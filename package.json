@@ -11,7 +11,11 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "format": "prettier --write server",
-    "format:check": "prettier --check server"
+    "format:check": "prettier --check server",
+    "db:migrate": "pnpm --filter server db:migrate",
+    "db:migrate:test": "pnpm --filter server db:migrate:test",
+    "db:rollback": "pnpm --filter server db:rollback",
+    "db:status": "pnpm --filter server db:status"
   },
   "devDependencies": {
     "prettier": "3.9.10"

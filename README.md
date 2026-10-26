@@ -100,3 +100,16 @@ If a setting is missing, the server stops at once and lists what to fix.
 | `pnpm build` | Builds the server into `server/dist` |
 
 Tests need Docker running (`docker compose up -d`).
+
+### Database tables (migrations)
+
+Tables are created by numbered migration files in `server/src/database/migrations/`.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm db:migrate` | Creates or updates the tables in `sarthi_dev`. Run this after first setup and after pulling changes |
+| `pnpm db:status` | Shows which migrations have run (`done`) and which have not (`pending`) |
+| `pnpm db:rollback` | Undoes the last migration in `sarthi_dev` |
+| `pnpm db:migrate:test` | Same as `db:migrate`, for `sarthi_test` (tests also do this themselves) |
+
+To see the tables: `docker compose exec postgres psql -U sarthi -d sarthi_dev -c "\dt"`

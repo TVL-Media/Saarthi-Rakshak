@@ -4,6 +4,13 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Kysely (0.29) for migrations and typed queries; migrations written as plain SQL | One small tool with no dependencies, on the `pg` driver we already use; plain SQL is easy to review; PostGIS works directly |
+| `sos_events`: a database trigger blocks deletes and changes to id, user_id, trigger, is_test, started_at (user_id may only become NULL on account deletion). Status, ended_at, end_reason can change. Admins have no edit API at all | SOS history must be trustworthy, even if application code has a bug |
+| `audit_log` is append-only (trigger blocks UPDATE and DELETE) | An audit trail that can be edited proves nothing |
+| "Delete my account" (`deleteUserData`): deletes user, devices, guardians, journeys, location points, check-ins, guardian links, audio clips and support tickets; keeps SOS events and alerts with every link to the person removed | DPDP: personal data goes; anonymous counts keep pilot reports correct. Support tickets are deleted because their messages are personal text |
+| Guardians who decline: phone number removed (database rule: a declined guardian must have no phone). The guardian API does this when it is built | Someone who said no should not stay on file |
+| `location_points.delete_after` for a future cleanup job; retention days to be agreed with the client and stored as a setting | Location history is sensitive and should not be kept forever |
+| Alerts and audit_log hold ids only, never phone numbers or names (including provider error text) | They are kept after account deletion |
 | Node.js 24 LTS (≥ 24.9) for the server, locally and on DigitalOcean; Jest runs with `--experimental-vm-modules` | NestJS 12 ships only as ES modules; Jest loads them only on Node ≥ 24.9 with that flag. Node 22 leaves support in April 2027 |
 | Server: NestJS 12, TypeScript 6.0 (not 7), `pg` driver, ioredis 5 (not 6), Zod for settings; no `@nestjs/config` or `@nestjs/terminus` | TS 7 not yet supported by ts-jest/typescript-eslint; BullMQ uses ioredis 5; Node's built-in `.env` loader and a small custom `/health` are enough |
 | Settings from root `.env` if present, otherwise real environment variables; test URLs required only in development/test | Same code runs locally and on DigitalOcean; tests can never fall back to dev data |
