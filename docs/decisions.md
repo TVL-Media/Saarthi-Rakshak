@@ -4,6 +4,7 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Local Docker: `postgis/postgis:17-3.5`, `redis:7.4-alpine`; one PostgreSQL container with two databases (`sarthi_dev`, `sarthi_test`); local PostgreSQL port 5433; Redis tests use DB `/1` | Same PostgreSQL version as DigitalOcean managed; pinned versions for everyone; simplest setup that keeps test data separate; 5433 avoids clashing with a Windows-installed PostgreSQL |
 | UI is designed in Figma and read by Claude Code through the Figma MCP server; Ant Design in code | One source of truth for design; Ant Design components map closely to the Ant Design Figma kit |
 | No fake data in the admin panel; no simulator; clear empty states | Requested by the project owner; only real data and real configuration appear in the panel |
 | Local development uses Docker (PostgreSQL + PostGIS, Redis); staging and production use DigitalOcean | Docker is the easiest identical setup for every developer; DigitalOcean hosts the real system in India |

@@ -30,4 +30,45 @@ A personal safety app. Phase 1 is a reliable SOS and safe-journey app for Androi
 
 ## Local setup
 
-_To be added in build step 1 (Docker Compose for PostgreSQL + Redis) and step 2 (server skeleton)._
+Local PostgreSQL (with PostGIS) and Redis run in Docker. Commands below are for PowerShell on Windows,
+run from the project folder.
+
+1. Install and open **Docker Desktop** (wait until it says "Engine running").
+2. Create your settings file (first time only), and change the password if you like:
+   ```powershell
+   copy .env.example .env
+   ```
+3. **Start** the services:
+   ```powershell
+   docker compose up -d
+   ```
+4. **Check** they are running — both should show `healthy`:
+   ```powershell
+   docker compose ps
+   docker compose exec postgres psql -U sarthi -d sarthi_dev -c "SELECT postgis_version();"
+   docker compose exec redis redis-cli ping
+   ```
+5. **Stop** them (your data is kept):
+   ```powershell
+   docker compose stop
+   ```
+6. **See logs** if something is wrong:
+   ```powershell
+   docker compose logs -f postgres
+   ```
+
+**Ports:** PostgreSQL is on **5433** (not the usual 5432), so it does not clash with a PostgreSQL installed
+directly on Windows. Redis is on 6379. Both are only reachable from your own computer.
+
+**Two databases:** `sarthi_dev` for your local work and `sarthi_test` for automated tests only.
+Both are created automatically the **first** time PostgreSQL starts.
+
+**Reset everything** (deletes all local data, and re-runs the first-time setup):
+```powershell
+docker compose down -v
+docker compose up -d
+```
+If you change `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` or `POSTGRES_TEST_DB` in `.env`,
+you must reset like this for the change to take effect.
+
+_Server setup is added in build step 2._
