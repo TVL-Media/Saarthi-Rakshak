@@ -3,7 +3,7 @@
 The admin panel is for the client's team: support, checking problems and pilot reports.
 It is **not** a command centre — admins cannot act on an SOS in Phase 1.
 
-Visual mockup: https://claude.ai/artifact/S2JFHZLFaiwZVTFjpaJTXc (6 screens; the sample data there is only for the mockup).
+Design: [`design/admin-panel.html`](design/admin-panel.html) (open in a browser) and [`admin-design.md`](admin-design.md) (theme values, routes, states).
 
 ## Roles
 

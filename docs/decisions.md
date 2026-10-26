@@ -4,7 +4,7 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
-| UI is designed in Figma and read by Claude Code through the Figma MCP server; Ant Design in code | One source of truth for design; Ant Design components map closely to the Ant Design Figma kit |
+| Admin UI design is `docs/design/admin-panel.html` + `docs/admin-design.md`, not Figma; Ant Design in code | No Figma file available; a design page in the repo is one source of truth Claude Code can read directly |
 | No fake data in the admin panel; no simulator; clear empty states | Requested by the project owner; only real data and real configuration appear in the panel |
 | Local development uses Docker (PostgreSQL + PostGIS, Redis); staging and production use DigitalOcean | Docker is the easiest identical setup for every developer; DigitalOcean hosts the real system in India |
 | Build the admin panel first, with the backend it needs | Requested by the team |

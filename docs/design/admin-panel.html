@@ -1,0 +1,598 @@
+<title>Sarthi Rakshak Admin Design</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: dark navy sidebar + warm off-white work area; one screen at a time, picked from the strip on top.
+   Single light look by choice: the Phase 1 admin panel has no dark mode. */
+:root {
+  --ink: #17191C;        /* main text */
+  --muted: #5B5F66;      /* secondary text */
+  --faint: #8A8E94;      /* hints, placeholders */
+  --line: #E3E1DA;       /* borders */
+  --line-soft: #EFEDE7;  /* table row lines */
+  --page: #F5F4F0;       /* layout background */
+  --card: #FFFFFF;       /* cards, inputs */
+  --primary: #1D4E89;    /* buttons, links, focus */
+  --primary-ink: #0F2F57;
+  --primary-soft: #E8EEF6;
+  --side: #14202B;       /* sidebar */
+  --side-active: #2A3B4B;
+  --side-text: #D7DEE5;
+  --side-muted: #8396A7;
+  --sos: #B42318;        /* SOS + errors only */
+  --sos-soft: #FDECEA;
+  --ok: #166534;
+  --ok-soft: #E7F4EC;
+  --warn: #9A5B00;
+  --warn-soft: #FFF8E6;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --r: 8px;              /* inputs, buttons */
+  --r-card: 12px;        /* cards */
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.5; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+button, input, select { font: inherit; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.num, .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- design-reference strip (not part of the panel) ---------- */
+.ref { background: var(--card); border-bottom: 1px solid var(--line); padding-block: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 10px; }
+.ref-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ref-top b { font-size: 15px; }
+.ref-top span { color: var(--muted); font-size: 13px; }
+.ref-groups { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.ref-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ref-group > span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-right: 2px; }
+.chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 4px 11px; font-size: 13px; cursor: pointer; }
+.chip:hover { border-color: var(--primary); }
+.chip[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: #FFFFFF; }
+.note { margin: 16px max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); background: var(--warn-soft); border: 1px dashed #E2C68A; color: #5A3D00; border-radius: var(--r); padding: 10px 14px; font-size: 13px; }
+.note b { color: #3B2A00; }
+
+/* ---------- auth screens ---------- */
+.auth { min-height: 720px; display: grid; place-items: center; padding-block: 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.auth-card { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: 32px; display: flex; flex-direction: column; gap: 20px; }
+.auth-card.wide { max-width: 560px; }
+.brand { display: flex; flex-direction: column; gap: 2px; }
+.brand b { font-size: 16px; letter-spacing: .04em; }
+.brand span { font-size: 13px; color: var(--muted); }
+.auth-card h1 { font-size: 22px; }
+.auth-card p { margin: 0; color: var(--muted); }
+.auth-foot { font-size: 12px; color: var(--faint); text-align: center; max-width: 420px; }
+.auth-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; width: 100%; }
+
+/* ---------- form parts (map to Ant Design Form, Input, Button) ---------- */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label { font-size: 13px; font-weight: 500; }
+.field small { color: var(--muted); font-size: 12px; }
+.input { height: 40px; border: 1px solid #D6D3CB; border-radius: var(--r); padding: 0 12px; background: var(--card); color: var(--ink); width: 100%; }
+.input:focus { border-color: var(--primary); outline: 3px solid var(--primary-soft); }
+.input.err { border-color: var(--sos); }
+.err-text { color: var(--sos); font-size: 12px; }
+.btn { height: 40px; padding: 0 16px; border-radius: var(--r); border: 1px solid var(--line); background: var(--card); color: var(--ink); font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #FFFFFF; }
+.btn.primary:hover { background: var(--primary-ink); }
+.btn.danger { background: var(--card); border-color: var(--sos); color: var(--sos); }
+.btn.block { width: 100%; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.link { color: var(--primary); background: none; border: 0; padding: 0; cursor: pointer; font-weight: 500; }
+.alert { border-radius: var(--r); padding: 10px 12px; font-size: 13px; display: flex; gap: 10px; align-items: flex-start; }
+.alert.error { background: var(--sos-soft); color: #7A1810; }
+.alert.info { background: var(--primary-soft); color: var(--primary-ink); }
+.alert.warn { background: var(--warn-soft); color: #5A3D00; }
+.alert.ok { background: var(--ok-soft); color: #0F4A26; }
+.otp { display: flex; gap: 8px; }
+.otp .input { width: 44px; height: 48px; text-align: center; font-family: var(--mono); font-size: 20px; padding: 0; }
+.steps { display: flex; gap: 8px; font-size: 12px; color: var(--muted); }
+.steps span { flex: 1; border-top: 3px solid var(--line); padding-top: 6px; }
+.steps span.on { border-color: var(--primary); color: var(--ink); font-weight: 600; }
+.qr-row { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+.qr { width: 160px; height: 160px; border: 1px solid var(--line); border-radius: var(--r); display: grid; place-items: center; color: var(--faint); font-size: 12px; text-align: center; padding: 12px; background: repeating-linear-gradient(45deg, #FAFAF8 0 8px, #F1F0EC 8px 16px); flex: none; }
+.qr-side { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.key { font-family: var(--mono); background: var(--page); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; word-break: break-all; color: var(--muted); }
+.codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; background: var(--page); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+.codes span { font-family: var(--mono); color: var(--faint); letter-spacing: .06em; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+.rules { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; display: grid; gap: 2px; }
+
+/* ---------- app shell (Ant Design Layout: Sider + Header + Content) ---------- */
+.shell { display: flex; min-height: 820px; }
+.side { width: 232px; flex: none; background: var(--side); color: var(--side-text); padding: 20px 12px; display: flex; flex-direction: column; gap: 2px; }
+.side .brand { padding: 0 10px 20px; }
+.side .brand b { color: #FFFFFF; }
+.side .brand span { color: var(--side-muted); }
+.nav { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border-radius: var(--r); color: var(--side-text); text-decoration: none; font-size: 14px; cursor: pointer; border: 0; background: none; text-align: left; width: 100%; }
+.nav:hover { background: #1D2C3A; }
+.nav.on { background: var(--side-active); color: #FFFFFF; font-weight: 600; }
+.nav-head { margin: 16px 12px 6px; font-size: 11px; letter-spacing: .08em; color: var(--side-muted); }
+.side-foot { margin-top: auto; padding: 16px 12px 0; font-size: 12px; color: var(--side-muted); border-top: 1px solid #22313F; }
+.pill-count { background: var(--sos); color: #FFFFFF; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.top { height: 60px; background: var(--card); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 24px; }
+.top-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tag { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--page); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.tag.role { background: var(--primary-soft); border-color: transparent; color: var(--primary-ink); }
+.who { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--primary-soft); color: var(--primary-ink); display: grid; place-items: center; font-weight: 700; font-size: 12px; flex: none; }
+.who-text { display: flex; flex-direction: column; line-height: 1.25; }
+.who-text small { color: var(--muted); font-size: 12px; }
+.menu-btn { display: none; }
+.content { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+.page-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.page-head h1 { font-size: 24px; font-weight: 700; }
+.page-head p { margin: 2px 0 0; color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card h2 { font-size: 15px; font-weight: 600; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.stat { display: flex; flex-direction: column; gap: 4px; }
+.stat span { color: var(--muted); font-size: 13px; }
+.stat b { font-family: var(--mono); font-size: 26px; font-weight: 500; }
+.stat.sos b { color: var(--sos); }
+.filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.filters .input, .filters select { width: auto; min-width: 150px; flex: 1 1 150px; }
+select.input { padding-right: 8px; }
+
+/* tables: Ant Design Table; header row + empty state */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--muted); background: #FAFAF8; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.ph { color: var(--faint); font-family: var(--mono); }
+
+/* empty / loading / error states */
+.empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 36px 16px; color: var(--muted); }
+.empty-icon { width: 44px; height: 44px; border-radius: 50%; background: var(--page); border: 1px solid var(--line); display: grid; place-items: center; margin-bottom: 4px; }
+.empty-icon svg { width: 20px; height: 20px; stroke: var(--faint); fill: none; stroke-width: 1.8; }
+.empty b { color: var(--ink); font-size: 14px; }
+.empty p { margin: 0; max-width: 46ch; font-size: 13px; }
+.skel { background: linear-gradient(90deg, #EFEDE7 25%, #F7F6F2 50%, #EFEDE7 75%); background-size: 200% 100%; border-radius: 6px; height: 14px; animation: shimmer 1.4s infinite linear; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+.map { min-height: 260px; border-radius: var(--r); border: 1px solid var(--line); background-color: #E9EEF0; background-image: linear-gradient(#D5DDE1 1px, transparent 1px), linear-gradient(90deg, #D5DDE1 1px, transparent 1px); background-size: 48px 48px; display: grid; place-items: center; }
+.map .empty { background: rgba(255,255,255,.88); border-radius: var(--r); padding: 18px 22px; }
+
+/* status rows (system health, providers) */
+.status-list { display: flex; flex-direction: column; }
+.status-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+.status-row:last-child { border-bottom: 0; }
+.badge { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.bad { background: var(--sos-soft); color: var(--sos); }
+.badge.off { background: var(--page); color: var(--muted); }
+
+/* settings form */
+.set-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 20px; }
+.unit { display: flex; align-items: stretch; }
+.unit .input { border-radius: var(--r) 0 0 var(--r); font-family: var(--mono); }
+.unit span { border: 1px solid #D6D3CB; border-left: 0; border-radius: 0 var(--r) var(--r) 0; background: #FAFAF8; padding: 0 10px; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+.sticky-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); padding: 12px 16px; }
+
+/* modal (Ant Design Modal) shown inline in the reference */
+.modal-back { background: rgba(20,32,43,.45); border-radius: var(--r-card); padding: 40px 16px; display: grid; place-items: center; }
+.modal { background: var(--card); border-radius: var(--r-card); width: 100%; max-width: 460px; padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+.modal-foot { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* theme sheet */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.sw { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--card); }
+.sw i { display: block; height: 52px; }
+.sw div { padding: 8px 10px; display: flex; flex-direction: column; font-size: 12px; }
+.sw code { font-family: var(--mono); color: var(--muted); }
+.type-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.type-row code { font-family: var(--mono); font-size: 12px; color: var(--muted); width: 190px; flex: none; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+
+@media (max-width: 860px) {
+  .side { display: none; }
+  .menu-btn { display: inline-flex; }
+  .cols { grid-template-columns: minmax(0, 1fr); }
+  .top { padding: 0 16px; }
+  .content { padding: 16px; }
+  .who-text { display: none; }
+  .auth-card { padding: 22px; }
+}
+</style>
+
+<div class="ref" role="navigation" aria-label="Design screens">
+  <div class="ref-top"><b>Sarthi Rakshak · Admin panel design</b><span>Source of truth for the admin UI. Pick a screen. Text in {braces} is filled from the server.</span></div>
+  <div class="ref-groups" id="picker"></div>
+</div>
+<div class="note" id="note"></div>
+<div id="stage"></div>
+
+<script>
+const ICON = {
+  inbox: '<path d="M3 13h5l1.5 2.5h5L16 13h5"/><path d="M5 5h14l2 8v6H3v-6z"/>',
+  sos: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 16.5v.5"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.5M3.5 12h.5M3.5 18h.5"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  wifi: '<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5v.5"/>'
+};
+const empty = (icon, title, text) =>
+  `<div class="empty"><div class="empty-icon"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[icon]}</svg></div><b>${title}</b><p>${text}</p></div>`;
+const table = (cols, body) =>
+  `<div class="tbl-wrap"><table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${body ? body : `<tr><td colspan="${cols.length}" style="white-space:normal">${''}</td></tr>`}</tbody></table></div>`;
+const emptyTable = (cols, icon, title, text) =>
+  `<div class="tbl-wrap"><table><thead><tr>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody><tr><td colspan="${cols.length}" style="white-space:normal">${empty(icon, title, text)}</td></tr></tbody></table></div>`;
+const brand = (dark) => `<div class="brand"><b>SARTHI RAKSHAK</b><span>Admin · Noida pilot</span></div>`;
+const authFoot = `<p class="auth-foot">For authorised client staff only. Every view and action in this panel is recorded.</p>`;
+
+/* ---------------- auth screens ---------------- */
+const AUTH = {
+  login: {
+    label: 'Log in',
+    note: '<b>Route /login.</b> After a correct password the server returns "needs 2-step" (go to 2-step code) or "must change password" (first login). Errors: wrong details, locked after 5 tries for 15 min, too many tries from this network. Never say which of email or password was wrong.',
+    html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
+      ${brand()}
+      <div><h1>Log in</h1><p>Use the email your Super Admin added you with.</p></div>
+      <div class="alert error" role="alert">Email or password is wrong. After 5 wrong tries the account is locked for 15 minutes.</div>
+      <div class="field"><label for="l-email">Email</label><input id="l-email" class="input err" type="email" autocomplete="username" placeholder="name@company.in"></div>
+      <div class="field"><label for="l-pass">Password</label><input id="l-pass" class="input err" type="password" autocomplete="current-password"></div>
+      <button class="btn primary block" type="submit">Log in</button>
+      <p style="font-size:13px">Forgot your password? Ask a Super Admin to reset it.</p>
+    </form>${authFoot}</div></div>`
+  },
+  locked: {
+    label: 'Locked',
+    note: '<b>Login error states</b> (same screen, alert above the fields). Locked account and too many tries from one network use the warning style, not red. Fields stay enabled.',
+    html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
+      ${brand()}
+      <div><h1>Log in</h1><p>Use the email your Super Admin added you with.</p></div>
+      <div class="alert warn" role="alert">This account is locked for 15 minutes after too many wrong tries. Try again later or ask a Super Admin.</div>
+      <div class="alert warn" role="alert">Too many login tries from this network. Wait 15 minutes and try again.</div>
+      <div class="field"><label for="k-email">Email</label><input id="k-email" class="input" type="email"></div>
+      <div class="field"><label for="k-pass">Password</label><input id="k-pass" class="input" type="password"></div>
+      <button class="btn primary block" type="submit">Log in</button>
+    </form>${authFoot}</div></div>`
+  },
+  password: {
+    label: 'Change password',
+    note: '<b>Route /change-password.</b> Shown when logging in with a temporary password (from the setup command or a reset). The rules list must match the server rule exactly; check the server before building and change the text if it differs. Rules turn green as they are met.',
+    html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
+      ${brand()}
+      <div class="steps"><span class="on">1 · New password</span><span>2 · 2-step setup</span><span>3 · Backup codes</span></div>
+      <div><h1>Set your own password</h1><p>You logged in with a temporary password. Choose a new one to continue.</p></div>
+      <div class="field"><label for="p-new">New password</label><input id="p-new" class="input" type="password" autocomplete="new-password">
+        <ul class="rules"><li>{password rule from the server, e.g. minimum length}</li><li>Not the same as the temporary password</li></ul></div>
+      <div class="field"><label for="p-again">Type it again</label><input id="p-again" class="input" type="password" autocomplete="new-password"></div>
+      <button class="btn primary block" type="submit">Save password</button>
+    </form>${authFoot}</div></div>`
+  },
+  setup: {
+    label: '2-step setup',
+    note: '<b>Route /two-step/setup.</b> Every admin must set this up before seeing any data. The QR code and key come from the server once. The 6-digit code is checked before moving on. Wrong code: "That code didn\'t work. Check the time on your phone and try the newest code."',
+    html: `<div class="auth"><div class="auth-wrap"><form class="auth-card wide" onsubmit="event.preventDefault()">
+      ${brand()}
+      <div class="steps"><span class="on">1 · New password</span><span class="on">2 · 2-step setup</span><span>3 · Backup codes</span></div>
+      <div><h1>Turn on 2-step login</h1><p>Each time you log in you'll also enter a code from an authenticator app on your phone, such as Google Authenticator or Microsoft Authenticator.</p></div>
+      <div class="qr-row">
+        <div class="qr" role="img" aria-label="QR code from the server">QR code<br>from server</div>
+        <div class="qr-side">
+          <b>1. Scan this QR code</b>
+          <p style="font-size:13px">Open your authenticator app, tap “Add”, and scan. Can't scan? Type this key instead:</p>
+          <div class="key">{setup key from server}</div>
+          <button class="link" type="button" style="align-self:flex-start">Copy key</button>
+        </div>
+      </div>
+      <div class="field"><label for="s-c1">2. Enter the 6-digit code from the app</label>
+        <div class="otp">${[1,2,3,4,5,6].map(i => `<input id="s-c${i}" class="input" inputmode="numeric" maxlength="1" aria-label="Digit ${i}">`).join('')}</div></div>
+      <button class="btn primary block" type="submit">Turn on 2-step login</button>
+    </form>${authFoot}</div></div>`
+  },
+  codes: {
+    label: 'Backup codes',
+    note: '<b>Same route, step 3.</b> The 10 backup codes are shown only once. "Continue" stays disabled until the box is ticked. Each code works one time. Never store the codes in the browser.',
+    html: `<div class="auth"><div class="auth-wrap"><form class="auth-card wide" onsubmit="event.preventDefault()">
+      ${brand()}
+      <div class="steps"><span class="on">1 · New password</span><span class="on">2 · 2-step setup</span><span class="on">3 · Backup codes</span></div>
+      <div><h1>Save your backup codes</h1><p>If you lose your phone, each code lets you log in once. You will not see these codes again.</p></div>
+      <div class="alert ok">2-step login is on.</div>
+      <div class="codes" aria-label="10 backup codes">${Array.from({length:10}, (_, i) => `<span>{code ${i+1}}</span>`).join('')}</div>
+      <div class="row"><button class="btn" type="button">Copy all codes</button></div>
+      <label class="check"><input id="c-saved" type="checkbox"> I have saved these codes somewhere safe, away from this computer.</label>
+      <button class="btn primary block" type="submit" disabled>Continue to the panel</button>
+    </form>${authFoot}</div></div>`
+  },
+  verify: {
+    label: '2-step code',
+    note: '<b>Route /two-step.</b> Shown on every login after the password. Wrong code counts toward the same 5-try lockout. "Use a backup code" swaps the 6 boxes for one text field (format from the server). After a backup code is used, show on the dashboard: "You used a backup code. {n} left."',
+    html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
+      ${brand()}
+      <div><h1>Enter your 2-step code</h1><p>Open your authenticator app and enter the 6-digit code for Sarthi Rakshak.</p></div>
+      <div class="field"><label for="v-c1">Code</label>
+        <div class="otp">${[1,2,3,4,5,6].map(i => `<input id="v-c${i}" class="input" inputmode="numeric" maxlength="1" aria-label="Digit ${i}">`).join('')}</div>
+        <span class="err-text">That code didn't work. Try the newest code in the app.</span></div>
+      <button class="btn primary block" type="submit">Verify</button>
+      <div class="row" style="justify-content:space-between"><button class="link" type="button">Use a backup code</button><button class="link" type="button">Back to log in</button></div>
+    </form>${authFoot}</div></div>`
+  },
+  expired: {
+    label: 'Logged out',
+    note: '<b>Shown on /login</b> when the server ends the session: 30 minutes without activity, or 12 hours after login. Any open page sends the admin here; nothing is kept in the browser.',
+    html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
+      ${brand()}
+      <div class="alert info">You were logged out after 30 minutes without activity. Log in again to continue.</div>
+      <div><h1>Log in</h1></div>
+      <div class="field"><label for="e-email">Email</label><input id="e-email" class="input" type="email"></div>
+      <div class="field"><label for="e-pass">Password</label><input id="e-pass" class="input" type="password"></div>
+      <button class="btn primary block" type="submit">Log in</button>
+    </form>${authFoot}</div></div>`
+  }
+};
+
+/* ---------------- in-panel screens ---------------- */
+const NAV = [
+  ['dashboard', 'Dashboard'], ['live', 'Live SOS'], ['users', 'Users'], ['history', 'SOS & Journey History'],
+  ['alerts', 'Alert Log'], ['support', 'Support Tickets'], ['reports', 'Reports']
+];
+const NAV_SUPER = [['settings', 'Settings'], ['team', 'Admin Team'], ['audit', 'Audit Log']];
+
+const PAGES = {
+  dashboard: {
+    label: 'Dashboard', title: 'Dashboard', sub: 'Noida pilot · updates live',
+    note: '<b>Screen 1.</b> Counters show real numbers, so 0 until the app is live. System health is real from day one: it comes from the server health check. Push and SMS show "Not set up" until their accounts are connected. The map shows SOS markers only during an active SOS; journeys appear as a count, never as names or dots.',
+    html: `
+      <div class="grid">
+        <div class="card stat sos"><span>Active SOS</span><b>0</b></div>
+        <div class="card stat"><span>Active journeys</span><b>0</b></div>
+        <div class="card stat"><span>SOS today</span><b>0</b></div>
+        <div class="card stat"><span>New users today</span><b>0</b></div>
+        <div class="card stat"><span>Failed alerts today</span><b>0</b></div>
+      </div>
+      <div class="cols">
+        <div class="card"><div class="card-head"><h2>Noida map</h2><span class="tag">Journeys in progress: 0</span></div>
+          <div class="map">${empty('sos', 'No active SOS', 'SOS locations appear here only while an SOS is active. Journeys are shown as a count, not on the map.')}</div></div>
+        <div class="card"><h2>System health</h2>
+          <div class="status-list">
+            <div class="status-row"><span>Server</span><span class="badge ok">Working</span></div>
+            <div class="status-row"><span>Database</span><span class="badge ok">Working</span></div>
+            <div class="status-row"><span>Live data (Redis)</span><span class="badge ok">Working</span></div>
+            <div class="status-row"><span>Push notifications</span><span class="badge off">Not set up</span></div>
+            <div class="status-row"><span>SMS · main provider</span><span class="badge off">Not set up</span></div>
+            <div class="status-row"><span>SMS · backup provider</span><span class="badge off">Not set up</span></div>
+          </div>
+          <small style="color:var(--muted)">Status shapes: <span class="badge ok">Working</span> <span class="badge warn">Slow</span> <span class="badge bad">Down</span> <span class="badge off">Not set up</span></small></div>
+      </div>
+      <div class="cols">
+        <div class="card"><h2>Needs attention</h2>${empty('inbox', 'Nothing needs attention', 'Failed alerts, lost contact and users whose setup is unfinished will show here.')}</div>
+        <div class="card"><h2>Recent events</h2>${empty('list', 'No events yet', 'Sign-ups, SOS and journeys appear here as they happen.')}</div>
+      </div>`
+  },
+  live: {
+    label: 'Live SOS', title: 'Live SOS', sub: 'View only',
+    note: '<b>Screen 2.</b> The view-only banner is always visible. When an SOS is active: list on the left, selected SOS on the right (duration, how it started, last location age, battery, network, live map trail, guardian table with SMS / opened link / responding, audio status with no play button). Live location is shown only while the SOS is active.',
+    html: `
+      <div class="alert warn"><span><b>View only.</b> Admins cannot act on an SOS. Guardians and 112 respond. Sarthi Rakshak alerts your guardians and helps you call 112. It is not a 24/7 monitoring service.</span></div>
+      <div class="cols">
+        <div class="card"><h2>Active SOS</h2>${empty('sos', 'No active SOS right now', 'When a user presses SOS, it appears here within seconds.')}</div>
+        <div class="card"><h2>Details</h2>${empty('list', 'Select an SOS', 'Its live map, guardians and alert status will show here.')}</div>
+      </div>
+      <div class="card"><h2>Guardians for the selected SOS</h2>${emptyTable(['Guardian', 'Phone', 'SMS', 'Push', 'Opened link', 'Responding'], 'user', 'No SOS selected', 'Guardian alert status appears when an SOS is selected.')}</div>`
+  },
+  users: {
+    label: 'Users', title: 'Users', sub: 'Search by phone number',
+    note: '<b>Screen 3.</b> Phone numbers are always partly masked, like <span class="mono">+91 98•• ••4521</span>. Opening a profile is written to the audit log. The profile page has: setup status, device, guardians (invite status), recent activity, and actions (Block / Unblock, Send setup reminder; Delete data is Super Admin only and asks for a reason).',
+    html: `
+      <div class="card"><div class="filters">
+        <input id="u-search" class="input" type="search" placeholder="Phone number, e.g. 98xxxxxx21" aria-label="Search by phone number">
+        <select id="u-setup" class="input" aria-label="Setup status"><option>Any setup status</option><option>Setup complete</option><option>Setup unfinished</option></select>
+        <select id="u-state" class="input" aria-label="Account status"><option>Any account status</option><option>Active</option><option>Blocked</option></select>
+      </div>
+      ${emptyTable(['Name', 'Phone', 'Setup', 'Guardians', 'App version', 'Last seen', 'Status'], 'user', 'No users yet', 'Users appear here after they sign up in the app.')}</div>`
+  },
+  history: {
+    label: 'History', title: 'SOS & Journey History', sub: 'Read only · records cannot be edited or deleted',
+    note: '<b>Screen 4.</b> Clicking a row opens a drawer with the minute-by-minute timeline (SOS started, alerts sent, guardian opened link, location gaps, ended). There is no edit, cancel or delete action anywhere. Test SOS events carry a TEST tag.',
+    html: `
+      <div class="card"><div class="filters">
+        <select id="h-type" class="input" aria-label="Type"><option>SOS and journeys</option><option>SOS only</option><option>Journeys only</option></select>
+        <select id="h-real" class="input" aria-label="Real or test"><option>Real and test</option><option>Real only</option><option>Test only</option></select>
+        <select id="h-out" class="input" aria-label="Outcome"><option>Any outcome</option><option>Ended safe</option><option>Cancelled in countdown</option><option>Lost contact</option></select>
+        <input id="h-date" class="input" type="text" placeholder="Date range" aria-label="Date range">
+      </div>
+      ${emptyTable(['Started', 'Type', 'User', 'Duration', 'Started by', 'Guardians alerted', 'Outcome'], 'list', 'No SOS or journeys yet', 'Every SOS and journey from the app will be listed here with its full timeline.')}</div>`
+  },
+  alerts: {
+    label: 'Alert Log', title: 'Alert Log', sub: 'Every SMS and push message, failed first',
+    note: '<b>Screen 5.</b> Rows: time, channel (SMS / push / SIM SMS), provider, guardian (masked phone), result, next step (e.g. "Retry with backup provider"). Failed rows use the red badge and sort to the top.',
+    html: `
+      <div class="grid">
+        <div class="card stat"><span>Sent today</span><b>0</b></div>
+        <div class="card stat"><span>Delivered</span><b>0</b></div>
+        <div class="card stat sos"><span>Failed</span><b>0</b></div>
+        <div class="card stat"><span>Sent by backup provider</span><b>0</b></div>
+      </div>
+      <div class="cols">
+        <div class="card"><h2>Messages</h2>${emptyTable(['Time', 'Channel', 'Provider', 'To', 'Result', 'Next step'], 'inbox', 'No alerts sent yet', 'Every SMS and push sent for an SOS, check-in or lost contact will be logged here.')}</div>
+        <div class="card"><h2>SMS setup</h2><div class="status-list">
+          <div class="status-row"><span>DLT templates</span><span class="badge off">Not set up</span></div>
+          <div class="status-row"><span>Link domain</span><span class="badge off">Not set up</span></div>
+          <div class="status-row"><span>Main provider</span><span class="badge off">Not set up</span></div>
+          <div class="status-row"><span>Backup provider</span><span class="badge off">Not set up</span></div>
+        </div></div>
+      </div>`
+  },
+  support: {
+    label: 'Support', title: 'Support Tickets', sub: 'Problems reported by users from the app',
+    note: '<b>Screen 6.</b> Status tags: New, In progress, Resolved. Opening a ticket shows the message, the user (masked phone) and a reply box. Office-hours support only; not for emergencies.',
+    html: `
+      <div class="card"><div class="filters">
+        <select id="t-status" class="input" aria-label="Status"><option>All tickets</option><option>New</option><option>In progress</option><option>Resolved</option></select>
+      </div>
+      ${emptyTable(['Received', 'User', 'Subject', 'Status', 'Assigned to'], 'inbox', 'No tickets yet', 'When a user taps “Report a problem” in the app, the ticket appears here.')}</div>`
+  },
+  reports: {
+    label: 'Reports', title: 'Reports', sub: 'Pilot numbers',
+    note: '<b>Screen 7.</b> Recharts line and bar charts once data exists: sign-ups, journeys, SOS count, false alarms (cancelled SOS), alert delivery rate, phone models with problems. Until then, one empty state per chart. No made-up numbers.',
+    html: `
+      <div class="card"><div class="filters"><select id="r-range" class="input" aria-label="Date range"><option>Last 7 days</option><option>Last 30 days</option><option>Since pilot start</option></select></div></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr))">
+        <div class="card"><h2>Sign-ups</h2>${empty('chart', 'No data yet', 'Starts when the first user signs up.')}</div>
+        <div class="card"><h2>SOS and false alarms</h2>${empty('chart', 'No data yet', 'Real SOS vs SOS cancelled during the countdown.')}</div>
+        <div class="card"><h2>Alert delivery rate</h2>${empty('chart', 'No data yet', 'Share of SMS and push alerts delivered.')}</div>
+        <div class="card"><h2>Phones with problems</h2>${empty('chart', 'No data yet', 'Phone models where the app was stopped or lost contact.')}</div>
+      </div>`
+  },
+  settings: {
+    label: 'Settings', title: 'Settings', sub: 'Super Admin only · every change is recorded in the audit log', superOnly: true,
+    note: '<b>Screen 8.</b> Real data from day one: the defaults saved by the setup command. "Save changes" opens a confirm modal that lists what changed and asks for a short reason (stored in the audit log). Each field validates a sensible range from the server.',
+    html: `
+      <div class="card"><h2>Safety rules</h2><div class="set-grid">
+        ${[
+          ['s-count', 'SOS countdown', '5', 'sec', 'Cancel without PIN'],
+          ['s-stop', 'Check-in: stopped too long', '3', 'min', ''],
+          ['s-route', 'Check-in: off route', '500', 'm', ''],
+          ['s-late', 'Check-in: late arrival', '15', 'min', ''],
+          ['s-reply', 'Wait for check-in reply', '2', 'min', 'Then alert guardians (not a full SOS)'],
+          ['s-traffic', '“Stuck in traffic” pause', '10', 'min', ''],
+          ['s-lost', 'Lost contact (phone silent)', '5', 'min', ''],
+          ['s-noresp', 'No guardian responds to SOS', '5', 'min', 'Re-send alerts and help the user call 112'],
+          ['s-link', 'Guardian link after SOS ends', '15', 'min', ''],
+          ['s-audio', 'Audio auto-delete', '30', 'days', 'Unless the user keeps it'],
+          ['s-max', 'Max guardians', '5', 'people', '']
+        ].map(([id, l, v, u, h]) => `<div class="field"><label for="${id}">${l}</label><div class="unit"><input id="${id}" class="input" type="number" value="${v}"><span>${u}</span></div>${h ? `<small>${h}</small>` : ''}</div>`).join('')}
+      </div></div>
+      <div class="card"><h2>SMS providers</h2><div class="set-grid">
+        <div class="field"><label for="s-main">Main provider</label><select id="s-main" class="input"><option>Not set up</option></select><small>Keys are kept on the server, never shown here.</small></div>
+        <div class="field"><label for="s-backup">Backup provider</label><select id="s-backup" class="input"><option>Not set up</option></select></div>
+      </div></div>
+      <div class="sticky-bar"><span style="color:var(--muted)">No unsaved changes</span><div class="row"><button class="btn" type="button">Discard</button><button class="btn primary" type="button" disabled>Save changes</button></div></div>
+      <div class="modal-back"><div class="modal" role="dialog" aria-labelledby="m-set">
+        <h2 id="m-set" style="font-size:17px">Save 1 change?</h2>
+        <p style="margin:0;color:var(--muted)">Check-in: stopped too long · 3 min → {new value} min. This applies to every new journey.</p>
+        <div class="field"><label for="m-reason">Reason for the change</label><input id="m-reason" class="input" placeholder="e.g. Pilot users found 3 minutes too short"><small>Saved in the audit log.</small></div>
+        <div class="modal-foot"><button class="btn" type="button">Cancel</button><button class="btn primary" type="button">Save change</button></div>
+      </div></div>`
+  },
+  team: {
+    label: 'Admin Team', title: 'Admin Team', sub: 'Super Admin only', superOnly: true,
+    note: '<b>Screen 9.</b> Real data from day one: the first Super Admin made by the setup command. "Add admin" creates the account and shows a temporary password once. "Reset" makes a new temporary password and turns off 2-step for that admin. A Super Admin cannot remove themself or the last Super Admin.',
+    html: `
+      <div class="card"><div class="card-head"><h2>Admins</h2><button class="btn primary" type="button">Add admin</button></div>
+      ${table(['Name', 'Email', 'Role', '2-step', 'Last login', ''],
+        `<tr><td>{name} <span class="tag">You</span></td><td class="ph">{email}</td><td><span class="tag role">Super Admin</span></td><td><span class="badge ok">On</span></td><td class="ph">{date time}</td><td><button class="link" type="button" disabled style="opacity:.45">Remove</button></td></tr>`)}
+      <small style="color:var(--muted)">Other rows: Reset password · Remove (asks for a reason). Roles: Super Admin, Support Admin.</small></div>
+      <div class="modal-back"><div class="modal" role="dialog" aria-labelledby="m-add">
+        <h2 id="m-add" style="font-size:17px">Add admin</h2>
+        <div class="field"><label for="a-name">Full name</label><input id="a-name" class="input"></div>
+        <div class="field"><label for="a-email">Work email</label><input id="a-email" class="input" type="email"></div>
+        <div class="field"><label for="a-role">Role</label><select id="a-role" class="input"><option>Support Admin</option><option>Super Admin</option></select><small>Support Admin cannot change settings, delete data, export audio or manage admins.</small></div>
+        <div class="modal-foot"><button class="btn" type="button">Cancel</button><button class="btn primary" type="button">Add admin</button></div>
+      </div></div>`
+  },
+  audit: {
+    label: 'Audit Log', title: 'Audit Log', sub: 'Super Admin only · cannot be edited or deleted', superOnly: true,
+    note: '<b>Screen 10.</b> Fills with real entries from the first login. Newest first, paged. Row format below. "Details" opens a drawer with before/after values for changes. No delete or export of the log in Phase 1.',
+    html: `
+      <div class="card"><div class="filters">
+        <select id="a-admin" class="input" aria-label="Admin"><option>All admins</option></select>
+        <select id="a-kind" class="input" aria-label="Kind"><option>Views and changes</option><option>Changes only</option><option>Logins only</option></select>
+        <input id="a-date" class="input" type="text" placeholder="Date range" aria-label="Date range">
+      </div>
+      ${table(['When', 'Admin', 'Action', 'What', 'IP address', ''],
+        `<tr><td class="ph">{date time}</td><td class="ph">{admin name}</td><td><span class="tag">{Viewed / Changed / Logged in}</span></td><td class="ph">{e.g. Settings · SOS countdown}</td><td class="ph">{ip}</td><td><button class="link" type="button">Details</button></td></tr>`)}
+      </div>`
+  }
+};
+
+/* ---------------- shared states ---------------- */
+const STATES = {
+  loading: {
+    label: 'Loading', title: 'Users', sub: 'Search by phone number', nav: 'users',
+    note: '<b>Loading state, every screen.</b> Ant Design Skeleton / Table loading in place of content. The layout, title and filters stay visible. No full-page spinner.',
+    html: `<div class="card">${Array.from({length: 6}, (_, i) => `<div class="skel" style="width:${[100, 92, 96, 88, 94, 70][i]}%"></div>`).join('')}</div>`
+  },
+  error: {
+    label: 'Load error', title: 'Users', sub: 'Search by phone number', nav: 'users',
+    note: '<b>Error state, every screen.</b> In place of the content, with a Retry button. Never show raw error text or codes from the server.',
+    html: `<div class="card">${empty('wifi', 'Couldn\'t load this page', 'Check your internet connection and try again. If it keeps happening, tell the TVL tech lead.')}<div class="row" style="justify-content:center"><button class="btn primary" type="button">Try again</button></div></div>`
+  },
+  noaccess: {
+    label: 'No access', title: 'Settings', sub: '', nav: 'settings', role: 'Support Admin',
+    note: '<b>Shown when a Support Admin opens a Super Admin page by URL.</b> The server also refuses the data (403). Support Admins do not see the "Super Admin only" menu group at all; this screen is the fallback.',
+    html: `<div class="card">${empty('lock', 'Only a Super Admin can open this page', 'Ask a Super Admin if you need a setting changed.')}<div class="row" style="justify-content:center"><button class="btn" type="button">Go to Dashboard</button></div></div>`
+  }
+};
+
+/* ---------------- theme sheet ---------------- */
+const THEME = {
+  label: 'Theme',
+  note: '<b>App theme.</b> Put these values in one Ant Design ConfigProvider theme file and use them everywhere. Full token list: docs/admin-design.md. Red is kept for SOS and errors only.',
+  html: () => `<div class="content" style="max-width:1100px">
+    <div class="card"><h2>Colours</h2><div class="swatches">${[
+      ['Primary', '--primary', 'colorPrimary'], ['Primary dark', '--primary-ink', 'hover / active'], ['Primary light', '--primary-soft', 'selected, info'],
+      ['Text', '--ink', 'colorText'], ['Text secondary', '--muted', 'colorTextSecondary'], ['Border', '--line', 'colorBorder'],
+      ['Page', '--page', 'colorBgLayout'], ['Card', '--card', 'colorBgContainer'], ['Sidebar', '--side', 'Layout siderBg'],
+      ['SOS / error', '--sos', 'colorError'], ['Success', '--ok', 'colorSuccess'], ['Warning', '--warn', 'colorWarning']
+    ].map(([n, v, a]) => `<div class="sw"><i style="background:var(${v})"></i><div><b>${n}</b><code>${getComputedStyle(document.documentElement).getPropertyValue(v).trim()}</code><code>${a}</code></div></div>`).join('')}</div></div>
+    <div class="card"><h2>Text</h2>
+      <div class="type-row"><code>Page title · 24/32 · 700</code><span style="font-size:24px;font-weight:700">Admin Team</span></div>
+      <div class="type-row"><code>Card title · 15/22 · 600</code><span style="font-size:15px;font-weight:600">System health</span></div>
+      <div class="type-row"><code>Body · 14/22 · 400</code><span>Users appear here after they sign up in the app.</span></div>
+      <div class="type-row"><code>Small · 12/18 · 400</code><span style="font-size:12px;color:var(--muted)">Saved in the audit log.</span></div>
+      <div class="type-row"><code>Numbers · Plex Mono 26</code><span class="num" style="font-size:26px">0</span></div>
+      <div class="type-row"><code>Codes, times, IDs · Plex Mono 13</code><span class="mono" style="font-size:13px">+91 98•• ••4521 · 23:38</span></div>
+    </div>
+    <div class="card"><h2>Components</h2>
+      <div class="row"><button class="btn primary" type="button">Primary</button><button class="btn" type="button">Default</button><button class="btn danger" type="button">Danger</button><button class="btn primary" type="button" disabled>Disabled</button><button class="link" type="button">Link</button></div>
+      <div class="row"><span class="badge ok">Working</span><span class="badge warn">Slow</span><span class="badge bad">Failed</span><span class="badge off">Not set up</span><span class="tag role">Super Admin</span><span class="tag">TEST</span></div>
+      <div class="row" style="flex-direction:column;align-items:stretch"><div class="alert error">Error message</div><div class="alert warn">Warning message</div><div class="alert info">Information message</div><div class="alert ok">Success message</div></div>
+      <p style="margin:0;color:var(--muted);font-size:13px">Radius 8 on inputs and buttons, 12 on cards. Control height 40. Spacing steps 4 · 8 · 12 · 16 · 20 · 24. Sidebar 232 wide, top bar 60 high, content padding 24.</p>
+    </div></div>`
+};
+
+/* ---------------- render ---------------- */
+function shell(key, page) {
+  const navKey = page.nav || key;
+  const role = page.role || 'Super Admin';
+  const item = ([k, l]) => `<button class="nav${k === navKey ? ' on' : ''}" type="button" data-go="${k}"><span>${l}</span></button>`;
+  return `<div class="shell">
+    <nav class="side" aria-label="Admin sections">${brand()}
+      ${NAV.map(item).join('')}
+      ${role === 'Super Admin' ? `<div class="nav-head">SUPER ADMIN ONLY</div>${NAV_SUPER.map(item).join('')}` : ''}
+      <div class="side-foot">Auto logout after 30 min without activity</div>
+    </nav>
+    <div class="body">
+      <header class="top"><div class="top-left"><button class="btn menu-btn" type="button" aria-label="Open menu">Menu</button><span class="tag">Noida pilot</span></div>
+        <div class="who"><div class="avatar" aria-hidden="true">{AB}</div><div class="who-text"><b>{admin name}</b><small>${role}</small></div><button class="btn" type="button">Log out</button></div></header>
+      <main class="content">
+        <div class="page-head"><div><h1>${page.title}</h1>${page.sub ? `<p>${page.sub}</p>` : ''}</div></div>
+        ${page.html}
+      </main>
+    </div></div>`;
+}
+
+const GROUPS = [
+  ['Theme', { theme: THEME }],
+  ['Log in', AUTH],
+  ['Screens', PAGES],
+  ['States', STATES]
+];
+const ALL = Object.assign({ theme: THEME }, AUTH, PAGES, STATES);
+
+function show(key) {
+  if (!ALL[key]) key = 'login';
+  const s = ALL[key];
+  document.getElementById('note').innerHTML = s.note;
+  const stage = document.getElementById('stage');
+  stage.innerHTML = key === 'theme' ? s.html() : (AUTH[key] ? s.html : shell(key, s));
+  document.querySelectorAll('[data-pick]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.pick === key)));
+  stage.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+}
+function go(key) { try { history.replaceState(null, '', '#' + key); } catch (e) {} show(key); window.scrollTo(0, 0); }
+
+document.getElementById('picker').innerHTML = GROUPS.map(([g, set]) =>
+  `<div class="ref-group"><span>${g}</span>${Object.entries(set).map(([k, v]) => `<button class="chip" type="button" data-pick="${k}">${v.label}</button>`).join('')}</div>`).join('');
+document.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => go(b.dataset.pick)));
+show((location.hash || '#login').slice(1));
+</script>
