@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+coverage/
+.turbo/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+google-services.json
+service-account*.json
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Flutter / Android (for apps/mobile later)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/android/.gradle/
+**/android/local.properties
+*.iml
+
+# Test output
+playwright-report/
+test-results/
