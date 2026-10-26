@@ -65,14 +65,14 @@ docker-compose.yml   Local PostgreSQL + Redis (to be added)
 8. **No secrets in code.** Use `.env` (never committed); keep `.env.example` up to date.
 9. **Never present Phase 1 as 24/7 monitoring.** In-app text: "Sarthi Rakshak alerts your guardians and helps you call 112. It is not a 24/7 monitoring service."
 
-## UI design (Figma)
+## UI design (admin panel)
 
-- **All UI comes from Figma**, read through the Figma MCP server. Do not invent screens, layouts or styles.
-- Work from **one frame (screen) link at a time**; ask for the link if it is missing.
-- Build with **Ant Design** components; map Figma components to their Ant Design equivalents.
-- Turn Figma variables (colours, text styles, spacing, radius) into the **app theme** once, then reuse it everywhere.
-- If a state is missing in the design (empty, loading, error), **ask** before building it.
-- The visual mockup (https://claude.ai/artifact/S2JFHZLFaiwZVTFjpaJTXc) is only a reference; Figma is the source of truth.
+- **The design is `docs/design/admin-panel.html`** (open it in a browser) with exact values in `docs/admin-design.md`.
+  No Figma. Do not invent screens, layouts or styles that are not in the design.
+- Build **one screen at a time**; follow the yellow note on each screen (route, rules, error text).
+- Build with **Ant Design** components and the theme in `docs/admin-design.md` (one theme file, reused everywhere).
+- If a screen or state is missing from the design, **ask** before building it.
+- The older mockup (https://claude.ai/artifact/S2JFHZLFaiwZVTFjpaJTXc) is replaced by this design.
 
 ## Phase 1 safety rules (configurable in Settings)
 
