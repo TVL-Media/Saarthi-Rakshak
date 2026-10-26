@@ -4,7 +4,9 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
-| Build the admin panel first, with the backend and a data simulator | Requested by the team; simulator gives realistic data before the app exists |
+| No fake data in the admin panel; no simulator; clear empty states | Requested by the project owner; only real data and real configuration appear in the panel |
+| Local development uses Docker (PostgreSQL + PostGIS, Redis); staging and production use DigitalOcean | Docker is the easiest identical setup for every developer; DigitalOcean hosts the real system in India |
+| Build the admin panel first, with the backend it needs | Requested by the team |
 | Admin panel: React + Vite + Ant Design (not Next.js) | Panel sits behind a login, needs no search engine pages; Ant Design gives ready admin components |
 | Support Admin is not a command centre | Support handles app problems in office hours; emergencies go to guardians and 112 in Phase 1 |
 | Excluded for now: auto-call, silent alert, Hindi | Not in the scope document |

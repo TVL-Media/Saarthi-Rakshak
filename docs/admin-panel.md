@@ -3,7 +3,7 @@
 The admin panel is for the client's team: support, checking problems and pilot reports.
 It is **not** a command centre — admins cannot act on an SOS in Phase 1.
 
-Visual mockup: https://claude.ai/artifact/S2JFHZLFaiwZVTFjpaJTXc (6 screens, sample data).
+Visual mockup: https://claude.ai/artifact/S2JFHZLFaiwZVTFjpaJTXc (6 screens; the sample data there is only for the mockup).
 
 ## Roles
 
@@ -60,7 +60,10 @@ Talks only to the NestJS server (never directly to the database).
 
 ## Build order (admin panel first)
 
-The user app does not exist yet, so a **simulator** fills the database with realistic data.
+**No fake data.** The user app does not exist yet, so most screens will be empty at first. Every screen must have a
+clear empty state (for example "No SOS events yet"). Setup creates only real configuration: the first Super Admin and
+the default safety settings. Automated tests use a separate test database that is wiped after each run; test records
+never appear in the panel.
 Do **one step per task**: plan → approve → build → run → test → commit.
 
 | # | Step | Done when |
@@ -68,10 +71,12 @@ Do **one step per task**: plan → approve → build → run → test → commit
 | 1 | `docker-compose.yml`: PostgreSQL + PostGIS, Redis; `.env.example` | Both run locally with one command |
 | 2 | pnpm workspace + NestJS server skeleton + `/health` | `/health` returns OK and checks DB + Redis |
 | 3 | Database schema + migrations (tables listed in `phase-1-overview.md`) | Migrations create all tables |
-| 4 | Simulator: fake users, guardians, journeys, check-ins, SOS, alerts; "live SOS" mode moving a point | DB full of realistic data; live mode updates location |
+| 4 | Setup command: create the first Super Admin and default safety settings; separate test database for automated tests | First Super Admin exists; tests run on their own database and clean up |
 | 5 | Admin auth: login, 2-step verification, roles, audit log | Super Admin can log in; role checks tested |
 | 6 | Admin panel skeleton: Vite + Ant Design, login page, layout (sidebar, top bar), routing | Login works in the browser |
-| 7 | Screens in order: Users → History + timeline → Alert Log → Dashboard → Live SOS → Settings → Admin Team + Audit Log → Support Tickets → Reports | Each screen shows simulator data and passes its tests |
+| 7 | Screens in order: Settings → Admin Team + Audit Log → Users → History + timeline → Alert Log → Dashboard → Live SOS → Support Tickets → Reports | Each screen works, shows a clear empty state, and passes its tests |
 | 8 | Security check: role access, no audio playback, audit entries | Checklist passes |
 
-Show the client a demo after every 2–3 screens.
+Settings, Admin Team and Audit Log come first because they work with real data from day one.
+Screens that need user data (Users, History, Alert Log, Dashboard, Live SOS) are verified by automated tests until
+the user app starts sending real data. Show the client a demo after every 2–3 screens.

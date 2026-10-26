@@ -17,7 +17,10 @@ When someone presses SOS, their guardians (family/friends) know where they are, 
 ## Current focus
 
 **Admin panel first** (with the backend it needs). Build order: `docs/admin-panel.md` → "Build order".
-The user app does not exist yet, so the admin panel is fed by a **simulator** that creates realistic fake data.
+**No fake data in the admin panel.** Do not build a simulator or seed sample users, SOS events or alerts into the
+development or staging database. Screens must show clear empty states until real data arrives from the user app.
+The only data created by setup is real configuration: the first Super Admin account and the default safety settings.
+Automated tests may create temporary records in a separate test database that is wiped after each run.
 
 ## Tech stack (decided — do not change without asking)
 
