@@ -180,6 +180,12 @@ describe('audit_log is append-only', () => {
         /append-only/,
       );
     }));
+
+  it('refuses TRUNCATE', () =>
+    inRollback(async (trx) => {
+      await trx.insertInto('audit_log').values({ action: 'test.check' }).execute();
+      await expect(sql`TRUNCATE audit_log`.execute(trx)).rejects.toThrow(/append-only/);
+    }));
 });
 
 describe('sos_events are protected', () => {

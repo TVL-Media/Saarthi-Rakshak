@@ -6,7 +6,9 @@ Short record of what was decided and why. Add new decisions at the top.
 | --- | --- |
 | Kysely (0.29) for migrations and typed queries; migrations written as plain SQL | One small tool with no dependencies, on the `pg` driver we already use; plain SQL is easy to review; PostGIS works directly |
 | `sos_events`: a database trigger blocks deletes and changes to id, user_id, trigger, is_test, started_at (user_id may only become NULL on account deletion). Status, ended_at, end_reason can change. Admins have no edit API at all | SOS history must be trustworthy, even if application code has a bug |
-| `audit_log` is append-only (trigger blocks UPDATE and DELETE) | An audit trail that can be edited proves nothing |
+| `audit_log` is append-only (triggers block UPDATE, DELETE and TRUNCATE) | An audit trail that can be edited proves nothing |
+| Production: the server connects as a **limited database user** (read/write rows only: no DDL, no TRUNCATE, not the table owner). Only migrations run as the owner user | Triggers can be dropped or disabled by the table owner; a limited user cannot, so the audit and SOS protections hold even if the server is compromised |
+| Guardian API (when built): a declined guardian's row loses its phone; only a **hashed** phone is kept in a "do not invite again" list | Stops repeat invites to someone who said no, without keeping their number |
 | "Delete my account" (`deleteUserData`): deletes user, devices, guardians, journeys, location points, check-ins, guardian links, audio clips and support tickets; keeps SOS events and alerts with every link to the person removed | DPDP: personal data goes; anonymous counts keep pilot reports correct. Support tickets are deleted because their messages are personal text |
 | Guardians who decline: phone number removed (database rule: a declined guardian must have no phone). The guardian API does this when it is built | Someone who said no should not stay on file |
 | `location_points.delete_after` for a future cleanup job; retention days to be agreed with the client and stored as a setting | Location history is sensitive and should not be kept forever |
