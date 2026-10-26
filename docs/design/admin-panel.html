@@ -257,13 +257,13 @@ const AUTH = {
   },
   password: {
     label: 'Change password',
-    note: '<b>Route /change-password.</b> Shown when logging in with a temporary password (from the setup command or a reset). The rules list must match the server rule exactly; check the server before building and change the text if it differs. Rules turn green as they are met.',
+    note: '<b>Route /change-password.</b> Shown when logging in with a temporary password (from the setup command or a reset). The rules list must match the server rule (at least 12 characters). Rules turn green as they are met.',
     html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
       ${brand()}
       <div class="steps"><span class="on">1 · New password</span><span>2 · 2-step setup</span><span>3 · Backup codes</span></div>
       <div><h1>Set your own password</h1><p>You logged in with a temporary password. Choose a new one to continue.</p></div>
       <div class="field"><label for="p-new">New password</label><input id="p-new" class="input" type="password" autocomplete="new-password">
-        <ul class="rules"><li>{password rule from the server, e.g. minimum length}</li><li>Not the same as the temporary password</li></ul></div>
+        <ul class="rules"><li>At least 12 characters</li><li>Not the same as the temporary password</li></ul></div>
       <div class="field"><label for="p-again">Type it again</label><input id="p-again" class="input" type="password" autocomplete="new-password"></div>
       <button class="btn primary block" type="submit">Save password</button>
     </form>${authFoot}</div></div>`
