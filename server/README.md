@@ -6,15 +6,15 @@ How to install, run and test: see "Local setup" in the [main README](../README.m
 
 ## Layout
 
-| Path            | What it is                                                                        |
-| --------------- | --------------------------------------------------------------------------------- |
-| `src/main.ts`   | Starts the server; checks settings first                                          |
-| `src/config/`   | Loads `.env` (if present) and checks every setting with Zod                       |
-| `src/database/` | PostgreSQL connection (`pg` pool + Kysely), table types, `deleteUserData`         |
-| `src/database/migrations/` | Numbered migrations (plain SQL); list new ones in `migrator.ts`        |
-| `src/redis/`    | Redis connection (`ioredis`)                                                      |
-| `src/health/`   | `GET /health`: checks PostgreSQL and Redis                                        |
-| `test/`         | End-to-end tests (`*.e2e-spec.ts`); unit tests sit next to the code (`*.spec.ts`) |
+| Path                       | What it is                                                                        |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| `src/main.ts`              | Starts the server; checks settings first                                          |
+| `src/config/`              | Loads `.env` (if present) and checks every setting with Zod                       |
+| `src/database/`            | PostgreSQL connection (`pg` pool + Kysely), table types, `deleteUserData`         |
+| `src/database/migrations/` | Numbered migrations (plain SQL); list new ones in `migrator.ts`                   |
+| `src/redis/`               | Redis connection (`ioredis`)                                                      |
+| `src/health/`              | `GET /health`: checks PostgreSQL and Redis                                        |
+| `test/`                    | End-to-end tests (`*.e2e-spec.ts`); unit tests sit next to the code (`*.spec.ts`) |
 
 ## Settings
 
