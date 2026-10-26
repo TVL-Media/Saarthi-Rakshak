@@ -1,7 +1,13 @@
 packages:
   - server
+  - apps/admin
 
 # Install scripts are blocked by default. These ship prebuilt binaries, so their scripts are not needed.
 allowBuilds:
   '@parcel/watcher': false
   unrs-resolver: false
+
+minimumReleaseAgeExclude:
+  - '@tanstack/query-core@5.105.0'
+  - '@tanstack/react-query@5.105.0'
+  - antd@6.6.8

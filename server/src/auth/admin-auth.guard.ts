@@ -1,18 +1,18 @@
 import {
+  BadRequestException,
   CanActivate,
   ExecutionContext,
   ForbiddenException,
   Injectable,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuditService } from '../audit/audit.service';
 import { header, isAdminPath, requestMeta, requestPath, type HttpRequest } from '../common/http';
 import type { SessionStage } from '../database/types';
 import { SESSION_COOKIE } from './auth.constants';
-import { ALLOWED_STAGES, IS_PUBLIC, ROLES } from './auth.decorators';
+import { ALLOWED_STAGES, IS_PUBLIC, PASSIVE, ROLES } from './auth.decorators';
 import { readCookie } from './cookies';
-import { SessionsService } from './sessions.service';
+import { SessionsService, sessionEnded } from './sessions.service';
 
 /**
  * Every /admin route needs a finished login unless marked @Public or @AllowStages
@@ -34,14 +34,17 @@ export class AdminAuthGuard implements CanActivate {
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
 
     const token = readCookie(header(req, 'cookie'), SESSION_COOKIE);
-    if (!token) throw new UnauthorizedException('Not logged in, or the session has ended');
-    const admin = await this.sessions.authenticate(token, requestMeta(req));
+    if (!token) throw sessionEnded('no_session');
+    const passive = this.reflector.getAllAndOverride<boolean>(PASSIVE, targets) ?? false;
+    const admin = await this.sessions.authenticate(token, requestMeta(req), !passive);
 
     const stages = this.reflector.getAllAndOverride<SessionStage[]>(ALLOWED_STAGES, targets) ?? [
       'full',
     ];
     if (!stages.includes(admin.stage)) {
-      throw new UnauthorizedException('Finish logging in first');
+      if (admin.stage === 'full') throw new BadRequestException('Already logged in');
+      // A half-finished login: tell the panel which step to show (only about its own session).
+      throw sessionEnded('login_incomplete', { next: admin.stage });
     }
 
     const roles = this.reflector.getAllAndOverride<string[]>(ROLES, targets);

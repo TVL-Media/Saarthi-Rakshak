@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody, requestMeta, type HttpRequest, type HttpResponse } from '../common/http';
-import { AllowStages, NoAudit, Public } from './auth.decorators';
+import { AllowStages, NoAudit, Passive, Public } from './auth.decorators';
 import { AuthService } from './auth.service';
 import { clearedSessionCookie, sessionCookie } from './cookies';
 import { LoginRateLimiter } from './login-rate-limiter';
@@ -117,7 +117,8 @@ export class AuthController {
     };
   }
 
-  /** Polled by the panel in the background, so never audited. */
+  /** Polled by the panel every minute: never audited, and not counted as activity. */
+  @Passive()
   @Get('me')
   me(@Req() req: HttpRequest) {
     return this.auth.me(req.admin!);

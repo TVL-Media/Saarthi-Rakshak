@@ -16,6 +16,13 @@ export const AllowStages = (...stages: SessionStage[]) => SetMetadata(ALLOWED_ST
 export const Roles = (...roles: ('super_admin' | 'support_admin')[]) => SetMetadata(ROLES, roles);
 
 /**
+ * A background check by the panel (like /me every minute). It does not count as activity, so it
+ * never keeps an idle session alive past the 30-minute auto logout.
+ */
+export const PASSIVE = 'auth:passive';
+export const Passive = () => SetMetadata(PASSIVE, true);
+
+/**
  * Do not write a per-request audit row: for background refreshes (like /me), and for routes
  * that write their own named audit events.
  */

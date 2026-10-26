@@ -434,6 +434,105 @@ describe('sessions', () => {
   });
 });
 
+describe('why a session ended (shown on the login page)', () => {
+  const ended = (reason: string, extra = {}) => ({
+    statusCode: 401,
+    message: 'Not logged in, or the session has ended',
+    reason,
+    ...extra,
+  });
+
+  it('no cookie: no_session', async () => {
+    expect((await new Client().get('/admin/auth/me')).body).toEqual(ended('no_session'));
+  });
+
+  it('30 minutes idle: idle, also on every later request', async () => {
+    const admin = await createAdmin('super_admin', 'sa@example.test');
+    const client = await loginFully(admin);
+    await db
+      .updateTable('admin_sessions')
+      .set({ last_seen_at: new Date(Date.now() - 31 * MINUTE) })
+      .where('stage', '=', 'full')
+      .execute();
+    expect((await client.get('/admin/auth/me')).body).toEqual(ended('idle'));
+    expect((await client.get('/admin/admins')).body).toEqual(ended('idle'));
+  });
+
+  it('checking /me does not count as activity; a real view does', async () => {
+    const admin = await createAdmin('super_admin', 'sa@example.test');
+    const client = await loginFully(admin);
+    const twentyMinutesAgo = new Date(Date.now() - 20 * MINUTE);
+    const setLastSeen = () =>
+      db
+        .updateTable('admin_sessions')
+        .set({ last_seen_at: twentyMinutesAgo })
+        .where('stage', '=', 'full')
+        .execute();
+    const lastSeen = async () =>
+      (
+        await db
+          .selectFrom('admin_sessions')
+          .select('last_seen_at')
+          .where('stage', '=', 'full')
+          .where('ended_at', 'is', null)
+          .executeTakeFirstOrThrow()
+      ).last_seen_at.getTime();
+
+    await setLastSeen();
+    expect((await client.get('/admin/auth/me')).status).toBe(200);
+    expect(await lastSeen()).toBe(twentyMinutesAgo.getTime());
+
+    await client.get('/admin/admins');
+    expect(await lastSeen()).toBeGreaterThan(Date.now() - MINUTE);
+  });
+
+  it('12 hours after login: expired', async () => {
+    const admin = await createAdmin('super_admin', 'sa@example.test');
+    const client = await loginFully(admin);
+    await db
+      .updateTable('admin_sessions')
+      .set({ expires_at: new Date(Date.now() - 1000) })
+      .where('stage', '=', 'full')
+      .execute();
+    expect((await client.get('/admin/auth/me')).body).toEqual(ended('expired'));
+  });
+
+  it('logout, a disabled account, or an unknown cookie: only "ended", nothing more', async () => {
+    const admin = await createAdmin('super_admin', 'sa@example.test');
+    const loggedOut = await loginFully(admin);
+    const cookie = loggedOut.cookie;
+    await loggedOut.post('/admin/auth/logout');
+    const reused = new Client();
+    reused.cookie = cookie;
+    expect((await reused.get('/admin/auth/me')).body).toEqual(ended('ended'));
+
+    const disabled = await loginFully(admin);
+    await db.updateTable('admins').set({ status: 'disabled' }).execute();
+    const body = (await disabled.get('/admin/auth/me')).body as object;
+    expect(body).toEqual(ended('ended'));
+    expect(JSON.stringify(body)).not.toMatch(/disabled|locked/i);
+
+    const unknown = new Client();
+    unknown.cookie = '__Host-sr_admin=not-a-real-token';
+    expect((await unknown.get('/admin/auth/me')).body).toEqual(ended('ended'));
+  });
+
+  it('a half-finished login says which step comes next; once timed out it is just "ended"', async () => {
+    const admin = await createAdmin('super_admin', 'sa@example.test');
+    const client = new Client();
+    await client.post('/admin/auth/login', { email: admin.email, password: admin.password });
+    expect((await client.get('/admin/auth/me')).body).toEqual(
+      ended('login_incomplete', { next: 'verify_2fa' }),
+    );
+
+    await db
+      .updateTable('admin_sessions')
+      .set({ expires_at: new Date(Date.now() - 1000) })
+      .execute();
+    expect((await client.get('/admin/auth/me')).body).toEqual(ended('ended'));
+  });
+});
+
 describe('roles (checked on the server)', () => {
   it('a Support Admin cannot open the Admin Team, and the attempt is logged', async () => {
     await createAdmin('super_admin', 'sa@example.test');

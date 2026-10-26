@@ -19,7 +19,28 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-const notLoggedIn = () => new UnauthorizedException('Not logged in, or the session has ended');
+/**
+ * Why the panel is not (or no longer) logged in, sent with every 401 so it can show the right
+ * message. Deliberately coarse: "ended" covers logout, password change, account disabled or
+ * locked, so the reply never reveals anything about the account.
+ */
+export type SessionEndReason = 'no_session' | 'idle' | 'expired' | 'ended' | 'login_incomplete';
+
+const ENDED_MESSAGE = 'Not logged in, or the session has ended';
+
+export function sessionEnded(
+  reason: SessionEndReason,
+  extra: Record<string, string> = {},
+): UnauthorizedException {
+  return new UnauthorizedException({ statusCode: 401, message: ENDED_MESSAGE, reason, ...extra });
+}
+
+/** Only a full session's idle timeout and 12-hour limit are named; everything else is "ended". */
+function publicReason(stage: SessionStage, endReason: string | null): SessionEndReason {
+  if (stage === 'full' && endReason === 'idle') return 'idle';
+  if (stage === 'full' && endReason === 'expired') return 'expired';
+  return 'ended';
+}
 
 @Injectable()
 export class SessionsService {
@@ -63,7 +84,11 @@ export class SessionsService {
   }
 
   /** Checks the cookie token. Ends the session (and refuses) if expired, idle or disabled. */
-  async authenticate(token: string, meta: RequestMeta): Promise<AuthedAdmin> {
+  async authenticate(
+    token: string,
+    meta: RequestMeta,
+    countsAsActivity = true,
+  ): Promise<AuthedAdmin> {
     const db = this.database.db;
     const row = await db
       .selectFrom('admin_sessions as s')
@@ -74,6 +99,7 @@ export class SessionsService {
         's.expires_at',
         's.last_seen_at',
         's.ended_at',
+        's.end_reason',
         'a.id as admin_id',
         'a.role',
         'a.status',
@@ -82,7 +108,8 @@ export class SessionsService {
       ])
       .where('s.token_hash', '=', hashToken(token))
       .executeTakeFirst();
-    if (!row || row.ended_at) throw notLoggedIn();
+    if (!row) throw sessionEnded('ended');
+    if (row.ended_at) throw sessionEnded(publicReason(row.stage, row.end_reason));
 
     const now = Date.now();
     let endReason: string | null = null;
@@ -105,14 +132,16 @@ export class SessionsService {
         },
         meta,
       );
-      throw notLoggedIn();
+      throw sessionEnded(publicReason(row.stage, endReason));
     }
 
-    await db
-      .updateTable('admin_sessions')
-      .set({ last_seen_at: new Date() })
-      .where('id', '=', row.session_id)
-      .execute();
+    if (countsAsActivity) {
+      await db
+        .updateTable('admin_sessions')
+        .set({ last_seen_at: new Date() })
+        .where('id', '=', row.session_id)
+        .execute();
+    }
     return {
       id: row.admin_id,
       role: row.role,

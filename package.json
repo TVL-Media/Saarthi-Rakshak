@@ -6,12 +6,12 @@
     "node": ">=24.9"
   },
   "scripts": {
-    "dev": "pnpm --filter server dev",
+    "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "pnpm --filter server test && pnpm --filter admin test",
     "lint": "pnpm -r lint",
-    "format": "prettier --write server",
-    "format:check": "prettier --check server",
+    "format": "prettier --write server apps/admin",
+    "format:check": "prettier --check server apps/admin",
     "db:migrate": "pnpm --filter server db:migrate",
     "db:migrate:test": "pnpm --filter server db:migrate:test",
     "db:rollback": "pnpm --filter server db:rollback",

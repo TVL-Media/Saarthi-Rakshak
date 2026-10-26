@@ -79,11 +79,16 @@ Needs **Node.js 24.9 or newer** (Node 24 LTS) and **pnpm 12** (`corepack enable`
    ```powershell
    pnpm install
    ```
-2. **Start** the server (restarts automatically when you change code):
+2. **Start** the server and the admin panel together (both restart when you change code):
    ```powershell
    pnpm dev
    ```
-3. **Open** http://localhost:3000/health in your browser, or:
+   - Admin panel: **http://localhost:5173** (log in with the Super Admin from `pnpm app:setup`).
+   - Server: http://localhost:3000. If port 3000 or 5173 is already in use, it stops with an error;
+     close whatever is using the port (the panel must run on 5173: the server only accepts that address).
+   - Use Chrome, Edge or Firefox locally. The login cookie is `Secure`; those browsers allow it on
+     `http://localhost`. On the real server everything is HTTPS.
+3. **Check the server** at http://localhost:3000/health, or:
    ```powershell
    curl.exe http://localhost:3000/health
    ```
@@ -94,12 +99,14 @@ If a setting is missing, the server stops at once and lists what to fix.
 
 | Command | What it does |
 | --- | --- |
-| `pnpm test` | Runs all tests. They use only `sarthi_test` and Redis slot `/1`, never your dev data |
+| `pnpm test` | Runs all tests: server tests, then the admin panel's browser tests. They use only `sarthi_test` and Redis slot `/1`, never your dev data |
 | `pnpm lint` | Checks the code for mistakes |
 | `pnpm format` | Formats the code (`pnpm format:check` only checks) |
-| `pnpm build` | Builds the server into `server/dist` |
+| `pnpm build` | Builds the server (`server/dist`) and the panel (`apps/admin/dist`) |
 
-Tests need Docker running (`docker compose up -d`).
+Tests need Docker running (`docker compose up -d`). The browser tests need Chromium once:
+`pnpm --filter admin exec playwright install chromium`. They start their own server and panel on
+ports **3100** and **5174**, so they can run while `pnpm dev` is running.
 
 ### Database tables (migrations)
 

@@ -4,6 +4,13 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Admin panel: Vite 8, React 19, Ant Design 6 (its own `QRCode` and `Input.OTP`, so no QR or code-input library), React Router 8, TanStack Query 5, React Hook Form + Zod; fonts from `@fontsource` | Stack from CLAUDE.md; fewest extra packages |
+| The panel calls the API directly (`VITE_API_URL`, cookies with `credentials: 'include'`), not through a dev proxy | Same cross-origin set-up as production, so CORS and the cookie are tested locally |
+| The panel stores nothing about the session in the browser; login state comes only from `GET /admin/auth/me`, checked every minute. Backup codes live only in page memory | Design rule; a stolen browser profile holds nothing useful |
+| The server's 401 says why: `no_session`, `idle`, `expired`, `ended` or `login_incomplete` (+ next step). `ended` covers logout, password change, disabled and locked, so nothing about the account is revealed | The login page shows the design's message for each reason; a refreshed login step returns to the same step |
+| `/me` is a passive request: it never counts as activity | Otherwise the panel's once-a-minute check would keep every session alive and the 30-minute auto logout would never happen |
+| One theme file `apps/admin/src/theme.ts`; it also sets `--sr-*` CSS variables used by `styles.css`. A few colours only in the design page (alert text, map grid, sidebar divider) were added there | No hard-coded colours anywhere else |
+| Browser tests (Playwright, Chromium) start their own server and panel on ports 3100 / 5174 with the test database; `pnpm test` runs server tests first, then browser tests, one after the other | Never touch dev servers or dev data; both suites share `sarthi_test` |
 | Admin login in steps: password → forced change of a temporary password → 2-step setup or check → full session. A new session ID at every step; a half-finished login can only call the next step | Stops session fixation; nothing is reachable before 2-step is done |
 | Sessions in PostgreSQL (`admin_sessions`, token stored as SHA-256), cookie `__Host-sr_admin` (HttpOnly, Secure, SameSite=Strict). Auto logout after 30 min idle, at most 12 h; half-finished login 10 min | Sessions can be ended in the same transaction as a reset; permanent record. Limits fixed in code, not admin-editable |
 | 2-step: own RFC 6238 TOTP code (no library, tested against the RFC values), ±30 s drift, each time step usable once; 10 one-time backup codes | Small, well-specified; replay blocked twice (in code and by an atomic database update) |

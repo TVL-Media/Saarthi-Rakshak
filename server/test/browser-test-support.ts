@@ -1,0 +1,104 @@
+// Helpers for the admin panel's Playwright tests (apps/admin/e2e). Test database and test
+// Redis slot only: openTestDatabase refuses any database whose name does not end in _test.
+import { randomBytes } from 'node:crypto';
+import Redis from 'ioredis';
+import { deriveAuthKeys } from '../src/auth/auth-keys';
+import { base32Decode, base32Encode } from '../src/auth/base32';
+import { encrypt } from '../src/auth/crypto-box';
+import { hashPassword } from '../src/auth/password';
+import { timeStep, totpCode } from '../src/auth/totp';
+import { activeConnections, validateEnv } from '../src/config/env.schema';
+import { createFirstSuperAdmin } from '../src/setup/setup';
+import { openTestDatabase, resetTestDatabase, wipeTestDatabase } from './test-database';
+
+async function withTestDatabase<T>(
+  fn: (db: Awaited<ReturnType<typeof openTestDatabase>>) => Promise<T>,
+): Promise<T> {
+  const db = await openTestDatabase();
+  try {
+    return await fn(db);
+  } finally {
+    await db.destroy();
+  }
+}
+
+/** Clean test database and an empty test Redis slot (rate limits, audit de-duplication). */
+export async function resetForBrowserTests(): Promise<void> {
+  await withTestDatabase(resetTestDatabase);
+  const redis = new Redis(activeConnections(validateEnv(process.env)).redisUrl);
+  try {
+    await redis.flushdb();
+  } finally {
+    redis.disconnect();
+  }
+}
+
+export async function wipeAfterBrowserTests(): Promise<void> {
+  await withTestDatabase(wipeTestDatabase);
+}
+
+/** The first Super Admin, made by the real setup code. Returns the one-time password. */
+export async function createFirstSuperAdminForTest(name: string, email: string): Promise<string> {
+  const issued = await withTestDatabase((db) => createFirstSuperAdmin(db, { name, email }));
+  return issued.temporaryPassword;
+}
+
+/** A Support Admin with a known password and 2-step already set up. */
+export async function createSupportAdminForTest(
+  name: string,
+  email: string,
+): Promise<{ password: string; secret: string }> {
+  const password = 'support-' + randomBytes(6).toString('hex');
+  const secret = randomBytes(20);
+  const keys = deriveAuthKeys(validateEnv(process.env).ADMIN_TOTP_ENCRYPTION_KEY);
+  await withTestDatabase(async (db) => {
+    const row = await db
+      .insertInto('admins')
+      .values({
+        name,
+        email,
+        role: 'support_admin',
+        password_hash: await hashPassword(password),
+        totp_enabled_at: new Date(),
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .updateTable('admins')
+      .set({ totp_secret_encrypted: encrypt(keys.totpSecretKey, secret, row.id) })
+      .where('id', '=', row.id)
+      .execute();
+  });
+  return { password, secret: base32Encode(secret) };
+}
+
+/**
+ * Ends an admin's open sessions on the server, keeping the browser's cookie: 'idle' makes them
+ * look 31 minutes inactive; 'ended' ends them as a password change elsewhere would.
+ */
+export async function endSessionsForTest(email: string, how: 'idle' | 'ended'): Promise<void> {
+  await withTestDatabase(async (db) => {
+    const admin = await db
+      .selectFrom('admins')
+      .select('id')
+      .where('email', '=', email)
+      .executeTakeFirstOrThrow();
+    const open = db
+      .updateTable('admin_sessions')
+      .where('admin_id', '=', admin.id)
+      .where('ended_at', 'is', null);
+    if (how === 'idle') {
+      await open.set({ last_seen_at: new Date(Date.now() - 31 * 60_000) }).execute();
+    } else {
+      await open.set({ ended_at: new Date(), end_reason: 'password changed' }).execute();
+    }
+  });
+}
+
+/**
+ * The authenticator code for a base32 key. `stepsAhead` 1 gives the next step's code (still
+ * accepted), for a second login inside the same 30 seconds.
+ */
+export function authenticatorCode(base32Secret: string, stepsAhead = 0): string {
+  return totpCode(base32Decode(base32Secret), timeStep(Date.now()) + stepsAhead);
+}
