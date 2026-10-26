@@ -1,40 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { NO_MIGRATIONS } from 'kysely/migration';
-import { Pool } from 'pg';
-import { loadEnvFile } from '../src/config/env';
-import { activeConnections, validateEnv } from '../src/config/env.schema';
 import { deleteUserData } from '../src/database/delete-user-data';
-import { createKysely, createMigrator, migrations } from '../src/database/migrator';
+import { createMigrator, migrations } from '../src/database/migrator';
 import type { Database } from '../src/database/types';
-
-const TABLES = [
-  'admins',
-  'alerts',
-  'audit_log',
-  'checkins',
-  'devices',
-  'guardian_links',
-  'guardians',
-  'journeys',
-  'location_points',
-  'media_clips',
-  'settings',
-  'sos_events',
-  'support_tickets',
-  'users',
-];
+import { TABLES, openTestDatabase } from './test-database';
 
 let db: Kysely<Database>;
 
 beforeAll(async () => {
-  loadEnvFile();
-  const { databaseUrl } = activeConnections(validateEnv(process.env));
-  db = createKysely(new Pool({ connectionString: databaseUrl }));
-  const { rows } = await sql<{ name: string }>`SELECT current_database() AS name`.execute(db);
-  expect(rows[0].name).toBe('sarthi_test');
-  const { error } = await createMigrator(db).migrateToLatest();
-  if (error) throw error instanceof Error ? error : new Error('Migration failed', { cause: error });
+  db = await openTestDatabase();
 });
 
 afterAll(async () => {

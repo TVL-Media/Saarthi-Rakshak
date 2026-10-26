@@ -1,0 +1,187 @@
+import { sql, type Kysely, type Transaction } from 'kysely';
+import { z } from 'zod';
+import { generateTemporaryPassword, hashPassword } from '../auth/password';
+import type { Database } from '../database/types';
+import { DEFAULT_SETTINGS } from '../settings/default-settings';
+
+export const TEMP_PASSWORD_VALID_HOURS = 24;
+
+/** A refusal with a message meant for the person running the command. */
+export class SetupError extends Error {}
+
+const emailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email({ error: 'Email is not a valid email address' }));
+const nameSchema = z.string().trim().min(1, { error: 'Name must not be empty' });
+
+function parse<T>(schema: z.ZodType<T>, value: unknown): T {
+  const result = schema.safeParse(value);
+  if (!result.success) throw new SetupError(result.error.issues[0].message);
+  return result.data;
+}
+
+/** Only one setup action at a time, so two people can never create two Super Admins. */
+async function lockSetup(trx: Transaction<Database>): Promise<void> {
+  await sql`SELECT pg_advisory_xact_lock(hashtext('sarthi.setup'))`.execute(trx);
+}
+
+async function issueTemporaryPassword() {
+  const temporaryPassword = generateTemporaryPassword();
+  return {
+    temporaryPassword,
+    passwordHash: await hashPassword(temporaryPassword),
+    expiresAt: new Date(Date.now() + TEMP_PASSWORD_VALID_HOURS * 60 * 60 * 1000),
+  };
+}
+
+/** Adds every default setting that is missing. Never overwrites. Returns the keys added. */
+export async function insertDefaultSettings(db: Kysely<Database>): Promise<string[]> {
+  return db.transaction().execute(async (trx) => {
+    await lockSetup(trx);
+    const added = await trx
+      .insertInto('settings')
+      .values(
+        Object.entries(DEFAULT_SETTINGS).map(([key, def]) => ({
+          key,
+          value: JSON.stringify(def.value),
+        })),
+      )
+      .onConflict((oc) => oc.column('key').doNothing())
+      .returning('key')
+      .execute();
+
+    const keys = added.map((row) => row.key);
+    if (keys.length > 0) {
+      await trx
+        .insertInto('audit_log')
+        .values({
+          action: 'setup.settings_added',
+          target_type: 'settings',
+          target_id: keys.join(','),
+        })
+        .execute();
+    }
+    return keys;
+  });
+}
+
+export interface IssuedPassword {
+  adminId: string;
+  email: string;
+  /** Shown once in the terminal. Never stored or logged. */
+  temporaryPassword: string;
+  expiresAt: Date;
+}
+
+/** Creates the first Super Admin. Refuses if any Super Admin exists (active or disabled). */
+export async function createFirstSuperAdmin(
+  db: Kysely<Database>,
+  input: { name: string; email: string },
+): Promise<IssuedPassword> {
+  const name = parse(nameSchema, input.name);
+  const email = parse(emailSchema, input.email);
+
+  return db.transaction().execute(async (trx) => {
+    await lockSetup(trx);
+    const existing = await trx
+      .selectFrom('admins')
+      .select('id')
+      .where('role', '=', 'super_admin')
+      .executeTakeFirst();
+    if (existing) {
+      throw new SetupError(
+        'A Super Admin already exists. Add more admins from the Admin Team screen, ' +
+          'or use --reissue if the Super Admin is locked out.',
+      );
+    }
+    const sameEmail = await trx
+      .selectFrom('admins')
+      .select('id')
+      .where('email', '=', email)
+      .executeTakeFirst();
+    if (sameEmail) throw new SetupError(`An admin with the email ${email} already exists.`);
+
+    const issued = await issueTemporaryPassword();
+    const admin = await trx
+      .insertInto('admins')
+      .values({
+        name,
+        email,
+        role: 'super_admin',
+        password_hash: issued.passwordHash,
+        must_change_password: true,
+        password_expires_at: issued.expiresAt,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+
+    await trx
+      .insertInto('audit_log')
+      .values({ action: 'setup.super_admin_created', target_type: 'admin', target_id: admin.id })
+      .execute();
+
+    return {
+      adminId: admin.id,
+      email,
+      temporaryPassword: issued.temporaryPassword,
+      expiresAt: issued.expiresAt,
+    };
+  });
+}
+
+/**
+ * Break-glass: a new temporary password for an EXISTING Super Admin (expired temporary
+ * password, or the only Super Admin disabled). Re-enables the account. Never creates an admin.
+ */
+export async function reissueSuperAdminPassword(
+  db: Kysely<Database>,
+  input: { email: string },
+): Promise<IssuedPassword & { reEnabled: boolean }> {
+  const email = parse(emailSchema, input.email);
+
+  return db.transaction().execute(async (trx) => {
+    await lockSetup(trx);
+    const admin = await trx
+      .selectFrom('admins')
+      .select(['id', 'status'])
+      .where('email', '=', email)
+      .where('role', '=', 'super_admin')
+      .executeTakeFirst();
+    if (!admin) throw new SetupError(`${email} is not an existing Super Admin.`);
+
+    const issued = await issueTemporaryPassword();
+    await trx
+      .updateTable('admins')
+      .set({
+        password_hash: issued.passwordHash,
+        must_change_password: true,
+        password_expires_at: issued.expiresAt,
+        status: 'active',
+      })
+      .where('id', '=', admin.id)
+      .execute();
+
+    const reEnabled = admin.status === 'disabled';
+    await trx
+      .insertInto('audit_log')
+      .values({
+        action: 'setup.super_admin_reissued',
+        target_type: 'admin',
+        target_id: admin.id,
+        reason: reEnabled
+          ? 'Temporary password reissued; account re-enabled'
+          : 'Temporary password reissued',
+      })
+      .execute();
+
+    return {
+      adminId: admin.id,
+      email,
+      temporaryPassword: issued.temporaryPassword,
+      expiresAt: issued.expiresAt,
+      reEnabled,
+    };
+  });
+}

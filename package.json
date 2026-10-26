@@ -15,7 +15,8 @@
     "db:migrate": "pnpm --filter server db:migrate",
     "db:migrate:test": "pnpm --filter server db:migrate:test",
     "db:rollback": "pnpm --filter server db:rollback",
-    "db:status": "pnpm --filter server db:status"
+    "db:status": "pnpm --filter server db:status",
+    "app:setup": "pnpm --filter server app:setup"
   },
   "devDependencies": {
     "prettier": "3.9.10"

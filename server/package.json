@@ -9,11 +9,12 @@
     "lint": "eslint .",
     "test": "pnpm test:unit && pnpm test:e2e",
     "test:unit": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config test/jest-e2e.json",
+    "test:e2e": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config test/jest-e2e.json --runInBand",
     "db:migrate": "nest build && node dist/database/migrate.js latest",
     "db:migrate:test": "nest build && node dist/database/migrate.js latest --test",
     "db:rollback": "nest build && node dist/database/migrate.js down",
-    "db:status": "nest build && node dist/database/migrate.js status"
+    "db:status": "nest build && node dist/database/migrate.js status",
+    "app:setup": "nest build && node dist/setup/cli.js"
   },
   "dependencies": {
     "@nestjs/common": "12.2.0",

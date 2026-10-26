@@ -56,6 +56,8 @@ export interface AdminsTable {
   password_hash: string;
   totp_secret_encrypted: string | null;
   status: Generated<'active' | 'disabled'>;
+  must_change_password: Generated<boolean>;
+  password_expires_at: Date | null;
   last_login_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;

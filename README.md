@@ -113,3 +113,31 @@ Tables are created by numbered migration files in `server/src/database/migration
 | `pnpm db:migrate:test` | Same as `db:migrate`, for `sarthi_test` (tests also do this themselves) |
 
 To see the tables: `docker compose exec postgres psql -U sarthi -d sarthi_dev -c "\dt"`
+
+### First-time setup: default settings and the first Super Admin
+
+Run once, after `pnpm db:migrate`:
+
+```powershell
+pnpm app:setup --name "Your Name" --email "you@tvlmedia.in"
+```
+
+- Adds the default safety settings (any that are missing; never overwrites a changed value).
+- Creates the **first Super Admin** and prints a **temporary password once**. Copy it straight away:
+  it is not saved anywhere. It works for **24 hours** and must be changed at first login.
+- Refuses if a Super Admin already exists. More admins are added from the Admin Team screen.
+- `pnpm app:setup` with no options only adds missing settings. Running it again changes nothing.
+
+**Locked out?** If the temporary password expired, or the only Super Admin was disabled:
+
+```powershell
+pnpm app:setup --reissue --email "you@tvlmedia.in"
+```
+
+This gives that existing Super Admin a new temporary password (24 hours, must be changed) and
+re-enables the account. It never creates a new admin, and it is written to the audit log.
+
+On a server, run the same commands with the server's environment variables set (no `.env` needed).
+
+**Tests** reset `sarthi_test` themselves: before the run every table is dropped and rebuilt, and
+after the run every table is dropped again, so no test records are left behind.

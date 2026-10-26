@@ -4,6 +4,11 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Admin passwords: Node's built-in scrypt, N=2^16, r=8, p=2 (OWASP-listed), maxmem 128 MB, 16-byte salt; stored as `scrypt$N$r$p$salt$hash` | No extra library or native build; settings are stored per hash so they can be raised later |
+| First Super Admin via `pnpm app:setup --name --email`: one-time temporary password (20 chars, ~115 bits) shown once in the terminal, never stored or logged; must be changed at first login; expires after 24 hours. Refuses if any Super Admin exists | No password in code or `.env`; only one bootstrap path |
+| Break-glass: `pnpm app:setup --reissue --email` gives an EXISTING Super Admin a new temporary password and re-enables the account; never creates an admin; audit-logged (`setup.super_admin_reissued`) | Recovers from an expired temporary password or a disabled only Super Admin. Needs server access, so it is only for the tech lead |
+| Default safety settings inserted by the setup command, only if missing. Location retention and SMS providers are not inserted until agreed | Running setup again never undoes a change made in Settings |
+| Test database reset by undoing and re-running all migrations (before and after each run, and before each setup test); end-to-end tests run one file at a time | `audit_log` and `sos_events` refuse deletes, so dropping tables is the clean way to wipe; tests never leave records |
 | Kysely (0.29) for migrations and typed queries; migrations written as plain SQL | One small tool with no dependencies, on the `pg` driver we already use; plain SQL is easy to review; PostGIS works directly |
 | `sos_events`: a database trigger blocks deletes and changes to id, user_id, trigger, is_test, started_at (user_id may only become NULL on account deletion). Status, ended_at, end_reason can change. Admins have no edit API at all | SOS history must be trustworthy, even if application code has a bug |
 | `audit_log` is append-only (triggers block UPDATE, DELETE and TRUNCATE) | An audit trail that can be edited proves nothing |
