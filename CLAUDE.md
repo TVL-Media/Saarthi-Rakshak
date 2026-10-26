@@ -102,4 +102,5 @@ Auto-call to guardians · silent alert · Hindi language · WhatsApp alerts (onl
 - **Commit after each working step** with a clear message; one branch per feature.
 - **Keep it simple:** no extra libraries or patterns unless the step needs them.
 - **Update this file and `docs/decisions.md`** when a decision changes.
+- Never stop or kill a process you did not start yourself. If a port is busy, ask.
 - The project owner prefers **simple, plain language** in explanations.
