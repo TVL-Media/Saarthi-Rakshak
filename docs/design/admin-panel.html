@@ -231,7 +231,7 @@ const authFoot = `<p class="auth-foot">For authorised client staff only. Every v
 const AUTH = {
   login: {
     label: 'Log in',
-    note: '<b>Route /login.</b> After a correct password the server returns "needs 2-step" (go to 2-step code) or "must change password" (first login). Errors: wrong details, locked after 5 tries for 15 min, too many tries from this network. Never say which of email or password was wrong.',
+    note: '<b>Route /login.</b> After a correct password the server returns "needs 2-step" (go to 2-step code) or "must change password" (first login). The server sends one reply for wrong details and for a locked account (so nobody can tell which emails exist): always show this one red message. Never say which of email or password was wrong.',
     html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
       ${brand()}
       <div><h1>Log in</h1><p>Use the email your Super Admin added you with.</p></div>
@@ -243,12 +243,11 @@ const AUTH = {
     </form>${authFoot}</div></div>`
   },
   locked: {
-    label: 'Locked',
-    note: '<b>Login error states</b> (same screen, alert above the fields). Locked account and too many tries from one network use the warning style, not red. Fields stay enabled.',
+    label: 'Too many tries',
+    note: '<b>Login error state</b> (same screen, alert above the fields) when the server refuses because of too many tries from this network (429). Warning style, not red. Fields stay enabled. There is no separate "account locked" message: a locked account gets the normal wrong-details message.',
     html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
       ${brand()}
       <div><h1>Log in</h1><p>Use the email your Super Admin added you with.</p></div>
-      <div class="alert warn" role="alert">This account is locked for 15 minutes after too many wrong tries. Try again later or ask a Super Admin.</div>
       <div class="alert warn" role="alert">Too many login tries from this network. Wait 15 minutes and try again.</div>
       <div class="field"><label for="k-email">Email</label><input id="k-email" class="input" type="email"></div>
       <div class="field"><label for="k-pass">Password</label><input id="k-pass" class="input" type="password"></div>
@@ -257,13 +256,13 @@ const AUTH = {
   },
   password: {
     label: 'Change password',
-    note: '<b>Route /change-password.</b> Shown when logging in with a temporary password (from the setup command or a reset). The rules list must match the server rule (at least 12 characters). Rules turn green as they are met.',
+    note: '<b>Route /change-password.</b> Shown when logging in with a temporary password (from the setup command or a reset). The rules list must match the server rules. Rules turn green as they are met (the last two are checked by the server and shown as an error under the field if broken).',
     html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
       ${brand()}
       <div class="steps"><span class="on">1 · New password</span><span>2 · 2-step setup</span><span>3 · Backup codes</span></div>
       <div><h1>Set your own password</h1><p>You logged in with a temporary password. Choose a new one to continue.</p></div>
       <div class="field"><label for="p-new">New password</label><input id="p-new" class="input" type="password" autocomplete="new-password">
-        <ul class="rules"><li>At least 12 characters</li><li>Not the same as the temporary password</li></ul></div>
+        <ul class="rules"><li>At least 12 characters</li><li>Not the same as the temporary password</li><li>Does not contain the name part of your email</li></ul></div>
       <div class="field"><label for="p-again">Type it again</label><input id="p-again" class="input" type="password" autocomplete="new-password"></div>
       <button class="btn primary block" type="submit">Save password</button>
     </form>${authFoot}</div></div>`
@@ -318,7 +317,7 @@ const AUTH = {
   },
   expired: {
     label: 'Logged out',
-    note: '<b>Shown on /login</b> when the server ends the session: 30 minutes without activity, or 12 hours after login. Any open page sends the admin here; nothing is kept in the browser.',
+    note: '<b>Shown on /login</b> when the server ends the session. The server says why, and the message changes: idle = "You were logged out after 30 minutes without activity. Log in again to continue." · expired = "You were logged out 12 hours after login. Log in again to continue." · ended (logout elsewhere, password change, account disabled) = "Your session ended. Log in again." Nothing is kept in the browser.',
     html: `<div class="auth"><div class="auth-wrap"><form class="auth-card" onsubmit="event.preventDefault()">
       ${brand()}
       <div class="alert info">You were logged out after 30 minutes without activity. Log in again to continue.</div>

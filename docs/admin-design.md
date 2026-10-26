@@ -80,7 +80,7 @@ Spacing steps: 4 · 8 · 12 · 16 · 20 · 24. Sidebar 232 px wide, top bar 60 p
 
 | Design screen | Route | Who |
 | --- | --- | --- |
-| Log in, Locked, Logged out | `/login` | Everyone |
+| Log in, Too many tries, Logged out | `/login` | Everyone |
 | Change password | `/change-password` | After a temporary password |
 | 2-step setup, Backup codes | `/two-step/setup` | First login |
 | 2-step code | `/two-step` | Every login |
@@ -105,7 +105,7 @@ Route names are a suggestion. Keep them if the server or existing code doesn't a
 | Empty | Icon + bold line + one sentence saying what will appear and when (exact text in the design) |
 | Error | "Couldn't load this page" + "Try again" button. Never show raw server errors |
 | No access | "Only a Super Admin can open this page" + "Go to Dashboard". The server also returns 403 |
-| Logged out | Back to `/login` with "You were logged out after 30 minutes without activity." |
+| Logged out | Back to `/login` with the message for the reason the server gives (idle, 12 hours, ended); text in the design |
 
 ## Rules shown in the design
 
