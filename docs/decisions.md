@@ -4,6 +4,9 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Node.js 24 LTS (≥ 24.9) for the server, locally and on DigitalOcean; Jest runs with `--experimental-vm-modules` | NestJS 12 ships only as ES modules; Jest loads them only on Node ≥ 24.9 with that flag. Node 22 leaves support in April 2027 |
+| Server: NestJS 12, TypeScript 6.0 (not 7), `pg` driver, ioredis 5 (not 6), Zod for settings; no `@nestjs/config` or `@nestjs/terminus` | TS 7 not yet supported by ts-jest/typescript-eslint; BullMQ uses ioredis 5; Node's built-in `.env` loader and a small custom `/health` are enough |
+| Settings from root `.env` if present, otherwise real environment variables; test URLs required only in development/test | Same code runs locally and on DigitalOcean; tests can never fall back to dev data |
 | Local Docker: `postgis/postgis:17-3.5`, `redis:7.4-alpine`; one PostgreSQL container with two databases (`sarthi_dev`, `sarthi_test`); local PostgreSQL port 5433; Redis tests use DB `/1` | Same PostgreSQL version as DigitalOcean managed; pinned versions for everyone; simplest setup that keeps test data separate; 5433 avoids clashing with a Windows-installed PostgreSQL |
 | UI is designed in Figma and read by Claude Code through the Figma MCP server; Ant Design in code | One source of truth for design; Ant Design components map closely to the Ant Design Figma kit |
 | No fake data in the admin panel; no simulator; clear empty states | Requested by the project owner; only real data and real configuration appear in the panel |

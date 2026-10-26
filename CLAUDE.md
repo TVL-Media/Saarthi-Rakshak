@@ -27,7 +27,7 @@ Automated tests may create temporary records in a separate test database that is
 | Part | Tool |
 | --- | --- |
 | Mobile app | Flutter (screens) + Kotlin (native Android "safety engine") — later |
-| Server | Node.js + TypeScript, NestJS |
+| Server | Node.js 24 LTS (≥ 24.9) + TypeScript 6.0, NestJS 12 |
 | Admin panel | React + TypeScript, Vite, Ant Design, React Router, TanStack Query, Socket.IO client, Recharts, React Hook Form + Zod |
 | Guardian live page | React + TypeScript, very light (no Ant Design) — later |
 | Database | PostgreSQL + PostGIS |

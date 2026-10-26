@@ -24,7 +24,7 @@ A personal safety app. Phase 1 is a reliable SOS and safe-journey app for Androi
 ## Tools to install
 
 - Git
-- Node.js (LTS) and pnpm
+- Node.js 24 LTS (24.9 or newer) and pnpm 12
 - Docker Desktop (runs PostgreSQL + PostGIS and Redis locally)
 - Later: Flutter SDK and Android Studio (for the mobile app)
 
@@ -71,4 +71,32 @@ docker compose up -d
 If you change `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` or `POSTGRES_TEST_DB` in `.env`,
 you must reset like this for the change to take effect.
 
-_Server setup is added in build step 2._
+### Server
+
+Needs **Node.js 24.9 or newer** (Node 24 LTS) and **pnpm 12** (`corepack enable` sets up the right pnpm).
+
+1. Install packages (first time, and after pulling new changes):
+   ```powershell
+   pnpm install
+   ```
+2. **Start** the server (restarts automatically when you change code):
+   ```powershell
+   pnpm dev
+   ```
+3. **Open** http://localhost:3000/health in your browser, or:
+   ```powershell
+   curl.exe http://localhost:3000/health
+   ```
+   - `{"status":"ok", ...}` means PostgreSQL and Redis are both reachable.
+   - A **503** shows which one is `down`. Start it with `docker compose up -d`.
+
+If a setting is missing, the server stops at once and lists what to fix.
+
+| Command | What it does |
+| --- | --- |
+| `pnpm test` | Runs all tests. They use only `sarthi_test` and Redis slot `/1`, never your dev data |
+| `pnpm lint` | Checks the code for mistakes |
+| `pnpm format` | Formats the code (`pnpm format:check` only checks) |
+| `pnpm build` | Builds the server into `server/dist` |
+
+Tests need Docker running (`docker compose up -d`).

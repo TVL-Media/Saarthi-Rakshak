@@ -1,0 +1,19 @@
+{
+  "name": "sarthi-rakshak",
+  "private": true,
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24.9"
+  },
+  "scripts": {
+    "dev": "pnpm --filter server dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write server",
+    "format:check": "prettier --check server"
+  },
+  "devDependencies": {
+    "prettier": "3.9.10"
+  }
+}
