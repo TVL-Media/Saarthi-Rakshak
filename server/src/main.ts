@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { configureApp } from './app-setup';
 import { AppModule } from './app.module';
 import { loadEnvFile } from './config/env';
 import { validateEnv, type Env } from './config/env.schema';
@@ -16,6 +17,7 @@ async function bootstrap(): Promise<void> {
   }
 
   const app = await NestFactory.create(AppModule);
+  configureApp(app, env);
   app.enableShutdownHooks();
   await app.listen(env.PORT);
   console.log(`Server running on http://localhost:${env.PORT} (${env.NODE_ENV})`);

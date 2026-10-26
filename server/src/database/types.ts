@@ -58,6 +58,12 @@ export interface AdminsTable {
   status: Generated<'active' | 'disabled'>;
   must_change_password: Generated<boolean>;
   password_expires_at: Date | null;
+  failed_login_count: Generated<number>;
+  locked_until: Date | null;
+  totp_enabled_at: Date | null;
+  /** bigint, returned as a string by pg. */
+  totp_last_step: string | number | null;
+  password_changed_at: Date | null;
   last_login_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
@@ -183,6 +189,32 @@ export interface AuditLogTable {
   reason: string | null;
   ip: string | null;
   user_agent: string | null;
+  session_id: string | null;
+  status_code: number | null;
+  created_at: CreatedAt;
+}
+
+export type SessionStage = 'change_password' | 'setup_2fa' | 'verify_2fa' | 'full';
+
+export interface AdminSessionsTable {
+  id: Generated<string>;
+  admin_id: string;
+  token_hash: string;
+  stage: SessionStage;
+  ip: string | null;
+  user_agent: string | null;
+  created_at: CreatedAt;
+  last_seen_at: Timestamp;
+  expires_at: Date;
+  ended_at: Date | null;
+  end_reason: string | null;
+}
+
+export interface AdminBackupCodesTable {
+  id: Generated<string>;
+  admin_id: string;
+  code_hash: string;
+  used_at: Date | null;
   created_at: CreatedAt;
 }
 
@@ -203,6 +235,8 @@ export interface Database {
   devices: DevicesTable;
   guardians: GuardiansTable;
   admins: AdminsTable;
+  admin_sessions: AdminSessionsTable;
+  admin_backup_codes: AdminBackupCodesTable;
   settings: SettingsTable;
   journeys: JourneysTable;
   sos_events: SosEventsTable;

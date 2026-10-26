@@ -152,6 +152,8 @@ export async function reissueSuperAdminPassword(
     if (!admin) throw new SetupError(`${email} is not an existing Super Admin.`);
 
     const issued = await issueTemporaryPassword();
+    // Break-glass: new temporary password, 2-step cleared (set up again at login),
+    // lockout cleared, account re-enabled, and every open session ended.
     await trx
       .updateTable('admins')
       .set({
@@ -159,8 +161,20 @@ export async function reissueSuperAdminPassword(
         must_change_password: true,
         password_expires_at: issued.expiresAt,
         status: 'active',
+        totp_secret_encrypted: null,
+        totp_enabled_at: null,
+        totp_last_step: null,
+        failed_login_count: 0,
+        locked_until: null,
       })
       .where('id', '=', admin.id)
+      .execute();
+    await trx.deleteFrom('admin_backup_codes').where('admin_id', '=', admin.id).execute();
+    await trx
+      .updateTable('admin_sessions')
+      .set({ ended_at: new Date(), end_reason: 'reissued by setup command' })
+      .where('admin_id', '=', admin.id)
+      .where('ended_at', 'is', null)
       .execute();
 
     const reEnabled = admin.status === 'disabled';
@@ -170,9 +184,9 @@ export async function reissueSuperAdminPassword(
         action: 'setup.super_admin_reissued',
         target_type: 'admin',
         target_id: admin.id,
-        reason: reEnabled
-          ? 'Temporary password reissued; account re-enabled'
-          : 'Temporary password reissued',
+        reason:
+          'Temporary password reissued; 2-step setup cleared; all sessions ended' +
+          (reEnabled ? '; account re-enabled' : ''),
       })
       .execute();
 

@@ -8,6 +8,8 @@ import type { Database } from '../src/database/types';
 
 /** Every table the migrations create. */
 export const TABLES = [
+  'admin_backup_codes',
+  'admin_sessions',
   'admins',
   'alerts',
   'audit_log',

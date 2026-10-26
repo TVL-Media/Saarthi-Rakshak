@@ -139,5 +139,36 @@ re-enables the account. It never creates a new admin, and it is written to the a
 
 On a server, run the same commands with the server's environment variables set (no `.env` needed).
 
+### Admin login (API)
+
+`.env` needs `ADMIN_TOTP_ENCRYPTION_KEY` (32 random bytes). Generate one and paste it in:
+
+```powershell
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Never reuse a key between environments. Changing it later means every admin has to set up 2-step again.
+
+Logging in has steps; each answer says what comes `next`:
+
+| Step | Call | When |
+| --- | --- | --- |
+| 1 | `POST /admin/auth/login` `{ email, password }` | Always |
+| 2 | `POST /admin/auth/password` `{ newPassword }` | `next: change_password` (temporary password). At least 12 characters |
+| 3 | `POST /admin/auth/2fa/setup`, then `POST /admin/auth/2fa/setup/confirm` `{ code }` | `next: setup_2fa`. Add the secret to an authenticator app; you get **10 backup codes once** |
+| 3 | `POST /admin/auth/2fa/verify` `{ code }` or `{ backupCode }` | `next: verify_2fa` |
+| — | `GET /admin/auth/me`, `POST /admin/auth/logout` | When logged in |
+
+Trying it with `curl.exe` (the panel does this for you later). Requests that change something must
+send the panel's `Origin`; the cookie is kept in `cookies.txt`:
+
+```powershell
+curl.exe -i -c cookies.txt -b cookies.txt -H "Origin: http://localhost:5173" -H "Content-Type: application/json" `
+  -d '{\"email\":\"you@tvlmedia.in\",\"password\":\"YOUR-PASSWORD\"}' http://localhost:3000/admin/auth/login
+```
+
+Note: the session cookie is marked `Secure`. Browsers accept it on `localhost`; `curl.exe` only keeps
+it when the address is `localhost` too.
+
 **Tests** reset `sarthi_test` themselves: before the run every table is dropped and rebuilt, and
 after the run every table is dropped again, so no test records are left behind.

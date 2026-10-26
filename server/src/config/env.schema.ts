@@ -15,6 +15,15 @@ const envSchema = z
     // Required in development and test only (checked below); not used in production.
     DATABASE_URL_TEST: postgresUrl.optional(),
     REDIS_URL_TEST: redisUrl.optional(),
+    // 32 random bytes in base64. Two separate keys are derived from it (see auth/auth-keys.ts).
+    ADMIN_TOTP_ENCRYPTION_KEY: z
+      .string({ error: 'Required: 32 random bytes in base64 (see README)' })
+      .regex(/^[A-Za-z0-9+/]{43}=$/, { error: 'Must be 32 random bytes in base64 (see README)' }),
+    // The admin panel's address: the only origin allowed by CORS and the Origin check.
+    ADMIN_PANEL_ORIGIN: z
+      .url({ protocol: /^https?$/, error: 'Must be a http(s):// address' })
+      .default('http://localhost:5173')
+      .transform((url) => new URL(url).origin),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') return;

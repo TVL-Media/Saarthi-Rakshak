@@ -44,7 +44,7 @@ const NOIDA_SECTOR_18 = sql<string>`ST_MakePoint(77.326, 28.5708)::geography`;
 const BOTANICAL_GARDEN = sql<string>`ST_MakePoint(77.334, 28.564)::geography`;
 
 describe('migrations', () => {
-  it('create all 14 tables', async () => {
+  it('create all tables', async () => {
     const { rows } = await sql<{ table_name: string }>`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public' AND table_name = ANY(${TABLES})
