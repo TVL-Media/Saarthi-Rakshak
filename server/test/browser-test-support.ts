@@ -8,7 +8,7 @@ import { encrypt } from '../src/auth/crypto-box';
 import { hashPassword } from '../src/auth/password';
 import { timeStep, totpCode } from '../src/auth/totp';
 import { activeConnections, validateEnv } from '../src/config/env.schema';
-import { createFirstSuperAdmin } from '../src/setup/setup';
+import { createFirstSuperAdmin, insertDefaultSettings } from '../src/setup/setup';
 import { openTestDatabase, resetTestDatabase, wipeTestDatabase } from './test-database';
 
 async function withTestDatabase<T>(
@@ -70,6 +70,52 @@ export async function createSupportAdminForTest(
       .execute();
   });
   return { password, secret: base32Encode(secret) };
+}
+
+/** An admin with a known password and no 2-step setup (for the 2-step-off server). */
+export async function createAdminForTest(
+  role: 'super_admin' | 'support_admin',
+  name: string,
+  email: string,
+): Promise<string> {
+  const password = 'admin-' + randomBytes(6).toString('hex');
+  await withTestDatabase(async (db) => {
+    await db
+      .insertInto('admins')
+      .values({ name, email, role, password_hash: await hashPassword(password) })
+      .execute();
+  });
+  return password;
+}
+
+/** The default safety settings, saved by the real setup code. */
+export async function insertDefaultSettingsForTest(): Promise<void> {
+  await withTestDatabase((db) => insertDefaultSettings(db));
+}
+
+export async function settingValueForTest(key: string): Promise<unknown> {
+  return withTestDatabase(async (db) => {
+    const row = await db
+      .selectFrom('settings')
+      .select('value')
+      .where('key', '=', key)
+      .executeTakeFirst();
+    return row?.value;
+  });
+}
+
+/** The settings.changed audit rows: setting, reason and before/after values. */
+export async function settingChangesForTest(): Promise<
+  { target_id: string | null; reason: string | null; details: unknown }[]
+> {
+  return withTestDatabase((db) =>
+    db
+      .selectFrom('audit_log')
+      .select(['target_id', 'reason', 'details'])
+      .where('action', '=', 'settings.changed')
+      .orderBy('id')
+      .execute(),
+  );
 }
 
 /**

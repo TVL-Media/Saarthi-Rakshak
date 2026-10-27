@@ -2,6 +2,7 @@ import { Alert, Table } from 'antd';
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
+import { SettingsBody } from './SettingsPage';
 import type { DashboardState } from '../auth/TwoStepPage';
 
 // Step 6: each screen has its title and the empty states from the design. Data comes with each
@@ -218,7 +219,7 @@ export const MAIN_SCREENS: Screen[] = [
   { path: '/reports', menu: 'Reports', title: 'Reports', sub: 'Pilot numbers', body: Reports },
 ];
 
-// Content comes in step 7; title and subtitle only for now (no placeholder cards).
+// Admin Team and Audit Log: content comes later in step 7; title and subtitle only for now.
 export const SUPER_ADMIN_SCREENS: Screen[] = [
   {
     path: '/settings',
@@ -226,6 +227,7 @@ export const SUPER_ADMIN_SCREENS: Screen[] = [
     title: 'Settings',
     sub: 'Super Admin only · every change is recorded in the audit log',
     superOnly: true,
+    body: SettingsBody,
   },
   {
     path: '/team',

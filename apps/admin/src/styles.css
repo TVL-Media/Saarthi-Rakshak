@@ -1,5 +1,5 @@
 /* Layout and type sizes from docs/admin-design.md. Colours come only from the --sr-* variables,
-   which src/theme.ts sets on .sr-root (never hard-coded here). */
+   which src/theme.ts sets on <body class="sr-root"> (never hard-coded here). */
 
 body {
   margin: 0;
@@ -439,4 +439,51 @@ body {
   .sr-auth-card {
     padding: 22px;
   }
+}
+
+/* ---------- settings ---------- */
+.sr-set-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px 20px;
+}
+.sr-unit.ant-space-compact {
+  display: flex;
+  width: 100%;
+}
+.sr-unit .ant-input-number {
+  flex: 1;
+}
+.sr-unit-label {
+  border: 1px solid var(--sr-border);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  background: var(--sr-table-head);
+  padding: 0 10px;
+  display: grid;
+  place-items: center;
+  color: var(--sr-text-secondary);
+  font-size: 13px;
+}
+.sr-hint {
+  color: var(--sr-text-secondary);
+  font-size: 12px;
+}
+.sr-sticky-bar {
+  position: sticky;
+  bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--sr-card);
+  border: 1px solid var(--sr-border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.sr-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }

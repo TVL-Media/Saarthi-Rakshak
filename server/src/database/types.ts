@@ -191,6 +191,8 @@ export interface AuditLogTable {
   user_agent: string | null;
   session_id: string | null;
   status_code: number | null;
+  /** jsonb: before/after values of a change (names and values only, never personal details). */
+  details: ColumnType<unknown, string | null | undefined, never>;
   created_at: CreatedAt;
 }
 
