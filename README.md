@@ -15,6 +15,10 @@ A personal safety app. Phase 1 is a reliable SOS and safe-journey app for Androi
 | `packages/shared/` | Shared TypeScript types and API contract | Starting |
 | `docs/` | Plans, decisions and specs | Ready |
 
+## Run it on your computer
+
+**New to the project? Follow [`SETUP.md`](SETUP.md)** — step-by-step for Windows, with fixes for common problems.
+
 ## Start here
 
 1. Read [`CLAUDE.md`](CLAUDE.md) — the project summary, tech stack and rules.
