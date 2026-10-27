@@ -38,7 +38,7 @@ Automated tests may create temporary records in a separate test database that is
 | SMS | Indian provider (main + backup), DLT registered |
 | Maps | Google Maps |
 | Package manager | pnpm (workspaces) |
-| Local services | Docker Compose (PostgreSQL + PostGIS, Redis) |
+| Local services | Docker Compose (PostgreSQL + PostGIS, Redis, SeaweedFS for files — stands in for Spaces) |
 | Tests | Jest/Vitest for units, Playwright for admin panel screens |
 
 ## Repository layout
@@ -48,9 +48,9 @@ server/              NestJS backend (API, WebSocket, worker)
 apps/admin/          React admin panel
 apps/guardian-web/   Guardian live-map page (later)
 apps/mobile/         Flutter app (later)
-packages/shared/     Shared TypeScript types / API contract
+packages/shared/     API contract for the user app (Zod schemas + types); written out for Flutter in docs/app-api.md
 docs/                Plans, decisions, specs
-docker-compose.yml   Local PostgreSQL + Redis (to be added)
+docker-compose.yml   Local PostgreSQL + Redis + SeaweedFS (file storage)
 ```
 
 ## Rules that must never be broken

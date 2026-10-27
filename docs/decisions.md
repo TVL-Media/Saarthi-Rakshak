@@ -4,6 +4,7 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| API contract for the user app: Zod schemas in `packages/shared` (`@sarthi/shared`, built to `dist/` by `pnpm install`), used by the server to check input; the same list written out for Flutter in `docs/app-api.md`. One error shape for `/app` and `/g`: `{ error, message }` with fixed codes | One source of truth for TypeScript; Dart can't read TypeScript, so the app follows the written page |
 | Local file storage: **SeaweedFS** (`chrislusf/seaweedfs:4.48`) in Docker, S3 API, port 8333, buckets `sarthi-dev` and `sarthi-test` (made by the server on start, outside production). The server uses the standard S3 API (`@aws-sdk/client-s3`), so production switches to DigitalOcean Spaces by settings only. Storage settings have local defaults outside production and are required in production. Storage being down does not stop the server (a warning only) | MinIO was planned, but it was archived and its Docker image is no longer published. SeaweedFS is open source (Apache 2.0), one container, supports upload links. Defaults keep existing `.env` files working |
 | Phones upload files directly with 5-minute upload links; the file type and exact size are signed into the link | The server never streams files; a link can't be reused for a bigger or different file |
 | Fake call removed from Phase 1 (27 Oct 2026) | Requested by the project owner; not built unless asked again |
