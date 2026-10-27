@@ -51,7 +51,7 @@ Design: [`design/admin-panel.html`](design/admin-panel.html) (open in a browser)
 - No audio playback for any admin.
 - Every view and action written to `audit_log`.
 - SOS records are read-only.
-- 2-step login for every admin; auto logout after inactivity.
+- 2-step login: off in local development, always on in staging and production. Auto logout after inactivity.
 
 ## Tech stack
 

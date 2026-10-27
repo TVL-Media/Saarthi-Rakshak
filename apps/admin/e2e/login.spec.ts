@@ -4,7 +4,13 @@ import {
   createFirstSuperAdminForTest,
   createSupportAdminForTest,
   endSessionsForTest,
+  resetForBrowserTests,
 } from '../../../server/test/browser-test-support';
+
+// Every test starts with an empty test database.
+test.beforeEach(async () => {
+  await resetForBrowserTests();
+});
 
 // Test database only (see playwright.config.ts). Records are wiped after the run.
 

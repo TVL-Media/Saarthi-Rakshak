@@ -84,6 +84,8 @@ Spacing steps: 4 · 8 · 12 · 16 · 20 · 24. Sidebar 232 px wide, top bar 60 p
 | Change password | `/change-password` | After a temporary password |
 | 2-step setup, Backup codes | `/two-step/setup` | First login |
 | 2-step code | `/two-step` | Every login |
+
+2-step screens are used when ADMIN_TWO_STEP=on (always on in production).
 | Dashboard | `/` | Both roles |
 | Live SOS | `/live` | Both roles |
 | Users | `/users` (profile `/users/:id`) | Both roles |

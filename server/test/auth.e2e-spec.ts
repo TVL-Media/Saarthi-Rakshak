@@ -13,6 +13,7 @@ import { base32Decode } from '../src/auth/base32';
 import { encrypt } from '../src/auth/crypto-box';
 import { hashPassword } from '../src/auth/password';
 import { timeStep, totpCode } from '../src/auth/totp';
+import { ENV } from '../src/config/env.module';
 import { activeConnections, validateEnv, type Env } from '../src/config/env.schema';
 import type { Database } from '../src/database/types';
 import { createFirstSuperAdmin, reissueSuperAdminPassword } from '../src/setup/setup';
@@ -28,7 +29,12 @@ beforeAll(async () => {
   db = await openTestDatabase();
   env = validateEnv(process.env);
   redis = new Redis(activeConnections(env).redisUrl);
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  // These tests cover the 2-step login, so it is switched on whatever .env says.
+  env = { ...env, ADMIN_TWO_STEP: 'on' };
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(ENV)
+    .useValue(env)
+    .compile();
   app = moduleRef.createNestApplication();
   configureApp(app, env);
   await app.init();

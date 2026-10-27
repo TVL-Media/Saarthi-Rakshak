@@ -4,6 +4,7 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| 2-step login is a switch, `ADMIN_TWO_STEP` (on/off): **off by default in local development**, on by default in test and production; the server **refuses to start** with it off when `NODE_ENV=production` (staging runs as production too). The 2-step code, screens and tests stay | Requested by the project owner: no authenticator app needed while developing locally. **Risk:** on a laptop with 2-step off, a leaked or guessed password alone opens the panel; lockout (5 tries / 15 min), rate limits and auto logout still apply, and local data is not real user data. Staging and production can never run without 2-step, because the panel shows live SOS locations |
 | Admin panel: Vite 8, React 19, Ant Design 6 (its own `QRCode` and `Input.OTP`, so no QR or code-input library), React Router 8, TanStack Query 5, React Hook Form + Zod; fonts from `@fontsource` | Stack from CLAUDE.md; fewest extra packages |
 | The panel calls the API directly (`VITE_API_URL`, cookies with `credentials: 'include'`), not through a dev proxy | Same cross-origin set-up as production, so CORS and the cookie are tested locally |
 | The panel stores nothing about the session in the browser; login state comes only from `GET /admin/auth/me`, checked every minute. Backup codes live only in page memory | Design rule; a stolen browser profile holds nothing useful |

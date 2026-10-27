@@ -1,4 +1,5 @@
 import type { FormEventHandler, ReactNode } from 'react';
+import { useAuthOptions } from './session';
 
 export function Brand() {
   return (
@@ -40,7 +41,11 @@ export function AuthCard({
 
 /** "1 · New password  2 · 2-step setup  3 · Backup codes" */
 export function Steps({ current }: { current: 1 | 2 | 3 }) {
-  const labels = ['1 · New password', '2 · 2-step setup', '3 · Backup codes'];
+  const twoStep = useAuthOptions().data?.twoStep ?? true;
+  // With 2-step login off (local development), setting the password is the only step.
+  const labels = twoStep
+    ? ['1 · New password', '2 · 2-step setup', '3 · Backup codes']
+    : ['1 · New password'];
   return (
     <div className="sr-steps">
       {labels.map((label, i) => (

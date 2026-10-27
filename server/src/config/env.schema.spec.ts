@@ -28,6 +28,38 @@ describe('validateEnv', () => {
     );
   });
 
+  describe('ADMIN_TWO_STEP', () => {
+    const production = { ...validDev, NODE_ENV: 'production' };
+
+    it.each([
+      ['development', 'off'],
+      ['test', 'on'],
+      ['production', 'on'],
+    ])('defaults to the right value when NODE_ENV is %s (%s)', (NODE_ENV, expected) => {
+      expect(validateEnv({ ...validDev, NODE_ENV }).ADMIN_TWO_STEP).toBe(expected);
+    });
+
+    it('can be turned on in development and off in test', () => {
+      expect(validateEnv({ ...validDev, ADMIN_TWO_STEP: 'on' }).ADMIN_TWO_STEP).toBe('on');
+      expect(
+        validateEnv({ ...validDev, NODE_ENV: 'test', ADMIN_TWO_STEP: 'off' }).ADMIN_TWO_STEP,
+      ).toBe('off');
+    });
+
+    it('refuses off in production (staging also runs as production), with a clear message', () => {
+      expect(() => validateEnv({ ...production, ADMIN_TWO_STEP: 'off' })).toThrow(
+        /ADMIN_TWO_STEP: Must be on when NODE_ENV is production\. 2-step login is always required on staging and production\./,
+      );
+      expect(validateEnv({ ...production, ADMIN_TWO_STEP: 'on' }).ADMIN_TWO_STEP).toBe('on');
+    });
+
+    it('refuses anything other than on or off', () => {
+      expect(() => validateEnv({ ...validDev, ADMIN_TWO_STEP: 'false' })).toThrow(
+        /ADMIN_TWO_STEP: Must be on or off/,
+      );
+    });
+  });
+
   describe('ADMIN_PANEL_ORIGIN', () => {
     it('defaults to the local Vite address', () => {
       expect(validateEnv(validDev).ADMIN_PANEL_ORIGIN).toBe('http://localhost:5173');

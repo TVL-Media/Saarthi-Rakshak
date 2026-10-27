@@ -35,6 +35,13 @@ export class AuthController {
     private readonly rateLimiter: LoginRateLimiter,
   ) {}
 
+  /** What the login screens need to know before anyone logs in. */
+  @Public()
+  @Get('options')
+  options() {
+    return { twoStep: this.auth.twoStepOn };
+  }
+
   @Public()
   @Post('login')
   @HttpCode(200)

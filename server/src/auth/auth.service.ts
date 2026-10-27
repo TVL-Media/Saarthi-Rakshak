@@ -9,6 +9,8 @@ import {
 import { sql, type Selectable, type Transaction } from 'kysely';
 import { AuditService } from '../audit/audit.service';
 import type { AuthedAdmin, RequestMeta } from '../common/http';
+import { ENV } from '../config/env.module';
+import type { Env } from '../config/env.schema';
 import { DatabaseService } from '../database/database.module';
 import type { AdminsTable, Database, SessionStage } from '../database/types';
 import { AUTH_KEYS, type AuthKeys } from './auth-keys';
@@ -27,6 +29,8 @@ export type NextStep = Exclude<SessionStage, 'full'> | 'done';
 
 const loginFailed = () => new UnauthorizedException(LOGIN_FAILED_MESSAGE);
 const codeNotAccepted = () => new UnauthorizedException('Code not accepted');
+/** Audit reason for a login while ADMIN_TWO_STEP is off. */
+const PASSWORD_ONLY = 'password only (2-step login is off)';
 
 function isLocked(admin: Admin): boolean {
   return admin.locked_until !== null && admin.locked_until.getTime() > Date.now();
@@ -51,10 +55,16 @@ export class AuthService {
     private readonly sessions: SessionsService,
     private readonly audit: AuditService,
     @Inject(AUTH_KEYS) private readonly keys: AuthKeys,
+    @Inject(ENV) private readonly env: Env,
   ) {}
 
   private get db() {
     return this.database.db;
+  }
+
+  /** ADMIN_TWO_STEP: off in local development by default; always on in production. */
+  get twoStepOn(): boolean {
+    return this.env.ADMIN_TWO_STEP === 'on';
   }
 
   async login(
@@ -93,6 +103,13 @@ export class AuthService {
       admin.password_expires_at.getTime() <= Date.now()
     ) {
       throw await refuse('temporary password expired');
+    }
+
+    if (!admin.must_change_password && !this.twoStepOn) {
+      const session = await this.db
+        .transaction()
+        .execute((trx) => this.finishLogin(trx, admin.id, PASSWORD_ONLY, meta));
+      return { session, next: 'done' };
     }
 
     const stage = stageAfterPassword(admin);
@@ -155,6 +172,10 @@ export class AuthService {
       );
       if (current.stage === 'full') return { next: 'done' as const };
 
+      if (!this.twoStepOn) {
+        const session = await this.finishLogin(trx, admin.id, PASSWORD_ONLY, meta, current);
+        return { session, next: 'done' as const };
+      }
       const stage: SessionStage = admin.totp_enabled_at ? 'verify_2fa' : 'setup_2fa';
       const session = await this.sessions.rotate(current, stage, meta, trx);
       return { session, next: nextStep(stage) };
@@ -166,6 +187,7 @@ export class AuthService {
     current: AuthedAdmin,
     meta: RequestMeta,
   ): Promise<{ otpauthUrl: string; secret: string }> {
+    this.requireTwoStep();
     const admin = await this.loadAdmin(current.id);
     await this.refuseIfLocked(admin, current, meta);
     if (admin.totp_enabled_at)
@@ -190,6 +212,7 @@ export class AuthService {
     code: string,
     meta: RequestMeta,
   ): Promise<{ session: NewSession; backupCodes: string[] }> {
+    this.requireTwoStep();
     const admin = await this.loadAdmin(current.id);
     await this.refuseIfLocked(admin, current, meta);
     if (!admin.totp_secret_encrypted || admin.totp_enabled_at) {
@@ -214,7 +237,13 @@ export class AuthService {
         meta,
         trx,
       );
-      const session = await this.finishLogin(trx, current, 'authenticator (first setup)', meta);
+      const session = await this.finishLogin(
+        trx,
+        current.id,
+        'authenticator (first setup)',
+        meta,
+        current,
+      );
       return { session, backupCodes };
     });
   }
@@ -225,6 +254,7 @@ export class AuthService {
     input: { code?: string; backupCode?: string },
     meta: RequestMeta,
   ): Promise<{ session: NewSession; backupCodesLeft: number }> {
+    this.requireTwoStep();
     const admin = await this.loadAdmin(current.id);
     await this.refuseIfLocked(admin, current, meta);
     if (!admin.totp_enabled_at || !admin.totp_secret_encrypted) {
@@ -255,7 +285,7 @@ export class AuthService {
         );
       }
       const method = input.code ? 'authenticator' : 'backup code';
-      const session = await this.finishLogin(trx, current, method, meta);
+      const session = await this.finishLogin(trx, current.id, method, meta, current);
       return { session, backupCodesLeft };
     });
   }
@@ -266,6 +296,7 @@ export class AuthService {
     code: string,
     meta: RequestMeta,
   ): Promise<string[]> {
+    this.requireTwoStep();
     const admin = await this.loadAdmin(current.id);
     if (!(await this.useTotpCode(admin, code))) {
       await this.recordFailure(
@@ -431,24 +462,35 @@ export class AuthService {
     return Number(row.n);
   }
 
-  /** Full login: clears the failure count, records the login, swaps in a full session. */
+  /**
+   * Full login: clears the failure count, records the login and starts a full session
+   * (replacing the half-finished one, if there is one).
+   */
   private async finishLogin(
     trx: Transaction<Database>,
-    current: AuthedAdmin,
+    adminId: string,
     method: string,
     meta: RequestMeta,
+    current?: AuthedAdmin,
   ): Promise<NewSession> {
     await trx
       .updateTable('admins')
       .set({ failed_login_count: 0, locked_until: null, last_login_at: new Date() })
-      .where('id', '=', current.id)
+      .where('id', '=', adminId)
       .execute();
-    const session = await this.sessions.rotate(current, 'full', meta, trx);
+    const session = current
+      ? await this.sessions.rotate(current, 'full', meta, trx)
+      : await this.sessions.create(adminId, 'full', meta, trx);
     await this.audit.record(
-      { action: 'auth.login_succeeded', admin_id: current.id, reason: method },
+      { action: 'auth.login_succeeded', admin_id: adminId, reason: method },
       meta,
       trx,
     );
     return session;
+  }
+
+  /** The 2-step routes exist only while ADMIN_TWO_STEP is on. */
+  private requireTwoStep(): void {
+    if (!this.twoStepOn) throw new NotFoundException('2-step login is turned off');
   }
 }

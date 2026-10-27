@@ -17,6 +17,15 @@ export function useMe() {
   });
 }
 
+/** Server login options: whether 2-step login is on (ADMIN_TWO_STEP). */
+export function useAuthOptions() {
+  return useQuery({
+    queryKey: ['auth-options'],
+    queryFn: () => api<{ twoStep: boolean }>('/admin/auth/options'),
+    staleTime: Infinity,
+  });
+}
+
 /** Forget what we knew about the session (after login steps or logout). */
 export function useResetSession() {
   const queryClient = useQueryClient();

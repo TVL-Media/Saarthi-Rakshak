@@ -34,10 +34,11 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   });
   const login = useMutation({
-    mutationFn: (form: Form) => post<{ next: LoginStep }>('/admin/auth/login', form),
+    mutationFn: (form: Form) => post<{ next: LoginStep | 'done' }>('/admin/auth/login', form),
     onSuccess: ({ next }) => {
       resetSession();
-      void navigate(STEP_ROUTE[next]);
+      // 'done': fully logged in (2-step login is off).
+      void navigate(next === 'done' ? '/' : STEP_ROUTE[next]);
     },
   });
 

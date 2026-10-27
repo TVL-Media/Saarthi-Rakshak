@@ -24,8 +24,19 @@ const envSchema = z
       .url({ protocol: /^https?$/, error: 'Must be a http(s):// address' })
       .default('http://localhost:5173')
       .transform((url) => new URL(url).origin),
+    // 2-step login for admins. Default: off in development, on in test and production.
+    // Never allowed off in production (staging also runs as production).
+    ADMIN_TWO_STEP: z.enum(['on', 'off'], { error: 'Must be on or off' }).optional(),
   })
   .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production' && env.ADMIN_TWO_STEP === 'off') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ADMIN_TWO_STEP'],
+        message:
+          'Must be on when NODE_ENV is production. 2-step login is always required on staging and production.',
+      });
+    }
     if (env.NODE_ENV === 'production') return;
 
     for (const key of ['DATABASE_URL_TEST', 'REDIS_URL_TEST'] as const) {
@@ -55,7 +66,11 @@ const envSchema = z
         });
       }
     }
-  });
+  })
+  .transform((env) => ({
+    ...env,
+    ADMIN_TWO_STEP: env.ADMIN_TWO_STEP ?? (env.NODE_ENV === 'development' ? 'off' : 'on'),
+  }));
 
 export type Env = z.infer<typeof envSchema>;
 

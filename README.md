@@ -156,7 +156,15 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 
 Never reuse a key between environments. Changing it later means every admin has to set up 2-step again.
 
-Logging in has steps; each answer says what comes `next`:
+**2-step login (authenticator app)** is set by `ADMIN_TWO_STEP`:
+
+| Where | 2-step login |
+| --- | --- |
+| Your computer (`NODE_ENV=development`) | **Off** by default: log in with email + password only. Add `ADMIN_TWO_STEP=on` to `.env` to try it |
+| Automated tests | Both are tested |
+| Staging and production (`NODE_ENV=production`) | **Always on.** The server refuses to start with `ADMIN_TWO_STEP=off` |
+
+Logging in has steps; each answer says what comes `next` (`done` = logged in):
 
 | Step | Call | When |
 | --- | --- | --- |
