@@ -4,6 +4,10 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Audit Log screen: Super Admin only, read-only (no change, delete or export). Newest first, 50 per page with "Load more". Filters: admin (removed admins included), kind (views and changes / changes only / logins only), India dates. Opening the log is itself logged | Who looked at the log is part of the record |
+| Audit tags: **Viewed / Changed / Login**, with a red "Failed" or "Refused" tag where needed (not "Logged in": a failed login or a logout is not a login) | Clear at a glance |
+| Audit "Admin" column: "Unknown email" for a login with an email that matches no admin (the typed text is never stored or shown: people sometimes type a password into the email box); "System (server command)" for the setup command | No secrets in the log, but every attempt is visible |
+| All admin panel times are India time (Asia/Kolkata), whatever time zone the computer uses; the Details drawer shows the raw browser text (no parsing library) | One clock for the whole team; fewest dependencies |
 | Admin Team: "Remove" disables the account (cannot log in, sessions ended); the row stays in the list, greyed at the bottom with a "Removed" tag and no actions. A removed admin's email cannot be reused ("This email belongs to a removed admin."). Never remove yourself or the last Super Admin | The audit log refers to admins, so their history must stay complete |
 | New admins and password resets get a one-time temporary password (24 h, must be changed), shown once with: "Give this password to the person directly (in person or on a phone call). Don't send it by email or WhatsApp." It is stored only as a hash and never logged | A password sent in writing can be read by others |
 | "Reset password" only for Support Admins; it also turns off their 2-step setup, unlocks the account and ends their sessions. Super Admins: `pnpm app:setup --reissue` only. Adding a Super Admin needs an extra confirmation. Role changes are not available (for now) | Fewest ways to gain or take over a Super Admin account |

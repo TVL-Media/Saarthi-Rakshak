@@ -491,7 +491,7 @@ const PAGES = {
   },
   audit: {
     label: 'Audit Log', title: 'Audit Log', sub: 'Super Admin only · cannot be edited or deleted', superOnly: true,
-    note: '<b>Screen 10.</b> Fills with real entries from the first login. Newest first, paged. Row format below. "Details" opens a drawer with before/after values for changes. No delete or export of the log in Phase 1.',
+    note: '<b>Screen 10.</b> Fills with real entries from the first login. Newest first, paged. Row format below. "Details" opens a drawer with before/after values for changes. No delete or export of the log in Phase 1. Tags: Viewed / Changed / Login, with a red "Failed" or "Refused" tag where needed. Times are India time.',
     html: `
       <div class="card"><div class="filters">
         <select id="a-admin" class="input" aria-label="Admin"><option>All admins</option></select>
@@ -499,7 +499,7 @@ const PAGES = {
         <input id="a-date" class="input" type="text" placeholder="Date range" aria-label="Date range">
       </div>
       ${table(['When', 'Admin', 'Action', 'What', 'IP address', ''],
-        `<tr><td class="ph">{date time}</td><td class="ph">{admin name}</td><td><span class="tag">{Viewed / Changed / Logged in}</span></td><td class="ph">{e.g. Settings · SOS countdown}</td><td class="ph">{ip}</td><td><button class="link" type="button">Details</button></td></tr>`)}
+        `<tr><td class="ph">{date time}</td><td class="ph">{admin name}</td><td><span class="tag">{Viewed / Changed / Login}</span></td><td class="ph">{e.g. Settings · SOS countdown}</td><td class="ph">{ip}</td><td><button class="link" type="button">Details</button></td></tr>`)}
       </div>`
   }
 };

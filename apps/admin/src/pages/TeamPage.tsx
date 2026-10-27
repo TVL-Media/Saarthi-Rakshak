@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { api, ApiError, post, ROLE_LABEL, type Me } from '../api';
 import { useAuthOptions, useMe } from '../auth/session';
 import { ErrorState, LoadingState, SectionCard } from '../components/states';
+import { formatTime } from '../format';
 
 interface TeamMember {
   id: string;
@@ -19,19 +20,6 @@ interface TeamMember {
 }
 
 const TEAM_KEY = ['admins'] as const;
-
-/** Times in India, e.g. "27 Oct 2026, 10:20". */
-function formatTime(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-GB', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 /** The one-time password, shown once (never stored in the browser). */
 interface IssuedPassword {

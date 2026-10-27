@@ -22,7 +22,13 @@ const GENERAL_RULE =
   'Applies to new SOS events and journeys from now on. Ones already running keep the old rule.';
 
 /** Labels, units and hints from the design, in the design's order. */
-const FIELDS: { key: string; label: string; unit: string; hint?: string; applies: string }[] = [
+export const FIELDS: {
+  key: string;
+  label: string;
+  unit: string;
+  hint?: string;
+  applies: string;
+}[] = [
   {
     key: 'sos.countdown_seconds',
     label: 'SOS countdown',

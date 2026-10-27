@@ -2,6 +2,7 @@ import { Alert, Table } from 'antd';
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
+import { AuditBody } from './AuditPage';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import type { DashboardState } from '../auth/TwoStepPage';
@@ -220,7 +221,7 @@ export const MAIN_SCREENS: Screen[] = [
   { path: '/reports', menu: 'Reports', title: 'Reports', sub: 'Pilot numbers', body: Reports },
 ];
 
-// Admin Team and Audit Log: content comes later in step 7; title and subtitle only for now.
+// The Super Admin screens.
 export const SUPER_ADMIN_SCREENS: Screen[] = [
   {
     path: '/settings',
@@ -244,5 +245,6 @@ export const SUPER_ADMIN_SCREENS: Screen[] = [
     title: 'Audit Log',
     sub: 'Super Admin only · cannot be edited or deleted',
     superOnly: true,
+    body: AuditBody,
   },
 ];

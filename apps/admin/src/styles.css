@@ -538,3 +538,26 @@ body {
   letter-spacing: 0.06em;
   color: var(--sr-text);
 }
+
+/* ---------- audit log ---------- */
+.sr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sr-filters > * {
+  min-width: 150px;
+  flex: 1 1 150px;
+}
+.sr-tags {
+  display: inline-flex;
+  gap: 4px;
+}
+.sr-tag-bad.ant-tag {
+  background: var(--sr-error-light);
+  border-color: transparent;
+  color: var(--sr-error);
+}
+.sr-break {
+  word-break: break-all;
+}
