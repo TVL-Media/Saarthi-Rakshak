@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AdminsController } from '../admins/admins.controller';
 import { AuditLogController } from '../audit/audit-log.controller';
+import { UsersController } from '../users/users.controller';
+import { UsersService } from '../users/users.service';
 import { AuditLogService } from '../audit/audit-log.service';
 import { SettingsController } from '../settings/settings.controller';
 import { SettingsService } from '../settings/settings.service';
@@ -20,7 +22,13 @@ import { SessionsService } from './sessions.service';
 
 /** Admin login, sessions, roles and audit for every /admin route. */
 @Module({
-  controllers: [AuthController, AdminsController, SettingsController, AuditLogController],
+  controllers: [
+    AuthController,
+    AdminsController,
+    SettingsController,
+    AuditLogController,
+    UsersController,
+  ],
   providers: [
     {
       provide: AUTH_KEYS,
@@ -33,6 +41,7 @@ import { SessionsService } from './sessions.service';
     AdminsService,
     SettingsService,
     AuditLogService,
+    UsersService,
     LoginRateLimiter,
     // Order matters: the Origin check runs before the session check.
     { provide: APP_GUARD, useClass: OriginGuard },

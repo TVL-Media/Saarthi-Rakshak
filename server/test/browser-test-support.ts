@@ -119,6 +119,56 @@ export async function settingChangesForTest(): Promise<
   );
 }
 
+/**
+ * A temporary app user (test database only) with a device and one guardian. "complete" means
+ * every permission, battery saving off and an accepted guardian.
+ */
+export async function createUserForTest(
+  phone: string,
+  opts: { name?: string; complete?: boolean; runningJourney?: boolean } = {},
+): Promise<string> {
+  return withTestDatabase(async (db) => {
+    const user = await db
+      .insertInto('users')
+      .values({ phone, name: opts.name ?? 'Test User' })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('devices')
+      .values({
+        user_id: user.id,
+        model: 'Redmi Note 12',
+        android_version: '14',
+        app_version: '1.0.0',
+        permissions: opts.complete
+          ? { location: true, notifications: true, sms: true, microphone: true }
+          : { location: true },
+        battery_optimisation_off: Boolean(opts.complete),
+        last_seen_at: new Date(),
+      })
+      .execute();
+    await db
+      .insertInto('guardians')
+      .values({
+        user_id: user.id,
+        name: 'Maa',
+        phone: '+919800000001',
+        invite_status: opts.complete ? 'accepted' : 'pending',
+      })
+      .execute();
+    if (opts.runningJourney) await db.insertInto('journeys').values({ user_id: user.id }).execute();
+    return user.id;
+  });
+}
+
+export async function userStatusForTest(id: string): Promise<string | undefined> {
+  return withTestDatabase(
+    async (db) =>
+      (await db.selectFrom('users').select('status').where('id', '=', id).executeTakeFirst())
+        ?.status,
+  );
+}
+
 /** An admin's row (for checks in browser tests). */
 export async function adminForTest(email: string) {
   return withTestDatabase((db) =>

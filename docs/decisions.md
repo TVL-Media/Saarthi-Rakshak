@@ -4,6 +4,11 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| **Blocking a user never blocks SOS.** Blocking stops only login, new journeys and new guardian invites; it never ends an SOS or a journey already running. Block and Unblock need a written reason (both roles), saved in the audit log | A blocked person may still be in danger; blocking must never stop someone getting help |
+| Users screen: phone search by the **exact full number only** (no partial search); sent in the request body, never in the web address; logged as a view without the number. Full phone numbers never leave the server (users and guardians are masked, e.g. `+91 98•• ••4521`) | Partial search would let an admin browse numbers; masking (rule 7) is enforced on the server |
+| "Setup complete" = location, notifications, SMS and microphone permissions granted + battery saving off for the app + at least one accepted guardian (permission names to be kept in step with the app) | One clear meaning for support staff |
+| "Send setup reminder" is shown disabled ("Push notifications are not set up yet") until Firebase is connected | Honest about what works today |
+| "Delete data" (Super Admin, written reason): the confirm box lists what is deleted (profile, guardians, journeys, locations, recordings) and what is kept (SOS events and alerts, with no link to the person). Refused while an SOS or journey is running, and while the user has audio recordings (file storage not connected yet) | Never delete in the middle of an emergency; never leave audio files behind |
 | Audit Log screen: Super Admin only, read-only (no change, delete or export). Newest first, 50 per page with "Load more". Filters: admin (removed admins included), kind (views and changes / changes only / logins only), India dates. Opening the log is itself logged | Who looked at the log is part of the record |
 | Audit tags: **Viewed / Changed / Login**, with a red "Failed" or "Refused" tag where needed (not "Logged in": a failed login or a logout is not a login) | Clear at a glance |
 | Audit "Admin" column: "Unknown email" for a login with an email that matches no admin (the typed text is never stored or shown: people sometimes type a password into the email box); "System (server command)" for the setup command | No secrets in the log, but every attempt is visible |

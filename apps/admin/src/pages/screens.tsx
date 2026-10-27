@@ -5,6 +5,7 @@ import { EmptyState, SectionCard, type IconName } from '../components/states';
 import { AuditBody } from './AuditPage';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
+import { UsersBody } from './UsersPage';
 import type { DashboardState } from '../auth/TwoStepPage';
 
 // Step 6: each screen has its title and the empty states from the design. Data comes with each
@@ -100,19 +101,6 @@ function LiveSos() {
   );
 }
 
-function Users() {
-  return (
-    <SectionCard>
-      <EmptyTable
-        columns={['Name', 'Phone', 'Setup', 'Guardians', 'App version', 'Last seen', 'Status']}
-        icon="user"
-        title="No users yet"
-        text="Users appear here after they sign up in the app."
-      />
-    </SectionCard>
-  );
-}
-
 function History() {
   return (
     <SectionCard>
@@ -196,7 +184,7 @@ export const MAIN_SCREENS: Screen[] = [
     body: Dashboard,
   },
   { path: '/live', menu: 'Live SOS', title: 'Live SOS', sub: 'View only', body: LiveSos },
-  { path: '/users', menu: 'Users', title: 'Users', sub: 'Search by phone number', body: Users },
+  { path: '/users', menu: 'Users', title: 'Users', sub: 'Search by phone number', body: UsersBody },
   {
     path: '/history',
     menu: 'SOS & Journey History',

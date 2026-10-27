@@ -8,6 +8,7 @@ import { TwoStepSetupPage } from './auth/TwoStepSetupPage';
 import { ErrorState, LoadingState, NoAccessState } from './components/states';
 import { AppLayout, PageHead } from './layout/AppLayout';
 import { MAIN_SCREENS, SUPER_ADMIN_SCREENS, type Screen } from './pages/screens';
+import { UserProfileScreen } from './pages/UserProfilePage';
 
 /** Every panel page: needs a finished login. An ended session goes to /login with its reason. */
 function RequireLogin() {
@@ -66,6 +67,7 @@ export function App() {
         {[...MAIN_SCREENS, ...SUPER_ADMIN_SCREENS].map((screen) => (
           <Route key={screen.path} path={screen.path} element={<ScreenPage screen={screen} />} />
         ))}
+        <Route path="/users/:id" element={<UserProfileScreen />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

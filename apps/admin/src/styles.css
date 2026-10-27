@@ -561,3 +561,34 @@ body {
 .sr-break {
   word-break: break-all;
 }
+
+/* ---------- users ---------- */
+.sr-table-clickable .ant-table-tbody > tr {
+  cursor: pointer;
+}
+.sr-status-list {
+  display: flex;
+  flex-direction: column;
+}
+.sr-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--sr-border);
+}
+.sr-status-row:last-child {
+  border-bottom: 0;
+}
+.sr-badge.warn {
+  background: var(--sr-warning-light);
+  color: var(--sr-warning);
+}
+.sr-badge.bad {
+  background: var(--sr-error-light);
+  color: var(--sr-error);
+}
+.sr-wrap {
+  flex-wrap: wrap;
+}
