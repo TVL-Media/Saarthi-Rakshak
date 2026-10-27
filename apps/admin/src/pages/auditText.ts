@@ -116,6 +116,8 @@ export function describe(entry: AuditEntry): string {
     }
     case 'admin.created':
       return `Admin Team · added ${name} (${ROLE[String(details.role)] ?? 'admin'})`;
+    case 'admin.restored':
+      return `Admin Team · restored ${name} (${ROLE[String(details.role)] ?? 'admin'})`;
     case 'admin.removed':
       return `Admin Team · removed ${name}`;
     case 'admin.password_reset':

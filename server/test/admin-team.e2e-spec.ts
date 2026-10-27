@@ -131,31 +131,60 @@ describe('adding an admin', () => {
     expect(login.body).toEqual({ next: 'change_password' });
   });
 
-  it('refuses an email already in use, and a removed admin’s email', async () => {
+  it('refuses an email that belongs to an active admin', async () => {
     await addAdmin('super_admin', 'sa@example.test');
-    const removed = await addAdmin('support_admin', 'gone@example.test');
-    await db.updateTable('admins').set({ status: 'disabled' }).where('id', '=', removed).execute();
     const client = await logIn('sa@example.test');
-
     const same = await client.post('/admin/admins', {
       name: 'X',
-      email: 'sa@example.test',
+      email: 'SA@example.test',
       role: 'support_admin',
     });
     expect(same.status).toBe(409);
     expect((same.body as { message: string }).message).toBe(
       'An admin with this email already exists.',
     );
+  });
 
-    const old = await client.post('/admin/admins', {
-      name: 'X',
+  it('adding a removed admin again restores the same account (history stays linked)', async () => {
+    await addAdmin('super_admin', 'sa@example.test');
+    const removed = await addAdmin('support_admin', 'gone@example.test');
+    await db
+      .updateTable('admins')
+      .set({ status: 'disabled', totp_enabled_at: new Date(), totp_secret_encrypted: 'x' })
+      .where('id', '=', removed)
+      .execute();
+    const client = await logIn('sa@example.test');
+
+    const res = await client.post('/admin/admins', {
+      name: 'Back Again',
       email: 'GONE@example.test',
       role: 'support_admin',
     });
-    expect(old.status).toBe(409);
-    expect((old.body as { message: string }).message).toBe(
-      'This email belongs to a removed admin.',
-    );
+    expect(res.status).toBe(201);
+    const body = res.body as { id: string; restored: boolean; temporaryPassword: string };
+    expect(body).toMatchObject({ id: removed, restored: true });
+
+    const row = await admin(removed);
+    expect(row).toMatchObject({
+      name: 'Back Again',
+      status: 'active',
+      must_change_password: true,
+      totp_enabled_at: null,
+      totp_secret_encrypted: null,
+    });
+    expect(await verifyPassword(PASSWORD, row.password_hash)).toBe(false);
+    expect(await verifyPassword(body.temporaryPassword, row.password_hash)).toBe(true);
+    expect(await auditRows('admin.restored')).toHaveLength(1);
+    expect(
+      await db.selectFrom('admins').select('id').where('email', '=', 'gone@example.test').execute(),
+    ).toHaveLength(1);
+
+    const back = new Client();
+    const login = await back.post('/admin/auth/login', {
+      email: 'gone@example.test',
+      password: body.temporaryPassword,
+    });
+    expect(login.body).toEqual({ next: 'change_password' });
   });
 
   it('checks the fields', async () => {

@@ -43,31 +43,69 @@ export class AdminsService {
   }
 
   /**
-   * Adds an admin with a one-time temporary password (shown once to the Super Admin, stored
+   * Adds an admin (or brings a removed admin back) with a one-time temporary password (shown once to the Super Admin, stored
    * only as a hash, valid 24 hours, must be changed at first login).
    */
   async create(
     actor: AuthedAdmin,
     input: { name: string; email: string; role: 'super_admin' | 'support_admin' },
     meta: RequestMeta,
-  ): Promise<{ id: string; temporaryPassword: string; expiresAt: Date }> {
+  ): Promise<{ id: string; restored: boolean; temporaryPassword: string; expiresAt: Date }> {
     const name = parseInput(nameSchema, input.name);
     const email = parseInput(emailSchema, input.email);
 
     return this.database.db.transaction().execute(async (trx) => {
       const existing = await trx
         .selectFrom('admins')
-        .select('status')
+        .select(['id', 'status'])
         .where('email', '=', email)
         .executeTakeFirst();
-      if (existing) {
-        throw new ConflictException(
-          existing.status === 'disabled'
-            ? 'This email belongs to a removed admin.'
-            : 'An admin with this email already exists.',
-        );
+      if (existing?.status === 'active') {
+        throw new ConflictException('An admin with this email already exists.');
       }
       const issued = await issueTemporaryPassword();
+
+      // A removed admin added again: the same account comes back (history stays linked), with
+      // the name and role given now, a new temporary password and no old password or 2-step.
+      if (existing) {
+        await trx
+          .updateTable('admins')
+          .set({
+            name,
+            role: input.role,
+            status: 'active',
+            password_hash: issued.passwordHash,
+            must_change_password: true,
+            password_expires_at: issued.expiresAt,
+            totp_secret_encrypted: null,
+            totp_enabled_at: null,
+            totp_last_step: null,
+            failed_login_count: 0,
+            locked_until: null,
+          })
+          .where('id', '=', existing.id)
+          .execute();
+        await trx.deleteFrom('admin_backup_codes').where('admin_id', '=', existing.id).execute();
+        await this.audit.record(
+          {
+            action: 'admin.restored',
+            admin_id: actor.id,
+            session_id: actor.sessionId,
+            target_type: 'admin',
+            target_id: existing.id,
+            details: JSON.stringify({ role: input.role }),
+          },
+          meta,
+          trx,
+        );
+        return {
+          id: existing.id,
+          restored: true,
+          temporaryPassword: issued.temporaryPassword,
+          expiresAt: issued.expiresAt,
+        };
+      }
+
       const row = await trx
         .insertInto('admins')
         .values({
@@ -94,6 +132,7 @@ export class AdminsService {
       );
       return {
         id: row.id,
+        restored: false,
         temporaryPassword: issued.temporaryPassword,
         expiresAt: issued.expiresAt,
       };

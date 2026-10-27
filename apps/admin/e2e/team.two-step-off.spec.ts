@@ -112,7 +112,7 @@ test('adding a Super Admin asks for an extra confirmation', async ({ page }) => 
   ).toHaveCount(0);
 });
 
-test('reset a Support Admin’s password, then remove them with a reason', async ({
+test('reset a Support Admin’s password, remove them with a reason, then add them back', async ({
   page,
   browser,
 }) => {
@@ -141,7 +141,13 @@ test('reset a Support Admin’s password, then remove them with a reason', async
   await expect(page.getByRole('row').last()).toContainText('Ravi Kumar');
   expect((await adminForTest('ravi@example.test'))?.status).toBe('disabled');
 
-  // Their email cannot be used again.
-  await addAdmin(page, 'Ravi Again', 'ravi@example.test');
-  await expect(page.getByText('This email belongs to a removed admin.')).toBeVisible();
+  // Adding them again brings the same account back, with a new temporary password.
+  await addAdmin(page, 'Ravi Kumar', 'ravi@example.test');
+  const third = await takePassword(page);
+  const restoredRow = page.getByRole('row', { name: /Ravi Kumar/ });
+  await expect(restoredRow).toHaveCount(1);
+  await expect(restoredRow.getByText('Removed')).toHaveCount(0);
+  await expect(restoredRow.getByRole('button', { name: 'Reset password' })).toBeVisible();
+  expect((await adminForTest('ravi@example.test'))?.status).toBe('active');
+  await newPersonLogsIn(browser, 'ravi@example.test', third);
 });
