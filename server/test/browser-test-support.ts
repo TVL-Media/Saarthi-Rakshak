@@ -288,6 +288,98 @@ export async function createHistoryForTest(): Promise<{
   });
 }
 
+/**
+ * Alerts for the Alert Log (test database only), all from today: an SMS fixed by the backup
+ * provider, an SMS that used every try, a failed push where an SMS got through, a sent SMS.
+ */
+export async function createAlertsForTest(maxAttempts: number): Promise<{ sosId: string }> {
+  const ago = (m: number) => new Date(Date.now() - m * 60_000);
+  return withTestDatabase(async (db) => {
+    const user = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919812344521', name: 'Priya' })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const g1 = (
+      await db
+        .insertInto('guardians')
+        .values({
+          user_id: user,
+          name: 'Rohan',
+          phone: '+919800000001',
+          relation: 'brother',
+          invite_status: 'accepted',
+          created_at: ago(100),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const g2 = (
+      await db
+        .insertInto('guardians')
+        .values({
+          user_id: user,
+          name: 'Meera',
+          phone: '+919800000002',
+          invite_status: 'accepted',
+          created_at: ago(90),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const sosId = randomUUID();
+    await db
+      .insertInto('sos_events')
+      .values({ id: sosId, user_id: user, trigger: 'button', started_at: ago(10) })
+      .execute();
+    const base = { sos_event_id: sosId, type: 'sos' as const };
+    await db
+      .insertInto('alerts')
+      .values([
+        {
+          ...base,
+          guardian_id: g1,
+          channel: 'sms',
+          provider: 'main',
+          status: 'failed',
+          attempt: 1,
+          created_at: ago(9),
+        },
+        {
+          ...base,
+          guardian_id: g1,
+          channel: 'sms',
+          provider: 'backup',
+          status: 'delivered',
+          attempt: 2,
+          created_at: ago(8),
+        },
+        {
+          ...base,
+          guardian_id: g2,
+          channel: 'sms',
+          provider: 'backup',
+          status: 'failed',
+          attempt: maxAttempts,
+          created_at: ago(7),
+        },
+        { ...base, guardian_id: g1, channel: 'push', status: 'failed', created_at: ago(6) },
+        {
+          ...base,
+          guardian_id: g2,
+          channel: 'sms',
+          provider: 'main',
+          status: 'sent',
+          created_at: ago(30),
+        },
+      ])
+      .execute();
+    return { sosId };
+  });
+}
+
 export async function userStatusForTest(id: string): Promise<string | undefined> {
   return withTestDatabase(
     async (db) =>

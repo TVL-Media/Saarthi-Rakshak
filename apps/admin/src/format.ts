@@ -26,3 +26,19 @@ export function formatTimeExact(value: string | Date): string {
     second: '2-digit',
   });
 }
+
+/** Short time for busy tables: "14:19:18" today (India), otherwise "26 Oct, 14:19". */
+export function formatTimeShort(value: string | Date): string {
+  const date = new Date(value);
+  const day = (d: Date) => d.toLocaleDateString('en-GB', { timeZone: INDIA_TIME_ZONE });
+  if (day(date) === day(new Date())) {
+    return date.toLocaleTimeString('en-GB', { timeZone: INDIA_TIME_ZONE, hour12: false });
+  }
+  return date.toLocaleString('en-GB', {
+    timeZone: INDIA_TIME_ZONE,
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}

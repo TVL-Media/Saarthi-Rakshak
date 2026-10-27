@@ -129,11 +129,12 @@ export function AppLayout({ me, children }: { me: Me; children: ReactNode }) {
 }
 
 /** Title + one-line subtitle at the top of every screen. */
-export function PageHead({ title, sub }: { title: string; sub?: string }) {
+export function PageHead({ title, sub, note }: { title: string; sub?: string; note?: string }) {
   return (
     <div className="sr-page-head">
       <h1>{title}</h1>
       {sub && <p>{sub}</p>}
+      {note && <p className="sr-hint">{note}</p>}
     </div>
   );
 }

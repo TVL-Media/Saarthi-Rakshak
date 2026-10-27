@@ -2,6 +2,7 @@ import { Alert, Table } from 'antd';
 import type { ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
+import { AlertsBody } from './AlertsPage';
 import { AuditBody } from './AuditPage';
 import { HistoryBody } from './HistoryPage';
 import { SettingsBody } from './SettingsPage';
@@ -102,19 +103,6 @@ function LiveSos() {
   );
 }
 
-function AlertLog() {
-  return (
-    <SectionCard title="Messages">
-      <EmptyTable
-        columns={['Time', 'Channel', 'Provider', 'To', 'Result', 'Next step']}
-        icon="inbox"
-        title="No alerts sent yet"
-        text="Every SMS and push sent for an SOS, check-in or lost contact will be logged here."
-      />
-    </SectionCard>
-  );
-}
-
 function Support() {
   return (
     <SectionCard>
@@ -151,6 +139,8 @@ export interface Screen {
   menu: string;
   title: string;
   sub: string;
+  /** An extra line under the subtitle. */
+  note?: string;
   superOnly?: boolean;
   body?: () => ReactNode;
 }
@@ -177,7 +167,8 @@ export const MAIN_SCREENS: Screen[] = [
     menu: 'Alert Log',
     title: 'Alert Log',
     sub: 'Every SMS and push message, failed first',
-    body: AlertLog,
+    note: "Login OTPs are sent by Firebase and don't appear here.",
+    body: AlertsBody,
   },
   {
     path: '/support',

@@ -597,3 +597,40 @@ body {
 .sr-timeline-text {
   font-size: 14px;
 }
+
+/* ---------- alert log ---------- */
+.sr-stat-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.sr-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sr-stat span {
+  color: var(--sr-text-secondary);
+  font-size: 13px;
+}
+.sr-stat b {
+  font-family: var(--sr-font-mono);
+  font-size: 26px;
+  font-weight: 500;
+}
+.sr-stat.sos b {
+  color: var(--sr-error);
+}
+.sr-strong {
+  font-weight: 600;
+}
+.sr-row-failed td:first-child {
+  box-shadow: inset 3px 0 0 var(--sr-error);
+}
+.sr-tags {
+  align-items: flex-start;
+}
+.sr-tags .ant-tag {
+  flex: none;
+  height: auto;
+}

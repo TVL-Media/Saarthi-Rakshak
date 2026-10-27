@@ -270,7 +270,7 @@ export function HistoryBody() {
   );
 }
 
-function TimelineView(props: {
+export function TimelineView(props: {
   type: 'sos' | 'journey';
   id: string;
   onOpenSos: (id: string) => void;

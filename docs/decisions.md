@@ -4,6 +4,10 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Alert Log (both roles, read-only): failures not fixed by a later try come first, then newest first. "To" is "Guardian 1 (brother) +91 98•• ••0001" + SOS or journey; the user is never named. Today's counters use the India day; "Failed" counts only failures not fixed later | Support sees what still needs action first |
+| Next step wording: Sending now · Waiting for delivery report (SMS) · — (delivered) · Retry with backup provider · Retrying (try N of M) · **All tries failed. Check provider status.** (red; later in Dashboard "Needs attention") · Sent again (see newer row). Push shows only "Sent" or "Failed", never "Delivered" (Firebase gives no reliable delivery report); a failed push shows "SMS was sent too" when an SMS reached that guardian. The panel never claims the phone sent SIM SMS unless the phone reported it | Plain, honest status |
+| Tries per SMS: `MAX_SMS_ATTEMPTS = 3` in `server/src/alerts/alerts.constants.ts` — the one place for this number; the Alert Log reads it and the sending worker (not built yet) must use it | The screen and the server can never disagree |
+| Guardians are numbered in the order the user added them, the same on every screen (Alert Log, History timeline) | "Guardian 2" always means the same person |
 | SOS & Journey History (both roles, read-only): SOS rows show the user (name + masked phone, link to profile); **journey rows never name the person** ("A user's journey"); a person's own journeys are only on their profile. Deleted users show as "Deleted user" with no link | Rule 6 (journeys as counts, not names) applied to lists too |
 | History never shows a map or coordinates; location appears only as gaps ("No location for 5 min") when updates stop for **2 minutes or more** (fixed in code) | Rule 6: live location only during an active SOS |
 | Outcomes: SOS — Ended safe · Cancelled in countdown · Still active (links to Live SOS); journey — Arrived safely · Ended · Lost contact · Turned into SOS (opens that SOS) | One set of plain names for the filter, list and timeline |
