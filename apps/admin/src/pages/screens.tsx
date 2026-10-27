@@ -1,10 +1,11 @@
-import { Alert, Table } from 'antd';
+import { Table } from 'antd';
 import type { ReactNode } from 'react';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
 import { AlertsBody } from './AlertsPage';
 import { AuditBody } from './AuditPage';
 import { DashboardBody } from './DashboardPage';
 import { HistoryBody } from './HistoryPage';
+import { LiveBody } from './LivePage';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
@@ -23,46 +24,6 @@ function EmptyTable(props: { columns: string[]; icon: IconName; title: string; t
       scroll={{ x: 'max-content' }}
       locale={{ emptyText: <EmptyState icon={props.icon} title={props.title} text={props.text} /> }}
     />
-  );
-}
-
-function LiveSos() {
-  return (
-    <>
-      <Alert
-        type="warning"
-        title={
-          <span>
-            <b>View only.</b> Admins cannot act on an SOS. Guardians and 112 respond. Sarthi Rakshak
-            alerts your guardians and helps you call 112. It is not a 24/7 monitoring service.
-          </span>
-        }
-      />
-      <div className="sr-cols">
-        <SectionCard title="Active SOS">
-          <EmptyState
-            icon="sos"
-            title="No active SOS right now"
-            text="When a user presses SOS, it appears here within seconds."
-          />
-        </SectionCard>
-        <SectionCard title="Details">
-          <EmptyState
-            icon="list"
-            title="Select an SOS"
-            text="Its live map, guardians and alert status will show here."
-          />
-        </SectionCard>
-      </div>
-      <SectionCard title="Guardians for the selected SOS">
-        <EmptyTable
-          columns={['Guardian', 'Phone', 'SMS', 'Push', 'Opened link', 'Responding']}
-          icon="user"
-          title="No SOS selected"
-          text="Guardian alert status appears when an SOS is selected."
-        />
-      </SectionCard>
-    </>
   );
 }
 
@@ -116,7 +77,7 @@ export const MAIN_SCREENS: Screen[] = [
     sub: 'Noida pilot · updates live',
     body: DashboardBody,
   },
-  { path: '/live', menu: 'Live SOS', title: 'Live SOS', sub: 'View only', body: LiveSos },
+  { path: '/live', menu: 'Live SOS', title: 'Live SOS', sub: 'View only', body: LiveBody },
   { path: '/users', menu: 'Users', title: 'Users', sub: 'Search by phone number', body: UsersBody },
   {
     path: '/history',

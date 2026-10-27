@@ -426,6 +426,109 @@ export async function createDashboardSceneForTest(): Promise<{
   });
 }
 
+/**
+ * Live SOS scene (test database only): a calm SOS (guardian responding, location 30 s ago) and
+ * an SOS with lost contact (last location 9 min ago, nobody responding).
+ */
+export async function createLiveSceneForTest(): Promise<{ calm: string; lost: string }> {
+  const ago = (m: number) => new Date(Date.now() - m * 60_000);
+  const point = sql<string>`ST_MakePoint(77.3123, 28.5678)::geography`;
+  return withTestDatabase(async (db) => {
+    const u1 = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919811111111', name: 'Priya' })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const u2 = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919822222222', name: 'Rahul' })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const calm = randomUUID();
+    const lost = randomUUID();
+    await db
+      .insertInto('sos_events')
+      .values([
+        { id: calm, user_id: u1, trigger: 'button', started_at: ago(30) },
+        { id: lost, user_id: u2, trigger: 'widget', started_at: ago(12) },
+      ])
+      .execute();
+    const g = (
+      await db
+        .insertInto('guardians')
+        .values({
+          user_id: u1,
+          name: 'Rohan',
+          phone: '+919800000001',
+          relation: 'brother',
+          invite_status: 'accepted',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await db
+      .insertInto('alerts')
+      .values({
+        sos_event_id: calm,
+        type: 'sos',
+        guardian_id: g,
+        channel: 'sms',
+        status: 'delivered',
+      })
+      .execute();
+    await db
+      .insertInto('guardian_links')
+      .values({
+        sos_event_id: calm,
+        guardian_id: g,
+        token_hash: randomUUID(),
+        expires_at: ago(-60),
+        opened_at: ago(25),
+        responding_at: ago(24),
+      })
+      .execute();
+    await db
+      .insertInto('location_points')
+      .values([
+        {
+          user_id: u1,
+          sos_event_id: calm,
+          location: point,
+          recorded_at: ago(0.5),
+          accuracy_m: 15,
+          battery_pct: 42,
+          network: '4G',
+        },
+        {
+          user_id: u2,
+          sos_event_id: lost,
+          location: point,
+          recorded_at: ago(9),
+          accuracy_m: 30,
+          battery_pct: 8,
+          network: '2G',
+        },
+      ])
+      .execute();
+    return { calm, lost };
+  });
+}
+
+/** End an SOS as the app would ("I'm safe"). */
+export async function endSosForTest(id: string): Promise<void> {
+  await withTestDatabase((db) =>
+    db
+      .updateTable('sos_events')
+      .set({ status: 'ended', ended_at: new Date() })
+      .where('id', '=', id)
+      .execute(),
+  );
+}
+
 /** How many times an action is in the audit log. */
 export async function auditCountForTest(action: string): Promise<number> {
   return withTestDatabase(

@@ -24,7 +24,13 @@ const LOGIN_ACTIONS = [
 export function kindOf(action: string): AuditKind {
   if (
     action.startsWith('GET ') ||
-    ['auth.access_denied', 'users.searched', 'dashboard.viewed'].includes(action)
+    [
+      'auth.access_denied',
+      'users.searched',
+      'dashboard.viewed',
+      'live.viewed',
+      'live_sos.viewed',
+    ].includes(action)
   ) {
     return 'view';
   }
@@ -115,6 +121,8 @@ export class AuditLogService {
           eb('l.action', '!=', 'auth.access_denied'),
           eb('l.action', '!=', 'users.searched'),
           eb('l.action', '!=', 'dashboard.viewed'),
+          eb('l.action', '!=', 'live.viewed'),
+          eb('l.action', '!=', 'live_sos.viewed'),
         ]),
       );
     }

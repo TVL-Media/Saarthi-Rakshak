@@ -639,3 +639,33 @@ body {
   color: var(--sr-error);
   font-weight: 600;
 }
+
+/* ---------- live sos ---------- */
+.sr-sos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sr-sos-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--sr-border);
+  border-radius: 8px;
+  background: var(--sr-card);
+  color: var(--sr-text);
+  cursor: pointer;
+  font: inherit;
+}
+.sr-sos-item.on {
+  border-color: var(--sr-primary);
+  background: var(--sr-primary-light);
+}
+.sr-sos-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}

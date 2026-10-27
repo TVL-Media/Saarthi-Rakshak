@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AdminsController } from '../admins/admins.controller';
 import { AuditLogController } from '../audit/audit-log.controller';
+import { LiveSosController } from '../live/live-sos.controller';
+import { LiveSosService } from '../live/live-sos.service';
 import { DashboardController } from '../dashboard/dashboard.controller';
 import { DashboardService } from '../dashboard/dashboard.service';
 import { HealthService } from '../health/health.service';
@@ -38,6 +40,7 @@ import { SessionsService } from './sessions.service';
     HistoryController,
     AlertsController,
     DashboardController,
+    LiveSosController,
   ],
   providers: [
     {
@@ -55,6 +58,7 @@ import { SessionsService } from './sessions.service';
     HistoryService,
     AlertsService,
     DashboardService,
+    LiveSosService,
     HealthService,
     LoginRateLimiter,
     // Order matters: the Origin check runs before the session check.
