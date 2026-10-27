@@ -4,6 +4,8 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Local file storage: **SeaweedFS** (`chrislusf/seaweedfs:4.48`) in Docker, S3 API, port 8333, buckets `sarthi-dev` and `sarthi-test` (made by the server on start, outside production). The server uses the standard S3 API (`@aws-sdk/client-s3`), so production switches to DigitalOcean Spaces by settings only. Storage settings have local defaults outside production and are required in production. Storage being down does not stop the server (a warning only) | MinIO was planned, but it was archived and its Docker image is no longer published. SeaweedFS is open source (Apache 2.0), one container, supports upload links. Defaults keep existing `.env` files working |
+| Phones upload files directly with 5-minute upload links; the file type and exact size are signed into the link | The server never streams files; a link can't be reused for a bigger or different file |
 | Fake call removed from Phase 1 (27 Oct 2026) | Requested by the project owner; not built unless asked again |
 | SOS & Journey History (both roles, read-only): SOS rows show the user (name + masked phone, link to profile); **journey rows never name the person** ("A user's journey"); a person's own journeys are only on their profile. Deleted users show as "Deleted user" with no link | Rule 6 (journeys as counts, not names) applied to lists too |
 | History never shows a map or coordinates; location appears only as gaps ("No location for 5 min") when updates stop for **2 minutes or more** (fixed in code) | Rule 6: live location only during an active SOS |

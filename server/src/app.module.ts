@@ -5,9 +5,10 @@ import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { HealthService } from './health/health.service';
 import { RedisModule } from './redis/redis.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
-  imports: [EnvModule, DatabaseModule, RedisModule, AuthModule],
+  imports: [EnvModule, DatabaseModule, RedisModule, StorageModule, AuthModule],
   controllers: [HealthController],
   providers: [HealthService],
 })

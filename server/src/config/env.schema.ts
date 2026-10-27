@@ -5,6 +5,22 @@ const postgresUrl = z.url({
   error: 'Required: a postgresql:// URL',
 });
 const redisUrl = z.url({ protocol: /^rediss?$/, error: 'Required: a redis:// URL' });
+const httpUrl = z
+  .url({ protocol: /^https?$/, error: 'Must be a http(s):// address' })
+  .transform((url) => url.replace(/\/+$/, ''));
+// S3 bucket names: 3–63 lowercase letters, digits, dots and dashes.
+const bucketName = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, { error: 'Must be a valid bucket name' });
+
+/** Local file storage (SeaweedFS in docker-compose.yml). Used only outside production. */
+const LOCAL_STORAGE = {
+  S3_ENDPOINT: 'http://localhost:8333',
+  S3_BUCKET: 'sarthi-dev',
+  S3_BUCKET_TEST: 'sarthi-test',
+  S3_ACCESS_KEY: 'sarthi_local',
+  S3_SECRET_KEY: 'change_me_local_only',
+} as const;
 
 const envSchema = z
   .object({
@@ -27,6 +43,17 @@ const envSchema = z
     // 2-step login for admins. Default: off in development, on in test and production.
     // Never allowed off in production (staging also runs as production).
     ADMIN_TWO_STEP: z.enum(['on', 'off'], { error: 'Must be on or off' }).optional(),
+    // File storage for photos and audio, through the S3 API: SeaweedFS locally, DigitalOcean
+    // Spaces on servers. Required in production; local defaults (LOCAL_STORAGE) otherwise.
+    S3_ENDPOINT: httpUrl.optional(),
+    // The address phones use for upload links, if different from S3_ENDPOINT.
+    S3_PUBLIC_ENDPOINT: httpUrl.optional(),
+    S3_REGION: z.string().min(1).default('us-east-1'),
+    S3_BUCKET: bucketName.optional(),
+    // Separate bucket for automated tests (emptied after each run); not used in production.
+    S3_BUCKET_TEST: bucketName.optional(),
+    S3_ACCESS_KEY: z.string().min(1).optional(),
+    S3_SECRET_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.ADMIN_TWO_STEP === 'off') {
@@ -37,7 +64,18 @@ const envSchema = z
           'Must be on when NODE_ENV is production. 2-step login is always required on staging and production.',
       });
     }
-    if (env.NODE_ENV === 'production') return;
+    if (env.NODE_ENV === 'production') {
+      for (const key of ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'Required when NODE_ENV is production',
+          });
+        }
+      }
+      return;
+    }
 
     for (const key of ['DATABASE_URL_TEST', 'REDIS_URL_TEST'] as const) {
       if (!env[key]) {
@@ -65,12 +103,29 @@ const envSchema = z
           message: 'Must use a different Redis slot from REDIS_URL',
         });
       }
+      const bucket = env.S3_BUCKET ?? LOCAL_STORAGE.S3_BUCKET;
+      if ((env.S3_BUCKET_TEST ?? LOCAL_STORAGE.S3_BUCKET_TEST) === bucket) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['S3_BUCKET_TEST'],
+          message: 'Must be a different bucket from S3_BUCKET',
+        });
+      }
     }
   })
-  .transform((env) => ({
-    ...env,
-    ADMIN_TWO_STEP: env.ADMIN_TWO_STEP ?? (env.NODE_ENV === 'development' ? 'off' : 'on'),
-  }));
+  .transform((env) => {
+    const local = env.NODE_ENV === 'production' ? undefined : LOCAL_STORAGE;
+    return {
+      ...env,
+      ADMIN_TWO_STEP: env.ADMIN_TWO_STEP ?? (env.NODE_ENV === 'development' ? 'off' : 'on'),
+      // In production these are guaranteed by the check above; elsewhere local defaults apply.
+      S3_ENDPOINT: (env.S3_ENDPOINT ?? local?.S3_ENDPOINT)!,
+      S3_BUCKET: (env.S3_BUCKET ?? local?.S3_BUCKET)!,
+      S3_BUCKET_TEST: env.S3_BUCKET_TEST ?? local?.S3_BUCKET_TEST,
+      S3_ACCESS_KEY: (env.S3_ACCESS_KEY ?? local?.S3_ACCESS_KEY)!,
+      S3_SECRET_KEY: (env.S3_SECRET_KEY ?? local?.S3_SECRET_KEY)!,
+    };
+  });
 
 export type Env = z.infer<typeof envSchema>;
 
@@ -96,6 +151,29 @@ export function activeConnections(env: Env): { databaseUrl: string; redisUrl: st
     return { databaseUrl: env.DATABASE_URL_TEST!, redisUrl: env.REDIS_URL_TEST! };
   }
   return { databaseUrl: env.DATABASE_URL, redisUrl: env.REDIS_URL };
+}
+
+export interface StorageSettings {
+  endpoint: string;
+  /** Address put into upload links for phones. */
+  publicEndpoint: string;
+  region: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+/** The file storage bucket the server should use: the test one when NODE_ENV is test. */
+export function activeStorage(env: Env): StorageSettings {
+  return {
+    endpoint: env.S3_ENDPOINT,
+    publicEndpoint: env.S3_PUBLIC_ENDPOINT ?? env.S3_ENDPOINT,
+    region: env.S3_REGION,
+    // validateEnv guarantees a separate test bucket in test mode.
+    bucket: env.NODE_ENV === 'test' ? env.S3_BUCKET_TEST! : env.S3_BUCKET,
+    accessKeyId: env.S3_ACCESS_KEY,
+    secretAccessKey: env.S3_SECRET_KEY,
+  };
 }
 
 function sameUrl(a: string, b: string): boolean {

@@ -34,7 +34,7 @@ A personal safety app. Phase 1 is a reliable SOS and safe-journey app for Androi
 
 ## Local setup
 
-Local PostgreSQL (with PostGIS) and Redis run in Docker. Commands below are for PowerShell on Windows,
+Local PostgreSQL (with PostGIS), Redis and file storage (SeaweedFS) run in Docker. Commands below are for PowerShell on Windows,
 run from the project folder.
 
 1. Install and open **Docker Desktop** (wait until it says "Engine running").
@@ -46,7 +46,7 @@ run from the project folder.
    ```powershell
    docker compose up -d
    ```
-4. **Check** they are running — both should show `healthy`:
+4. **Check** they are running — all three (`postgres`, `redis`, `storage`) should show `healthy`:
    ```powershell
    docker compose ps
    docker compose exec postgres psql -U sarthi -d sarthi_dev -c "SELECT postgis_version();"
@@ -62,7 +62,8 @@ run from the project folder.
    ```
 
 **Ports:** PostgreSQL is on **5433** (not the usual 5432), so it does not clash with a PostgreSQL installed
-directly on Windows. Redis is on 6379. Both are only reachable from your own computer.
+directly on Windows. Redis is on 6379. File storage (SeaweedFS, S3-compatible, for photos and audio)
+is on 8333. All are only reachable from your own computer.
 
 **Two databases:** `sarthi_dev` for your local work and `sarthi_test` for automated tests only.
 Both are created automatically the **first** time PostgreSQL starts.

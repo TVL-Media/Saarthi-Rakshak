@@ -1,4 +1,4 @@
-import { activeConnections, validateEnv } from './env.schema';
+import { activeConnections, activeStorage, validateEnv } from './env.schema';
 
 const validDev = {
   NODE_ENV: 'development',
@@ -8,6 +8,14 @@ const validDev = {
   REDIS_URL: 'redis://localhost:6379/0',
   REDIS_URL_TEST: 'redis://localhost:6379/1',
   ADMIN_TOTP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+};
+
+/** File storage settings that production must set (local defaults apply elsewhere). */
+const productionStorage = {
+  S3_ENDPOINT: 'https://blr1.digitaloceanspaces.com',
+  S3_BUCKET: 'sarthi-prod',
+  S3_ACCESS_KEY: 'key',
+  S3_SECRET_KEY: 'secret',
 };
 
 describe('validateEnv', () => {
@@ -29,14 +37,16 @@ describe('validateEnv', () => {
   });
 
   describe('ADMIN_TWO_STEP', () => {
-    const production = { ...validDev, NODE_ENV: 'production' };
+    const production = { ...validDev, ...productionStorage, NODE_ENV: 'production' };
 
     it.each([
       ['development', 'off'],
       ['test', 'on'],
       ['production', 'on'],
     ])('defaults to the right value when NODE_ENV is %s (%s)', (NODE_ENV, expected) => {
-      expect(validateEnv({ ...validDev, NODE_ENV }).ADMIN_TWO_STEP).toBe(expected);
+      expect(validateEnv({ ...validDev, ...productionStorage, NODE_ENV }).ADMIN_TWO_STEP).toBe(
+        expected,
+      );
     });
 
     it('can be turned on in development and off in test', () => {
@@ -115,7 +125,9 @@ describe('validateEnv', () => {
     });
 
     it('are not required when NODE_ENV is production', () => {
-      expect(() => validateEnv({ ...withoutTestUrls, NODE_ENV: 'production' })).not.toThrow();
+      expect(() =>
+        validateEnv({ ...withoutTestUrls, ...productionStorage, NODE_ENV: 'production' }),
+      ).not.toThrow();
     });
   });
 
@@ -131,6 +143,49 @@ describe('validateEnv', () => {
         validateEnv({ ...validDev, NODE_ENV: 'test', REDIS_URL_TEST: 'redis://localhost:6379' }),
       ).toThrow(/REDIS_URL_TEST: Must use a different Redis slot/);
     });
+  });
+});
+
+describe('file storage (S3_*)', () => {
+  it('uses the local SeaweedFS defaults outside production', () => {
+    const env = validateEnv(validDev);
+    expect(activeStorage(env)).toEqual({
+      endpoint: 'http://localhost:8333',
+      publicEndpoint: 'http://localhost:8333',
+      region: 'us-east-1',
+      bucket: 'sarthi-dev',
+      accessKeyId: 'sarthi_local',
+      secretAccessKey: 'change_me_local_only',
+    });
+  });
+
+  it('uses only the test bucket in test mode', () => {
+    expect(activeStorage(validateEnv({ ...validDev, NODE_ENV: 'test' })).bucket).toBe(
+      'sarthi-test',
+    );
+  });
+
+  it('refuses a test bucket that is the development bucket', () => {
+    expect(() =>
+      validateEnv({ ...validDev, NODE_ENV: 'test', S3_BUCKET: 'same', S3_BUCKET_TEST: 'same' }),
+    ).toThrow(/S3_BUCKET_TEST: Must be a different bucket/);
+  });
+
+  it('requires every storage setting in production', () => {
+    expect(() => validateEnv({ ...validDev, NODE_ENV: 'production' })).toThrow(
+      /S3_ENDPOINT: Required[\s\S]*S3_BUCKET: Required[\s\S]*S3_ACCESS_KEY: Required[\s\S]*S3_SECRET_KEY: Required/,
+    );
+  });
+
+  it('uses S3_PUBLIC_ENDPOINT for upload links when set, without a trailing slash', () => {
+    const env = validateEnv({ ...validDev, S3_PUBLIC_ENDPOINT: 'http://192.168.1.20:8333/' });
+    expect(activeStorage(env).publicEndpoint).toBe('http://192.168.1.20:8333');
+  });
+
+  it('rejects an invalid bucket name', () => {
+    expect(() => validateEnv({ ...validDev, S3_BUCKET: 'Bad_Name' })).toThrow(
+      /S3_BUCKET: Must be a valid bucket name/,
+    );
   });
 });
 

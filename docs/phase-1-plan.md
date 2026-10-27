@@ -146,7 +146,7 @@ The picture above is the **final** shape. For now the same parts run on the lapt
  Laptop (Windows)                                           Phones
  ┌──────────────────────────────────────────────────┐      ┌───────────────────────────┐
  │ Docker: PostgreSQL+PostGIS :5433 · Redis :6379   │      │ Android phone (USB cable) │
- │         MinIO :9000 (audio, stands in for Spaces)│      │  adb reverse tcp:3000 →   │
+ │         SeaweedFS :8333 (photos/audio, = Spaces) │      │  adb reverse tcp:3000 →   │
  │ pnpm dev:                                        │◄─────┤  app calls localhost:3000 │
  │   server  :3000  (/app /g /webhooks /admin)      │      └───────────────────────────┘
  │   worker  (alerts, timers)                       │      ┌───────────────────────────┐
@@ -167,7 +167,7 @@ The picture above is the **final** shape. For now the same parts run on the lapt
 | Push | FCM from the same dev project (needs internet on laptop and phone) |
 | Guardian SMS | **Log provider**: the worker prints the SMS text and the guardian link in the console and records the `alerts` row as normal. Open the link on the laptop or a phone on the same Wi-Fi |
 | Guardian link address | `GUARDIAN_WEB_URL` in `.env` (e.g. `http://localhost:5175` or `http://<laptop-ip>:5175`) |
-| Audio storage | **MinIO** in Docker (S3-compatible, same upload-link flow as DigitalOcean Spaces), so moving to Spaces later is a settings change, not a code change (needs approval: Q7) |
+| Audio storage | **SeaweedFS** in Docker (S3-compatible, same upload-link flow as DigitalOcean Spaces), so moving to Spaces later is a settings change, not a code change (needs approval: Q7) |
 | Maps | Google Maps dev key, restricted to `localhost` and the debug app's package + signing key |
 | Test data | Only what we create by really using the app on our own phones (project rule: no seeded fake data) |
 
@@ -185,10 +185,10 @@ Everything in Tracks A–E is built and tested **locally**. Track F (hosting, CI
 
 | # | Step | Size | Done when |
 | --- | --- | --- | --- |
-| A00 | **Local setup for the app side**: `pnpm dev` also starts the worker and guardian page; MinIO in `docker-compose.yml` (after Q7); Firebase dev project + test numbers; `.env.example` entries; short "run the app locally" section in `SETUP.md` | S | A phone on USB reaches `/health` on the laptop |
+| A00 | **Local setup for the app side**: `pnpm dev` also starts the worker and guardian page; SeaweedFS in `docker-compose.yml` (after Q7); Firebase dev project + test numbers; `.env.example` entries; short "run the app locally" section in `SETUP.md` | S | A phone on USB reaches `/health` on the laptop |
 | A0 | **API contract** in `packages/shared` (request/response types for `/app` and `/g`), agreed with Anjali; add `packages/shared` to the workspace | S | Types compile in server and both web apps |
 | A1 | **Phone login**: app signs in with Firebase phone OTP → `POST /app/auth/firebase` verifies the ID token (`firebase-admin`) → server creates `users` row (first time) + its own session token (stored hashed, like admin sessions). Refresh, logout, consent recorded (`consent_at`). Blocked users: refuse login, new journeys and new guardian invites, but **SOS always works** (already decided in `decisions.md`) | M | Login works from a test script against the Firebase emulator; tests for new/returning/blocked user |
-| A2 | **Profile + device**: name, photo (upload link to MinIO locally, Spaces later), blood group; register device (model, Android, app version, FCM token, permissions, battery-saver state) used by the admin "setup status" | S | Admin Users screen data appears from a real phone |
+| A2 | **Profile + device**: name, photo (upload link to SeaweedFS locally, Spaces later), blood group; register device (model, Android, app version, FCM token, permissions, battery-saver state) used by the admin "setup status" | S | Admin Users screen data appears from a real phone |
 | A3 | **Guardians + invites**: add up to `guardian.max_count`; SMS invite with accept/decline link; decline removes the phone and adds its hashed number to a "do not invite again" list; invite rate limits | M | Tests for limit, decline, re-invite blocked |
 | A4 | **SOS core**: `POST /app/sos` with the phone-made id (idempotent), trigger type, test flag; saves a **snapshot of the rules** in force; creates one secret guardian link per guardian (hashed); `POST /app/sos/:id/end` ("I'm safe") / cancel during countdown; link expiry = end + `guardian.link_live_after_end_minutes` | M | Same SOS sent 3 times → one record; tests for test SOS, cancel, end |
 | A5 | **Location intake**: batched points (`POST /app/locations`), latest point in Redis, saved to `location_points`, published for the live page; heartbeat `POST /app/heartbeat` | M | 1 point / 3 s from 50 fake clients in a **test-only** load script stays fast |
@@ -223,7 +223,7 @@ Everything in Tracks A–E is built and tested **locally**. Track F (hosting, CI
 | D3 | Setup screens: login, consent, profile, guardians from contacts (up to 5), **safety setup check** (permissions + per-brand "stop killing the app" guides), test SOS | L | New user can be fully set up |
 | D4 | **SOS flow**: big button, widget, tile → 5-s countdown (no PIN) → engine saves SOS locally first, starts location (3–5 s, slower on low battery), audio clips, sends to server; no internet → SIM SMS (or SMS composer, see R2); call 112 (dialer); "I'm safe" | L | Works with screen off, no internet, battery saver |
 | D5 | **Offline queue**: SQLite queue for SOS, points, check-in answers; WorkManager retries; ids made on the phone | M | Airplane mode → back online → no duplicates |
-| D6 | **Audio**: 30-s clips, encrypted with an Android Keystore key, uploaded with short-lived upload links (MinIO locally, Spaces later), keep/delete by user; only the user can play | M | Admin can see "3 clips" but never play them |
+| D6 | **Audio**: 30-s clips, encrypted with an Android Keystore key, uploaded with short-lived upload links (SeaweedFS locally, Spaces later), keep/delete by user; only the user can play | M | Admin can see "3 clips" but never play them |
 | D7 | **Journey mode + smart check-ins**: destination (Google Places), arrival time, route; detector for off route (500 m) and stopped (3 min) in Kotlin; check-in screen with 3 buttons; heartbeat 30–60 s | L | A real drive triggers the right check-ins (phone on mobile data needs the server reachable: use the Wi-Fi/LAN setup on a hotspot, or wait for staging) |
 | D8 | History, report a problem, delete account; the text "Sarthi Rakshak alerts your guardians and helps you call 112. It is not a 24/7 monitoring service." | M | |
 
@@ -243,7 +243,7 @@ Note: tests that need the phone **away from the laptop** (long drives on mobile 
 | # | Step | Size | Done when |
 | --- | --- | --- | --- |
 | F1 | **CI** (GitHub Actions): lint, server tests with PostGIS + Redis services, admin + guardian Playwright, Flutter tests | S | Every PR is checked |
-| F2 | **Staging** on DO Bangalore: 1 API + worker, managed PostgreSQL (PostGIS), managed Redis-compatible store, Spaces blr1 (replaces MinIO), HTTPS, limited DB user (existing decision), migrations as owner; real SMS providers with DLT | M | Phones in testing use staging |
+| F2 | **Staging** on DO Bangalore: 1 API + worker, managed PostgreSQL (PostGIS), managed Redis-compatible store, Spaces blr1 (replaces SeaweedFS), HTTPS, limited DB user (existing decision), migrations as owner; real SMS providers with DLT | M | Phones in testing use staging |
 | F3 | **Production**: 2 API copies behind a load balancer, worker, DB with standby + daily backups + point-in-time restore, uptime checks every minute, error reports with personal data scrubbed | M | Restore drill done once |
 | F4 | **Field testing on staging**: real drives in Noida on mobile data, lost contact, no-response timer | M | Test sheet passes away from the laptop |
 | F5 | **Play Store**: privacy policy, data safety form, foreground-service and location declarations, SMS permission declaration (if used), internal → closed testing → production | M | Approved and live for Noida pilot users |
@@ -255,7 +255,7 @@ Week  1-2   A00 local setup · A0 contract · D1 Android spike · A1 login
 Week  3-4   A2 profile · A3 guardians · B1-B2 worker + SMS log provider · D2 app skeleton
 Week  5-7   A4 SOS · A5 locations · B3 failover · C1-C3 guardian page · D3 setup screens
 Week  8-10  B4-B5 push + timers · D4-D5 SOS flow + offline · E1 local test sheet
-Week 11-13  A6 journeys · D6 audio (MinIO) · D7 journey mode · B6 cleanup
+Week 11-13  A6 journeys · D6 audio (SeaweedFS) · D7 journey mode · B6 cleanup
 Week 14-15  A7 + D8 extras · E2 phone matrix
 ── local end-to-end done ──
 Later       Track F: CI, staging, field tests, production, Play Store (needs DLT, DO, Play Console)
@@ -312,7 +312,7 @@ The 14 tables exist. These additions are needed for the app side (one migration 
 - **Role:** everything that must keep running with the screen off / app swiped away.
 - **Why now:** Flutter alone cannot run reliably in the background on Xiaomi/Vivo/Oppo.
 
-### Local development stack (Docker + pnpm + MinIO)
+### Local development stack (Docker + pnpm + SeaweedFS)
 - **Role:** run everything on the laptop while the app is built.
 - **Why now:** no users yet, no hosting cost, fastest feedback; matches the team's choice to build locally first.
 - **When to replace:** move to staging when local end-to-end works and DLT + DigitalOcean are ready (Track F).
@@ -386,13 +386,13 @@ The 14 tables exist. These additions are needed for the app side (one migration 
 - **Why:** one tap more, but no extra permission for Play review; Android routes emergency numbers to the dialer anyway.
 
 ### ADR-P1-10: Local-first development
-- **Choice:** build and test everything on the laptop (Docker services, `pnpm dev`, phones over USB/Wi-Fi, Firebase test numbers, SMS log provider, MinIO for audio); no hosting or CI yet.
+- **Choice:** build and test everything on the laptop (Docker services, `pnpm dev`, phones over USB/Wi-Fi, Firebase test numbers, SMS log provider, SeaweedFS for audio); no hosting or CI yet.
 - **Why:** team decision; no cost and quick changes while nothing real depends on the system.
 - **Tradeoff:** no field tests away from the laptop; no automatic checks on PRs (run `pnpm test` and `pnpm lint` before every push instead).
 - **Revisit when:** local end-to-end works, or a second developer starts pushing mobile code daily.
 
-### ADR-P1-11: MinIO stands in for DigitalOcean Spaces locally
-- **Choice:** S3-compatible MinIO container; the server uses the S3 API with a configurable endpoint.
+### ADR-P1-11: SeaweedFS stands in for DigitalOcean Spaces locally
+- **Choice:** S3-compatible SeaweedFS container; the server uses the S3 API with a configurable endpoint.
 - **Why:** same short-lived upload-link flow as production, so audio and photo uploads are tested for real; switching to Spaces is only `.env`.
 - **Tradeoff:** one more Docker container in a shared file (needs Anjali's OK).
 
@@ -424,7 +424,7 @@ The 14 tables exist. These additions are needed for the app side (one migration 
 4. **Q4** Guardians who also have the app: push as well as SMS, or SMS only in Phase 1?
 5. **Q5** Short-link domain for guardian links and DLT templates (exact SMS text, about 10 templates).
 6. **Q6** (later, Track F) DigitalOcean App Platform or plain droplets? (Suggestion: App Platform — less server upkeep.)
-7. **Q7** OK to add **MinIO** to `docker-compose.yml` for local audio/photo uploads? (Shared file — needs Anjali's agreement too.)
+7. ~~**Q7** Local file storage container~~ **Answered:** SeaweedFS (MinIO is archived). Tell Anjali: `docker-compose.yml` changed.
 
 ---
 
@@ -471,3 +471,4 @@ The 14 tables exist. These additions are needed for the app side (one migration 
 | 2026-10-27 | Pulled `main` (61ca48c) | Admin progress; app code moves to `server/src/app/`; migrations start at 0010; Q3 answered; Users-screen setup fields and guardian `relation` added to the hand-off list |
 | 2026-10-27 | Team decision: build locally first | Added local setup (3a), step A00, MinIO, Firebase test numbers, SMS log provider; testing is local (Track E); hosting, CI, field tests and Play Store moved to a later Track F; costs, risks, Q7, ADR-P1-10/11, agent rules updated |
 | 2026-10-27 | Owner removed fake call | D8 no longer includes fake call; added to the excluded list |
+| 2026-10-27 | MinIO archived (image no longer published) | Local file storage is SeaweedFS (S3 API, port 8333); Q7 answered |

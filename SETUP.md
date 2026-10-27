@@ -79,14 +79,15 @@ Leave everything else as it is. **Never commit `.env`** (Git already ignores it)
 
 ---
 
-## 4. Start the database and Redis
+## 4. Start the database, Redis and file storage
 
 ```powershell
 docker compose up -d
 docker compose ps
 ```
 
-Wait until both lines show **`healthy`** (about 10–20 seconds; run `docker compose ps` again).
+Wait until all three lines (`postgres`, `redis`, `storage`) show **`healthy`** (about 10–20 seconds;
+run `docker compose ps` again).
 
 ---
 
@@ -163,15 +164,40 @@ pnpm dev
 | `EPERM ... pnpx` after `corepack enable` | Ignore it. Use `npm install -g pnpm@12.15.0` instead (step 1) |
 | `pnpm` is not recognised | Open a new PowerShell window after installing pnpm |
 | `docker compose` fails / "cannot connect to the Docker daemon" | Start Docker Desktop and wait for "Engine running" |
-| `docker compose ps` doesn't say `healthy` | Wait a little; if it stays unhealthy: `docker compose logs postgres` |
+| `docker compose ps` doesn't say `healthy` | Wait a little; if it stays unhealthy: `docker compose logs postgres` (or `redis`, `storage`) |
+| Server says `File storage not reachable` | File storage isn't running: `docker compose up -d`. The admin panel still works without it |
 | `ECONNREFUSED 127.0.0.1:5433` when migrating or starting | The database isn't running: `docker compose up -d` |
-| `port is already allocated` for 5433 or 6379 | Another program uses that port. Ask the team before stopping anything |
+| `port is already allocated` for 5433, 6379 or 8333 | Another program uses that port. Ask the team before stopping anything |
 | `Port 5173 is already in use` or the server says port 3000 is in use | Close the other `pnpm dev` window or program using that port. The panel must be on 5173 |
 | Log in says "Email or password is wrong" | Check the email. After 5 wrong tries the account is locked for 15 minutes |
 | The temporary password no longer works (older than 24 hours) | `pnpm app:setup --reissue --email "you@tvlmedia.in"` prints a new one |
 | `A Super Admin already exists` | You already made your account. Log in with your password, or use `--reissue` (row above) |
 | Page shows "Couldn't load this page" | Is `pnpm dev` still running? Is Docker running? Check http://localhost:3000/health |
 | Login works but you're sent straight back to the login page | Use Chrome or Edge on `http://localhost:5173` exactly (not `127.0.0.1`, not Safari) |
+
+---
+
+## Connect an Android phone (for the user app)
+
+The app on the phone talks to the server on your computer. Use **one** of these:
+
+| Way | When | What to do |
+| --- | --- | --- |
+| **USB cable** (recommended) | Real phone | Turn on *Developer options → USB debugging* on the phone, plug it in, then run the two lines below. The app then uses `http://localhost:3000` |
+| **Emulator** | Android Studio emulator | Nothing to set up. The app uses `http://10.0.2.2:3000` |
+| **Wi-Fi** | Phone and computer on the same Wi-Fi | Find your computer's address with `ipconfig` (e.g. `192.168.1.20`). The app uses `http://192.168.1.20:3000`. Allow Node.js through Windows Firewall when Windows asks (Private networks only) |
+
+USB (run again each time you plug the phone in):
+
+```powershell
+adb reverse tcp:3000 tcp:3000   # server
+adb reverse tcp:8333 tcp:8333   # file storage (photo and audio uploads)
+```
+
+Check it works: open **http://localhost:3000/health** in the phone's browser. It should show `"status":"ok"`.
+
+> Wi-Fi only: file storage listens on your computer alone, so photo and audio uploads need the USB
+> cable (or the emulator). The rest of the app works over Wi-Fi.
 
 ---
 

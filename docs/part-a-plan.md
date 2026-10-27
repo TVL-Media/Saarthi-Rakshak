@@ -55,25 +55,17 @@ Order: A00 → A0 → A1 → A2 → A3 → A4 → A5 → A6 → A7. Each step ne
 **Goal:** a phone can reach the server on the laptop, and the server has what Part A needs.
 
 **Build**
-- Add **MinIO** to `docker-compose.yml` (port 9000, console 9001) for photos and audio. It creates bucket `sarthi-dev` on start. (Shared file — tell Anjali.)
-- New settings in `.env.example` and `env.schema.ts`:
-
-  | Setting | Example | Used for |
-  | --- | --- | --- |
-  | `FIREBASE_PROJECT_ID` | `sarthi-rakshak-dev` | Checking login |
-  | `GOOGLE_APPLICATION_CREDENTIALS` | `C:\keys\firebase-dev.json` | Firebase key file (outside the project, never committed) |
-  | `PHONE_HASH_KEY` | 32 random bytes, base64 | Hashing declined guardian numbers |
-  | `S3_ENDPOINT` | `http://localhost:9000` | MinIO now, Spaces later |
-  | `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` | `sarthi-dev` / … | Storage |
-  | `GUARDIAN_WEB_URL` | `http://localhost:5175` | Links in invite and SOS messages |
-
-- Packages: `firebase-admin`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`.
+- Add **SeaweedFS** to `docker-compose.yml` (S3 API on port 8333) for photos and audio. (MinIO was planned but is archived; its image is gone.) The server creates buckets `sarthi-dev` / `sarthi-test` on start. (Shared file — tell Anjali.)
+- `StorageService` (`server/src/storage/`): upload links (type and size signed in), file info, delete.
+- New storage settings in `.env.example` and `env.schema.ts` (`S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_BUCKET_TEST`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`). Local defaults outside production, so existing `.env` files keep working; required in production.
+- Other settings are added in the step that first uses them: `FIREBASE_PROJECT_ID` + `GOOGLE_APPLICATION_CREDENTIALS` (A1), `PHONE_HASH_KEY` + `GUARDIAN_WEB_URL` (A3).
+- Packages: `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner` (`firebase-admin` in A1).
 - Firebase dev project: turn on Phone sign-in, add 3–5 **test phone numbers** with fixed OTP codes (no real SMS).
 - `SETUP.md`: new section "Connect a phone" — USB (`adb reverse tcp:3000 tcp:3000`), emulator (`10.0.2.2:3000`), Wi-Fi (laptop IP + Windows firewall rule).
 
 **Done when**
-- `docker compose up -d` starts PostgreSQL, Redis and MinIO.
-- The server starts with the new settings and stops with a clear message if one is missing.
+- `docker compose up -d` starts PostgreSQL, Redis and SeaweedFS.
+- Upload-link tests pass against the test bucket; the server still starts if storage is down.
 - A phone on USB opens `http://localhost:3000/health` and sees `ok`.
 
 ---
@@ -148,7 +140,7 @@ New table `user_sessions`:
 | --- | --- |
 | `GET /app/profile` | Name, photo address, blood group |
 | `PATCH /app/profile` `{ name?, bloodGroup? }` | Name 1–60 characters; blood group one of `A+ A- B+ B- AB+ AB- O+ O-` or empty |
-| `POST /app/profile/photo-upload` | Returns a 5-minute upload link (JPEG, max 2 MB) |
+| `POST /app/profile/photo-upload` `{ sizeBytes }` | Returns a 5-minute upload link (JPEG, max 2 MB; type and size are signed into the link) |
 | `POST /app/profile/photo` `{ key }` | Saves the uploaded photo; deletes the old one |
 | `PUT /app/device` `{ deviceId, model, androidVersion, appVersion, pushToken, permissions, batteryOptimisationOff }` | Creates or updates this phone; links it to the session |
 
@@ -158,7 +150,7 @@ New table `user_sessions`:
 - `deviceId` is made by the app once per install.
 - `users.last_seen_at` and `devices.last_seen_at` are updated at most once a minute.
 
-**Tests:** profile changes, wrong blood group, photo upload flow with MinIO, device update, permission keys.
+**Tests:** profile changes, wrong blood group, photo upload flow with local storage, device update, permission keys.
 
 **Done when:** after setting up a real phone, the admin Users screen shows its device and setup status.
 
@@ -337,7 +329,7 @@ New table `user_sessions`:
 
 ## Tell Anjali (shared parts)
 
-- A00: MinIO added to `docker-compose.yml`; new `.env` settings.
+- A00: SeaweedFS added to `docker-compose.yml`; new storage settings (defaults, so her `.env` keeps working).
 - A1: new `user_sessions` table; `/app` routes have their own login check (admin checks untouched).
 - A2: phones now report `permissions` with keys `location`, `notifications`, `sms`, `microphone`.
 - A5: live points on Redis channel `sos:<id>:location` — ready for her Live SOS screen.
