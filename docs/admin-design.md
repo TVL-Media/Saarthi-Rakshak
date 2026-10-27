@@ -53,6 +53,9 @@ export const theme: ThemeConfig = {
 
 Extra colours (not Ant Design tokens): primary dark `#0F2F57`, primary light `#E8EEF6`, error light `#FDECEA`,
 success light `#E7F4EC`, warning light `#FFF8E6`, sidebar muted text `#8396A7`.
+From the design page: text on alerts — error `#7A1810`, warning `#5A3D00`, success `#0F4A26`;
+map grid — background `#E9EEF0`, lines `#D5DDE1`; sidebar divider `#22313F`.
+All of these live in `apps/admin/src/theme.ts` (`extraColors`).
 
 **Fonts:** IBM Plex Sans (400, 500, 600, 700) and IBM Plex Mono (400, 500). Install them as npm packages
 (`@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono`) so the font files are served by our own site.
