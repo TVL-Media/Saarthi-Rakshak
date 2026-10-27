@@ -1,7 +1,8 @@
 // Helpers for the admin panel's Playwright tests (apps/admin/e2e). Test database and test
 // Redis slot only: openTestDatabase refuses any database whose name does not end in _test.
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
+import { sql } from 'kysely';
 import { deriveAuthKeys } from '../src/auth/auth-keys';
 import { base32Decode, base32Encode } from '../src/auth/base32';
 import { encrypt } from '../src/auth/crypto-box';
@@ -158,6 +159,132 @@ export async function createUserForTest(
       .execute();
     if (opts.runningJourney) await db.insertInto('journeys').values({ user_id: user.id }).execute();
     return user.id;
+  });
+}
+
+/**
+ * SOS and journey records for the History screen (test database only): a real SOS with alerts,
+ * an opened link and a location gap; a TEST SOS; a journey that turned into an SOS; a journey
+ * with lost contact; an SOS from a user who deleted their data.
+ */
+export async function createHistoryForTest(): Promise<{
+  userId: string;
+  realSos: string;
+  journeyToSos: string;
+}> {
+  const at = (minutes: number) => new Date(Date.UTC(2025, 2, 14, 18, 0) + minutes * 60_000);
+  return withTestDatabase(async (db) => {
+    const userId = await (async () => {
+      const u = await db
+        .insertInto('users')
+        .values({ phone: '+919812344521', name: 'Priya' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      return u.id;
+    })();
+    const g1 = (
+      await db
+        .insertInto('guardians')
+        .values({
+          user_id: userId,
+          name: 'Rohan',
+          phone: '+919800000001',
+          relation: 'brother',
+          invite_status: 'accepted',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const realSos = randomUUID();
+    await db
+      .insertInto('sos_events')
+      .values({
+        id: realSos,
+        user_id: userId,
+        trigger: 'button',
+        started_at: at(0),
+        status: 'ended',
+        ended_at: at(20),
+      })
+      .execute();
+    await db
+      .insertInto('alerts')
+      .values({
+        sos_event_id: realSos,
+        guardian_id: g1,
+        channel: 'sms',
+        type: 'sos',
+        status: 'delivered',
+        sent_at: at(0.1),
+        delivered_at: at(0.2),
+      })
+      .execute();
+    await db
+      .insertInto('guardian_links')
+      .values({
+        sos_event_id: realSos,
+        guardian_id: g1,
+        token_hash: randomUUID(),
+        expires_at: at(60),
+        opened_at: at(1),
+        responding_at: at(2),
+      })
+      .execute();
+    const point = sql<string>`ST_MakePoint(77.3, 28.5)::geography`;
+    await db
+      .insertInto('location_points')
+      .values([
+        { user_id: userId, sos_event_id: realSos, location: point, recorded_at: at(3) },
+        { user_id: userId, sos_event_id: realSos, location: point, recorded_at: at(8) },
+      ])
+      .execute();
+
+    await db
+      .insertInto('sos_events')
+      .values({
+        id: randomUUID(),
+        user_id: userId,
+        trigger: 'widget',
+        started_at: at(30),
+        status: 'ended',
+        ended_at: at(31),
+        is_test: true,
+      })
+      .execute();
+    const journeyToSos = (
+      await db
+        .insertInto('journeys')
+        .values({ user_id: userId, started_at: at(40), status: 'ended', ended_at: at(60) })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await db
+      .insertInto('sos_events')
+      .values({
+        id: randomUUID(),
+        user_id: userId,
+        journey_id: journeyToSos,
+        trigger: 'journey',
+        started_at: at(45),
+        status: 'ended',
+        ended_at: at(55),
+      })
+      .execute();
+    await db
+      .insertInto('journeys')
+      .values({ user_id: userId, started_at: at(70), status: 'lost_contact', ended_at: at(80) })
+      .execute();
+    await db
+      .insertInto('sos_events')
+      .values({
+        id: randomUUID(),
+        user_id: null,
+        trigger: 'tile',
+        started_at: at(-30),
+        status: 'cancelled',
+      })
+      .execute();
+    return { userId, realSos, journeyToSos };
   });
 }
 

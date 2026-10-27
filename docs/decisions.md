@@ -4,6 +4,10 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| SOS & Journey History (both roles, read-only): SOS rows show the user (name + masked phone, link to profile); **journey rows never name the person** ("A user's journey"); a person's own journeys are only on their profile. Deleted users show as "Deleted user" with no link | Rule 6 (journeys as counts, not names) applied to lists too |
+| History never shows a map or coordinates; location appears only as gaps ("No location for 5 min") when updates stop for **2 minutes or more** (fixed in code) | Rule 6: live location only during an active SOS |
+| Outcomes: SOS — Ended safe · Cancelled in countdown · Still active (links to Live SOS); journey — Arrived safely · Ended · Lost contact · Turned into SOS (opens that SOS) | One set of plain names for the filter, list and timeline |
+| Timeline guardians appear as "Guardian 1 (brother) +91 98•• ••0001": numbered in the order the user added them, with the relation if the user gave one (new optional `guardians.relation`, migration 0009), masked phone, never the name or full number | Enough for support to follow what happened, without personal details |
 | **Blocking a user never blocks SOS.** Blocking stops only login, new journeys and new guardian invites; it never ends an SOS or a journey already running. Block and Unblock need a written reason (both roles), saved in the audit log | A blocked person may still be in danger; blocking must never stop someone getting help |
 | Users screen: phone search by the **exact full number only** (no partial search); sent in the request body, never in the web address; logged as a view without the number. Full phone numbers never leave the server (users and guardians are masked, e.g. `+91 98•• ••4521`) | Partial search would let an admin browse numbers; masking (rule 7) is enforced on the server |
 | "Setup complete" = location, notifications, SMS and microphone permissions granted + battery saving off for the app + at least one accepted guardian (permission names to be kept in step with the app) | One clear meaning for support staff |

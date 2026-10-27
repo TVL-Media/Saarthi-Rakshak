@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
 import { AuditBody } from './AuditPage';
+import { HistoryBody } from './HistoryPage';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
@@ -101,27 +102,6 @@ function LiveSos() {
   );
 }
 
-function History() {
-  return (
-    <SectionCard>
-      <EmptyTable
-        columns={[
-          'Started',
-          'Type',
-          'User',
-          'Duration',
-          'Started by',
-          'Guardians alerted',
-          'Outcome',
-        ]}
-        icon="list"
-        title="No SOS or journeys yet"
-        text="Every SOS and journey from the app will be listed here with its full timeline."
-      />
-    </SectionCard>
-  );
-}
-
 function AlertLog() {
   return (
     <SectionCard title="Messages">
@@ -190,7 +170,7 @@ export const MAIN_SCREENS: Screen[] = [
     menu: 'SOS & Journey History',
     title: 'SOS & Journey History',
     sub: 'Read only · records cannot be edited or deleted',
-    body: History,
+    body: HistoryBody,
   },
   {
     path: '/alerts',

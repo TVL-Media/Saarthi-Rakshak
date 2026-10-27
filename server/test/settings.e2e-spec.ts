@@ -234,7 +234,7 @@ describe('migration 0008', () => {
       .execute();
     const others = (await settingRows()).filter((r) => r.key !== 'sos.cancel_requires_pin');
     const migrator = createMigrator(db);
-    await migrator.migrateDown(); // undo 0008 ...
+    await migrator.migrateTo('0007_admin_auth'); // undo 0008 (and anything after it) ...
     await migrator.migrateToLatest(); // ... and run it again
     expect(await settingRows()).toEqual(others);
   });

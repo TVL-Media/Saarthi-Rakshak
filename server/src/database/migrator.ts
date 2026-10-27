@@ -9,6 +9,7 @@ import * as m0005 from './migrations/0005_audit_log_no_truncate';
 import * as m0006 from './migrations/0006_admin_first_login';
 import * as m0007 from './migrations/0007_admin_auth';
 import * as m0008 from './migrations/0008_settings_audit_details';
+import * as m0009 from './migrations/0009_guardian_relation';
 import type { Database } from './types';
 
 /** Every migration, in order. Add new ones here (listed by hand so they also load in tests). */
@@ -21,6 +22,7 @@ export const migrations: Record<string, Migration> = {
   '0006_admin_first_login': m0006,
   '0007_admin_auth': m0007,
   '0008_settings_audit_details': m0008,
+  '0009_guardian_relation': m0009,
 };
 
 export function createKysely(pool: Pool): Kysely<Database> {

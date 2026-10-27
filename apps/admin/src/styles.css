@@ -592,3 +592,8 @@ body {
 .sr-wrap {
   flex-wrap: wrap;
 }
+
+/* ---------- history ---------- */
+.sr-timeline-text {
+  font-size: 14px;
+}

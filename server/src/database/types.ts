@@ -41,6 +41,8 @@ export interface GuardiansTable {
   name: string;
   /** Always NULL once the invite is declined (enforced by the database). */
   phone: string | null;
+  /** How they are related, if the user says (e.g. "brother"). */
+  relation: string | null;
   invite_status: Generated<'pending' | 'accepted' | 'declined'>;
   invited_at: Timestamp;
   responded_at: Date | null;
