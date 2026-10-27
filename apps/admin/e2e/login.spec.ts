@@ -148,3 +148,26 @@ test.describe('when the server ends the session', () => {
     await expect(page.getByText('Your session ended. Log in again.')).toBeVisible();
   });
 });
+
+test('the 2-step QR code stays the same while the setup page is open', async ({ page }) => {
+  await page.clock.install();
+  let setupRequests = 0;
+  page.on('request', (r) => {
+    if (r.url().endsWith('/admin/auth/2fa/setup')) setupRequests++;
+  });
+  const temporaryPassword = await createFirstSuperAdminForTest(
+    'Test Super Admin',
+    'qr@example.test',
+  );
+  await logIn(page, 'qr@example.test', temporaryPassword);
+  await page.getByLabel('New password').fill('river-mango-lantern-42');
+  await page.getByLabel('Type it again').fill('river-mango-lantern-42');
+  await page.getByRole('button', { name: 'Save password' }).click();
+  const key = page.getByTestId('setup-key');
+  const first = await key.textContent();
+
+  // The panel checks the session every minute; that must not ask for a new secret.
+  await page.clock.runFor(3 * 61_000);
+  await expect(key).toHaveText(first!);
+  expect(setupRequests).toBe(1);
+});

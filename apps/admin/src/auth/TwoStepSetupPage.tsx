@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ApiError, post } from '../api';
 import { AuthCard, Field, Heading, Steps } from './AuthCard';
-import { useResetSession } from './session';
+import { TWO_STEP_SETUP_KEY, useResetSession } from './session';
 import { StepGate } from './StepGate';
 
 const WRONG_CODE = "That code didn't work. Check the time on your phone and try the newest code.";
@@ -26,16 +26,20 @@ function Setup({ onDone }: { onDone: (codes: string[]) => void }) {
 
   // Asked once per visit: a second request would replace the secret behind the QR code.
   const setup = useQuery({
-    queryKey: ['two-step-setup'],
+    queryKey: TWO_STEP_SETUP_KEY,
     queryFn: () => post<{ otpauthUrl: string; secret: string }>('/admin/auth/2fa/setup'),
     retry: false,
     staleTime: Infinity,
-    gcTime: 0,
+    // Kept for the whole visit; cleared on login, logout and once 2-step is on (useResetSession).
+    gcTime: Infinity,
     refetchOnWindowFocus: false,
   });
   const confirm = useMutation({
     mutationFn: () => post<{ backupCodes: string[] }>('/admin/auth/2fa/setup/confirm', { code }),
-    onSuccess: ({ backupCodes }) => onDone(backupCodes),
+    onSuccess: ({ backupCodes }) => {
+      resetSession();
+      onDone(backupCodes);
+    },
     onError: (error) => {
       if (error instanceof ApiError && error.sessionReason) {
         resetSession();

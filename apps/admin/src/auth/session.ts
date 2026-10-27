@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type Me, type SessionEndReason } from '../api';
 
 export const ME_KEY = ['me'] as const;
+export const TWO_STEP_SETUP_KEY = ['two-step-setup'] as const;
 
 /**
  * Who is logged in. Checked again every minute so an ended session sends the admin to
@@ -26,10 +27,16 @@ export function useAuthOptions() {
   });
 }
 
-/** Forget what we knew about the session (after login steps or logout). */
+/**
+ * Forget what we knew about the session (after login steps or logout), including any 2-step
+ * setup secret, so the next person in this browser never sees it.
+ */
 export function useResetSession() {
   const queryClient = useQueryClient();
-  return () => queryClient.removeQueries({ queryKey: ME_KEY });
+  return () => {
+    queryClient.removeQueries({ queryKey: ME_KEY });
+    queryClient.removeQueries({ queryKey: TWO_STEP_SETUP_KEY });
+  };
 }
 
 /** Passed to /login in router state (memory only, never stored). */
