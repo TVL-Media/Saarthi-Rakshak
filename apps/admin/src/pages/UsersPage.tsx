@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Button, Input, Select, Table } from 'antd';
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { ApiError, post } from '../api';
 import { EmptyState, ErrorState, LoadingState, SectionCard } from '../components/states';
 import { formatTime } from '../format';
@@ -19,6 +19,11 @@ export interface UserRow {
   status: 'active' | 'blocked';
 }
 
+/** Router state to open the list with a filter (e.g. setup unfinished). */
+export interface UsersLinkState {
+  filter?: Search;
+}
+
 interface Search {
   phone?: string;
   setup?: 'complete' | 'unfinished';
@@ -27,8 +32,12 @@ interface Search {
 
 export function UsersBody() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [typed, setTyped] = useState('');
-  const [search, setSearch] = useState<Search>({});
+  // The Dashboard links here with a filter already chosen (router state, memory only).
+  const [search, setSearch] = useState<Search>(
+    () => (location.state as UsersLinkState | null)?.filter ?? {},
+  );
 
   // POST: the phone number never goes into the web address or browser history.
   const users = useInfiniteQuery({

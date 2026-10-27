@@ -1,14 +1,13 @@
 import { Alert, Table } from 'antd';
 import type { ReactNode } from 'react';
-import { useLocation } from 'react-router';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
 import { AlertsBody } from './AlertsPage';
 import { AuditBody } from './AuditPage';
+import { DashboardBody } from './DashboardPage';
 import { HistoryBody } from './HistoryPage';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
-import type { DashboardState } from '../auth/TwoStepPage';
 
 // Step 6: each screen has its title and the empty states from the design. Data comes with each
 // screen's own step (filters, stat cards and health are left out until then).
@@ -24,42 +23,6 @@ function EmptyTable(props: { columns: string[]; icon: IconName; title: string; t
       scroll={{ x: 'max-content' }}
       locale={{ emptyText: <EmptyState icon={props.icon} title={props.title} text={props.text} /> }}
     />
-  );
-}
-
-function Dashboard() {
-  const left = (useLocation().state as DashboardState | null)?.backupCodesLeft;
-  return (
-    <>
-      {left !== undefined && (
-        <Alert type="warning" title={`You used a backup code. ${left} left.`} />
-      )}
-      <SectionCard title="Noida map">
-        <div className="sr-map">
-          <EmptyState
-            icon="sos"
-            title="No active SOS"
-            text="SOS locations appear here only while an SOS is active. Journeys are shown as a count, not on the map."
-          />
-        </div>
-      </SectionCard>
-      <div className="sr-cols">
-        <SectionCard title="Needs attention">
-          <EmptyState
-            icon="inbox"
-            title="Nothing needs attention"
-            text="Failed alerts, lost contact and users whose setup is unfinished will show here."
-          />
-        </SectionCard>
-        <SectionCard title="Recent events">
-          <EmptyState
-            icon="list"
-            title="No events yet"
-            text="Sign-ups, SOS and journeys appear here as they happen."
-          />
-        </SectionCard>
-      </div>
-    </>
   );
 }
 
@@ -151,7 +114,7 @@ export const MAIN_SCREENS: Screen[] = [
     menu: 'Dashboard',
     title: 'Dashboard',
     sub: 'Noida pilot · updates live',
-    body: Dashboard,
+    body: DashboardBody,
   },
   { path: '/live', menu: 'Live SOS', title: 'Live SOS', sub: 'View only', body: LiveSos },
   { path: '/users', menu: 'Users', title: 'Users', sub: 'Search by phone number', body: UsersBody },

@@ -380,6 +380,60 @@ export async function createAlertsForTest(maxAttempts: number): Promise<{ sosId:
   });
 }
 
+/**
+ * A Dashboard scene (test database only): one user with unfinished setup, an active SOS that no
+ * guardian has answered, and an SOS that ended earlier today.
+ */
+export async function createDashboardSceneForTest(): Promise<{
+  activeSos: string;
+  endedSos: string;
+}> {
+  const ago = (m: number) => new Date(Date.now() - m * 60_000);
+  return withTestDatabase(async (db) => {
+    const user = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919812344521', name: 'Priya', created_at: ago(60) })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const endedSos = randomUUID();
+    const activeSos = randomUUID();
+    await db
+      .insertInto('sos_events')
+      .values([
+        {
+          id: endedSos,
+          user_id: user,
+          trigger: 'button',
+          started_at: ago(40),
+          status: 'ended',
+          ended_at: ago(30),
+        },
+        { id: activeSos, user_id: user, trigger: 'button', started_at: ago(2) },
+      ])
+      .execute();
+    await db
+      .insertInto('location_points')
+      .values({
+        user_id: user,
+        sos_event_id: activeSos,
+        location: sql<string>`ST_MakePoint(77.3, 28.5)::geography`,
+        recorded_at: ago(0.2),
+      })
+      .execute();
+    return { activeSos, endedSos };
+  });
+}
+
+/** How many times an action is in the audit log. */
+export async function auditCountForTest(action: string): Promise<number> {
+  return withTestDatabase(
+    async (db) =>
+      (await db.selectFrom('audit_log').select('id').where('action', '=', action).execute()).length,
+  );
+}
+
 export async function userStatusForTest(id: string): Promise<string | undefined> {
   return withTestDatabase(
     async (db) =>

@@ -634,3 +634,8 @@ body {
   flex: none;
   height: auto;
 }
+/* A red, bold line at normal size (e.g. an active SOS in "Needs attention"). */
+.sr-urgent {
+  color: var(--sr-error);
+  font-weight: 600;
+}
