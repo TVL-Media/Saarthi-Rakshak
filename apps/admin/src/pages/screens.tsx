@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useLocation } from 'react-router';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
 import { SettingsBody } from './SettingsPage';
+import { TeamBody } from './TeamPage';
 import type { DashboardState } from '../auth/TwoStepPage';
 
 // Step 6: each screen has its title and the empty states from the design. Data comes with each
@@ -235,6 +236,7 @@ export const SUPER_ADMIN_SCREENS: Screen[] = [
     title: 'Admin Team',
     sub: 'Super Admin only',
     superOnly: true,
+    body: TeamBody,
   },
   {
     path: '/audit',

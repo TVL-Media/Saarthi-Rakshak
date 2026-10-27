@@ -487,3 +487,54 @@ body {
   flex-direction: column;
   gap: 16px;
 }
+
+/* ---------- admin team ---------- */
+.sr-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sr-tag-role.ant-tag {
+  background: var(--sr-primary-light);
+  border-color: transparent;
+  color: var(--sr-primary-dark);
+}
+.sr-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sr-badge::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.sr-badge.ok {
+  background: var(--sr-success-light);
+  color: var(--sr-success);
+}
+.sr-badge.off {
+  background: var(--sr-page);
+  color: var(--sr-text-secondary);
+}
+.sr-row-actions {
+  display: inline-flex;
+  gap: 16px;
+}
+.sr-row-removed td {
+  opacity: 0.55;
+}
+.sr-password {
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: var(--sr-text);
+}

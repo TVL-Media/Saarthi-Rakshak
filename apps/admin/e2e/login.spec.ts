@@ -171,3 +171,18 @@ test('the 2-step QR code stays the same while the setup page is open', async ({ 
   await expect(key).toHaveText(first!);
   expect(setupRequests).toBe(1);
 });
+
+test('with 2-step on, the Admin Team shows the 2-step column', async ({ page }) => {
+  const admin = await createSupportAdminForTest(
+    'Test Super Admin',
+    'sa-team@example.test',
+    'super_admin',
+  );
+  await logIn(page, 'sa-team@example.test', admin.password);
+  await expect(page).toHaveURL(/\/two-step$/);
+  await typeCode(page, authenticatorCode(admin.secret));
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await page.getByRole('menuitem', { name: 'Admin Team' }).click();
+  await expect(page.getByRole('columnheader', { name: '2-step' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Test Super Admin/ }).getByText('On')).toBeVisible();
+});

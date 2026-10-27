@@ -9,12 +9,12 @@ export const TEMP_PASSWORD_VALID_HOURS = 24;
 /** A refusal with a message meant for the person running the command. */
 export class SetupError extends Error {}
 
-const emailSchema = z
+export const emailSchema = z
   .string()
   .trim()
   .toLowerCase()
   .pipe(z.email({ error: 'Email is not a valid email address' }));
-const nameSchema = z.string().trim().min(1, { error: 'Name must not be empty' });
+export const nameSchema = z.string().trim().min(1, { error: 'Name must not be empty' });
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -27,7 +27,8 @@ async function lockSetup(trx: Transaction<Database>): Promise<void> {
   await sql`SELECT pg_advisory_xact_lock(hashtext('sarthi.setup'))`.execute(trx);
 }
 
-async function issueTemporaryPassword() {
+/** A one-time password (shown once) with its hash and 24-hour expiry. */
+export async function issueTemporaryPassword() {
   const temporaryPassword = generateTemporaryPassword();
   return {
     temporaryPassword,

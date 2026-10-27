@@ -43,10 +43,11 @@ export async function createFirstSuperAdminForTest(name: string, email: string):
   return issued.temporaryPassword;
 }
 
-/** A Support Admin with a known password and 2-step already set up. */
+/** An admin (Support Admin by default) with a known password and 2-step already set up. */
 export async function createSupportAdminForTest(
   name: string,
   email: string,
+  role: 'support_admin' | 'super_admin' = 'support_admin',
 ): Promise<{ password: string; secret: string }> {
   const password = 'support-' + randomBytes(6).toString('hex');
   const secret = randomBytes(20);
@@ -57,7 +58,7 @@ export async function createSupportAdminForTest(
       .values({
         name,
         email,
-        role: 'support_admin',
+        role,
         password_hash: await hashPassword(password),
         totp_enabled_at: new Date(),
       })
@@ -115,6 +116,20 @@ export async function settingChangesForTest(): Promise<
       .where('action', '=', 'settings.changed')
       .orderBy('id')
       .execute(),
+  );
+}
+
+/** An admin's row (for checks in browser tests). */
+export async function adminForTest(email: string) {
+  return withTestDatabase((db) =>
+    db.selectFrom('admins').selectAll().where('email', '=', email).executeTakeFirst(),
+  );
+}
+
+/** Every audit row as text, to check what was (and was not) logged. */
+export async function auditLogTextForTest(): Promise<string> {
+  return withTestDatabase(async (db) =>
+    JSON.stringify(await db.selectFrom('audit_log').selectAll().execute()),
   );
 }
 
