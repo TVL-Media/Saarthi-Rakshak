@@ -37,7 +37,6 @@ In-app text: "Sarthi Rakshak alerts your guardians and helps you call 112. It is
 | Journey | Journey mode | Destination, arrival time, live sharing, "I reached safely" |
 | Journey | Smart check-ins | Only when off route (500 m+), stopped 3+ min, or 15 min late. Buttons: I'm fine / Stuck in traffic (10 min) / SOS. No reply in 2 min → alert guardians (not a full SOS) |
 | Journey | Lost contact | Phone silent about 5 min → server alerts guardians |
-| Extras | Fake call | A fake incoming call to leave an uncomfortable situation |
 | Extras | History | Past journeys and SOS events |
 
 ### Guardian live page (web, no app needed)

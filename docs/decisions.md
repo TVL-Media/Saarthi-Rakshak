@@ -4,6 +4,7 @@ Short record of what was decided and why. Add new decisions at the top.
 
 | Decision | Why |
 | --- | --- |
+| Fake call removed from Phase 1 (27 Oct 2026) | Requested by the project owner; not built unless asked again |
 | SOS & Journey History (both roles, read-only): SOS rows show the user (name + masked phone, link to profile); **journey rows never name the person** ("A user's journey"); a person's own journeys are only on their profile. Deleted users show as "Deleted user" with no link | Rule 6 (journeys as counts, not names) applied to lists too |
 | History never shows a map or coordinates; location appears only as gaps ("No location for 5 min") when updates stop for **2 minutes or more** (fixed in code) | Rule 6: live location only during an active SOS |
 | Outcomes: SOS — Ended safe · Cancelled in countdown · Still active (links to Live SOS); journey — Arrived safely · Ended · Lost contact · Turned into SOS (opens that SOS) | One set of plain names for the filter, list and timeline |

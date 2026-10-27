@@ -92,7 +92,7 @@ docker-compose.yml   Local PostgreSQL + Redis (to be added)
 
 ## Excluded for now (do not build)
 
-Auto-call to guardians · silent alert · Hindi language · WhatsApp alerts (only if the client approves a Change Request).
+Auto-call to guardians · silent alert · fake call · Hindi language · WhatsApp alerts (only if the client approves a Change Request).
 
 ## How to work in this repo
 
@@ -104,3 +104,26 @@ Auto-call to guardians · silent alert · Hindi language · WhatsApp alerts (onl
 - **Update this file and `docs/decisions.md`** when a decision changes.
 - Never stop or kill a process you did not start yourself. If a port is busy, ask.
 - The project owner prefers **simple, plain language** in explanations.
+
+<!-- planfirst:start -->
+## Phase 1 plan (non-admin work)
+Full plan: `./docs/phase-1-plan.md` — read before building the app server, alerts, guardian page, mobile app or hosting.
+**Local development only for now:** no hosting, CI or DigitalOcean until Track F in the plan is approved.
+
+### Stack (moment: validate — Noida pilot)
+- App API + worker: NestJS (same codebase, user-app code under `server/src/app/`), BullMQ on Redis
+- Login: Firebase phone OTP, then our own hashed session token
+- Alerts: SMS main + backup behind one adapter; FCM push to the user's phone; SIM SMS offline
+- Guardian page: Vite + React, no Ant Design
+- Mobile: Flutter screens + Kotlin foreground-service safety engine
+
+### Agent Rules
+- DO NOT edit admin-owned code (apps/admin, server/src/admins, auth, audit, settings, users, history) without asking.
+- DO pull main before adding a migration; take the next free number; never edit a merged migration.
+- DO make SOS, location and check-in writes idempotent using the id made on the phone.
+- DO read safety rules from the snapshot on the SOS/journey inside timers, never live from settings.
+- DO NOT send real SMS from development; the log provider is refused in production.
+- DO NOT add Kafka, GraphQL, Kubernetes, microservices or a third-party realtime service.
+- DO NOT set up hosting, CI, cloud resources or internet tunnels now; keep everything runnable with `docker compose up -d` + `pnpm dev`, with every address in `.env`.
+- DO run `pnpm lint` and `pnpm test` before every push (no CI yet).
+<!-- planfirst:end -->
