@@ -9,10 +9,12 @@ import { PhoneTokenVerifier, phoneTokenVerifierFor } from './auth/phone-token-ve
 import { UserSessionsService } from './auth/user-sessions.service';
 import { AppExceptionFilter } from './common/app-exception.filter';
 import { AppRateLimiter } from './common/rate-limit';
+import { ProfileController } from './profile/profile.controller';
+import { ProfileService } from './profile/profile.service';
 
 /** Everything the Android app and the guardian pages call: /app/... and /g/... */
 @Module({
-  controllers: [AppAuthController],
+  controllers: [AppAuthController, ProfileController],
   providers: [
     {
       provide: PhoneTokenVerifier,
@@ -21,6 +23,7 @@ import { AppRateLimiter } from './common/rate-limit';
     },
     UserSessionsService,
     AppAuthService,
+    ProfileService,
     AppRateLimiter,
     { provide: APP_GUARD, useClass: AppAuthGuard },
     { provide: APP_FILTER, useClass: AppExceptionFilter },

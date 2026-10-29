@@ -9,7 +9,7 @@ type Db = Kysely<Database> | Transaction<Database>;
 
 /** A session ends after this many days without use. */
 export const SESSION_DAYS = 90;
-/** Moving the expiry forward is written at most this often, to keep requests cheap. */
+/** Moving the expiry forward (and the user's "last seen") is written at most this often. */
 const TOUCH_EVERY_SECONDS = 60;
 
 export function hashToken(token: string): string {
@@ -62,6 +62,11 @@ export class UserSessionsService {
           expires_at: sql<Date>`now() + make_interval(days => ${SESSION_DAYS})`,
         })
         .where('id', '=', row.sessionId)
+        .execute();
+      await this.database.db
+        .updateTable('users')
+        .set({ last_seen_at: sql<Date>`now()` })
+        .where('id', '=', row.userId)
         .execute();
     }
     return {

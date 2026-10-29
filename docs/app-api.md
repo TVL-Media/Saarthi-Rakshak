@@ -4,7 +4,7 @@ Every call the Android app makes to the server. The source of truth is
 [`packages/shared/src/app-api.ts`](../packages/shared/src/app-api.ts) (Zod schemas, used by the server to check
 input); this page is the same list for the Flutter app. Change both together.
 
-Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1**.
+Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1, A2**.
 
 ## Basics
 
@@ -92,6 +92,10 @@ Until consent is given, only these four calls work; everything else returns `con
 ```
 
 The four `permissions` keys are fixed: the admin panel's "Setup complete" check reads them.
+
+- `photoUrl` works for 1 hour; get the profile again for a fresh one.
+- At most 10 photo upload links per hour.
+- If another user logs in on the same phone (same `deviceId`), the phone moves to that user.
 
 ## A3 — Guardians and invites
 

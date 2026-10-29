@@ -1,6 +1,7 @@
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   NotFound,
@@ -101,6 +102,13 @@ export class StorageService implements OnModuleInit, OnApplicationShutdown {
     return getSignedUrl(this.publicS3, command, {
       expiresIn: UPLOAD_LINK_SECONDS,
       signableHeaders: new Set(['content-type', 'content-length']),
+    });
+  }
+
+  /** A link that shows one file (HTTP GET) for `seconds`. Never used for audio by admins. */
+  async downloadUrl(key: string, seconds: number): Promise<string> {
+    return getSignedUrl(this.publicS3, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+      expiresIn: seconds,
     });
   }
 
