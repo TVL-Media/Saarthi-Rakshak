@@ -4,7 +4,7 @@ Every call the Android app makes to the server. The source of truth is
 [`packages/shared/src/app-api.ts`](../packages/shared/src/app-api.ts) (Zod schemas, used by the server to check
 input); this page is the same list for the Flutter app. Change both together.
 
-Status: **contract agreed (A0)**. Each call is built in the step shown.
+Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1**.
 
 ## Basics
 
@@ -36,6 +36,8 @@ Every error has the same shape:
 | `limit_reached` | 409 | E.g. 5 guardians already, daily invite limit | Show `message` |
 | `too_many_requests` | 429 | Too many tries | Wait, then retry |
 | `link_expired` | 410 | Guardian invite link is no longer valid | Show `message` |
+| `service_unavailable` | 503 | A needed service is not set up or not reachable (e.g. login) | Show `message`, retry later |
+| `server_error` | 500 | Something unexpected on the server | Show `message`, retry |
 
 Anything else: show `message`.
 
@@ -55,6 +57,12 @@ Login is phone + OTP with **Firebase** on the phone; then the app swaps the Fire
 `Me` = `{ id, name, phone, bloodGroup, consentGiven, guardiansCount }` (`name` and `bloodGroup` may be `null`).
 
 Until consent is given, only these four calls work; everything else returns `consent_required`.
+
+- Only Indian mobile numbers can log in (`invalid_input` otherwise).
+- One phone at a time: a new login ends the session on the old phone (it gets `not_logged_in`).
+- A session lasts 90 days from the last use.
+- A blocked user can't log in (`account_blocked`); if already logged in, they stay logged in so SOS works.
+- At most 10 login tries per network address in 15 minutes (`too_many_requests`).
 
 ## A2 — Profile and phone details
 

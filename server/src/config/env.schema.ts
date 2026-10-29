@@ -54,6 +54,14 @@ const envSchema = z
     S3_BUCKET_TEST: bucketName.optional(),
     S3_ACCESS_KEY: z.string().min(1).optional(),
     S3_SECRET_KEY: z.string().min(1).optional(),
+    // Firebase project for app login (phone OTP). Without it, app login is off outside production.
+    FIREBASE_PROJECT_ID: z
+      .string()
+      .regex(/^[a-z0-9-]{4,40}$/, { error: 'Must be a Firebase project id (e.g. sarthi-rakshak)' })
+      .optional(),
+    // Path to the Firebase service-account key file; read by Firebase itself. Keep it outside the
+    // project folder and never commit it.
+    GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.ADMIN_TWO_STEP === 'off') {
@@ -65,7 +73,13 @@ const envSchema = z
       });
     }
     if (env.NODE_ENV === 'production') {
-      for (const key of ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY', 'S3_SECRET_KEY'] as const) {
+      for (const key of [
+        'S3_ENDPOINT',
+        'S3_BUCKET',
+        'S3_ACCESS_KEY',
+        'S3_SECRET_KEY',
+        'FIREBASE_PROJECT_ID',
+      ] as const) {
         if (!env[key]) {
           ctx.addIssue({
             code: 'custom',

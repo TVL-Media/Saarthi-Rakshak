@@ -16,6 +16,7 @@ const productionStorage = {
   S3_BUCKET: 'sarthi-prod',
   S3_ACCESS_KEY: 'key',
   S3_SECRET_KEY: 'secret',
+  FIREBASE_PROJECT_ID: 'sarthi-rakshak',
 };
 
 describe('validateEnv', () => {
@@ -185,6 +186,25 @@ describe('file storage (S3_*)', () => {
   it('rejects an invalid bucket name', () => {
     expect(() => validateEnv({ ...validDev, S3_BUCKET: 'Bad_Name' })).toThrow(
       /S3_BUCKET: Must be a valid bucket name/,
+    );
+  });
+});
+
+describe('FIREBASE_PROJECT_ID', () => {
+  it('is optional outside production (app login is then off)', () => {
+    expect(validateEnv(validDev).FIREBASE_PROJECT_ID).toBeUndefined();
+  });
+
+  it('is required in production', () => {
+    const withoutFirebase = { ...productionStorage, FIREBASE_PROJECT_ID: undefined };
+    expect(() => validateEnv({ ...validDev, ...withoutFirebase, NODE_ENV: 'production' })).toThrow(
+      /FIREBASE_PROJECT_ID: Required when NODE_ENV is production/,
+    );
+  });
+
+  it('refuses something that is not a project id', () => {
+    expect(() => validateEnv({ ...validDev, FIREBASE_PROJECT_ID: 'My Project!' })).toThrow(
+      /FIREBASE_PROJECT_ID: Must be a Firebase project id/,
     );
   });
 });

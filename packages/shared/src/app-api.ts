@@ -54,6 +54,8 @@ export const ERROR_CODES = [
   'limit_reached', // 409: e.g. maximum guardians, daily invite limit
   'too_many_requests', // 429
   'link_expired', // 410: guardian invite link no longer valid
+  'service_unavailable', // 503: a needed service is not set up or not reachable
+  'server_error', // 500: unexpected; try again
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 

@@ -7,6 +7,9 @@ packages:
 allowBuilds:
   '@parcel/watcher': false
   unrs-resolver: false
+  # firebase-admin dependencies: their install scripts are optional (a defaults file, a version notice).
+  '@firebase/util': false
+  protobufjs: false
 
 minimumReleaseAgeExclude:
   - '@tanstack/query-core@5.105.0'

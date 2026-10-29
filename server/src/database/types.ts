@@ -16,6 +16,7 @@ export interface UsersTable {
   blood_group: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-' | null;
   status: Generated<'active' | 'blocked'>;
   consent_at: Date | null;
+  consent_version: string | null;
   last_seen_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
@@ -214,6 +215,18 @@ export interface AdminSessionsTable {
   end_reason: string | null;
 }
 
+export interface UserSessionsTable {
+  id: Generated<string>;
+  user_id: string;
+  device_id: string | null;
+  token_hash: string;
+  created_at: CreatedAt;
+  last_seen_at: Timestamp;
+  expires_at: Date;
+  ended_at: Date | null;
+  end_reason: 'logout' | 'new_login' | 'account_deleted' | null;
+}
+
 export interface AdminBackupCodesTable {
   id: Generated<string>;
   admin_id: string;
@@ -241,6 +254,7 @@ export interface Database {
   admins: AdminsTable;
   admin_sessions: AdminSessionsTable;
   admin_backup_codes: AdminBackupCodesTable;
+  user_sessions: UserSessionsTable;
   settings: SettingsTable;
   journeys: JourneysTable;
   sos_events: SosEventsTable;

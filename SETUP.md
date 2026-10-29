@@ -165,6 +165,7 @@ pnpm dev
 | `pnpm` is not recognised | Open a new PowerShell window after installing pnpm |
 | `docker compose` fails / "cannot connect to the Docker daemon" | Start Docker Desktop and wait for "Engine running" |
 | `docker compose ps` doesn't say `healthy` | Wait a little; if it stays unhealthy: `docker compose logs postgres` (or `redis`, `storage`) |
+| App login answers `service_unavailable` | Firebase is not set up in `.env` (see "App login with Firebase") |
 | Server says `File storage not reachable` | File storage isn't running: `docker compose up -d`. The admin panel still works without it |
 | `ECONNREFUSED 127.0.0.1:5433` when migrating or starting | The database isn't running: `docker compose up -d` |
 | `port is already allocated` for 5433, 6379 or 8333 | Another program uses that port. Ask the team before stopping anything |
@@ -174,6 +175,25 @@ pnpm dev
 | `A Super Admin already exists` | You already made your account. Log in with your password, or use `--reissue` (row above) |
 | Page shows "Couldn't load this page" | Is `pnpm dev` still running? Is Docker running? Check http://localhost:3000/health |
 | Login works but you're sent straight back to the login page | Use Chrome or Edge on `http://localhost:5173` exactly (not `127.0.0.1`, not Safari) |
+
+---
+
+## App login with Firebase (for the user app)
+
+Only needed when you work on the user app; the admin panel works without it.
+
+1. Ask the team lead for the Firebase **service-account key file** (a `.json` file). Save it **outside**
+   the project folder, e.g. `C:\Users\<you>\firebase-key.json`. Never commit it or send it on chat.
+2. Add these two lines to your `.env` (use your own path):
+   ```
+   FIREBASE_PROJECT_ID=sarthi-rakshak
+   GOOGLE_APPLICATION_CREDENTIALS=C:\Users\<you>\firebase-key.json
+   ```
+3. Restart `pnpm dev`. Without these lines the server prints
+   `FIREBASE_PROJECT_ID is not set: app login is off` and app login answers `service_unavailable`.
+
+For testing on a phone, use the **test phone numbers** set up in the Firebase console
+(Authentication → Sign-in method → Phone → Phone numbers for testing). They use a fixed code and send no SMS.
 
 ---
 

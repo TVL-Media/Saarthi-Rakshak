@@ -23,6 +23,7 @@ export const TABLES = [
   'settings',
   'sos_events',
   'support_tickets',
+  'user_sessions',
   'users',
 ] as const satisfies readonly (keyof Database)[];
 

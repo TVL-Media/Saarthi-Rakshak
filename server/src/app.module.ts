@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { UserAppModule } from './app/user-app.module';
 import { AuthModule } from './auth/auth.module';
 import { EnvModule } from './config/env.module';
 import { DatabaseModule } from './database/database.module';
@@ -8,7 +9,7 @@ import { RedisModule } from './redis/redis.module';
 import { StorageModule } from './storage/storage.module';
 
 @Module({
-  imports: [EnvModule, DatabaseModule, RedisModule, StorageModule, AuthModule],
+  imports: [EnvModule, DatabaseModule, RedisModule, StorageModule, AuthModule, UserAppModule],
   controllers: [HealthController],
   providers: [HealthService],
 })
