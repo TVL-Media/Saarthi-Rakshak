@@ -22,6 +22,13 @@ const LOCAL_STORAGE = {
   S3_SECRET_KEY: 'change_me_local_only',
 } as const;
 
+/** User-app settings with local defaults outside production (required in production). */
+const LOCAL_APP = {
+  // A fixed key is fine locally: it only protects hashes of test phone numbers.
+  PHONE_HASH_KEY: Buffer.alloc(32, 1).toString('base64'),
+  GUARDIAN_WEB_URL: 'http://localhost:5175',
+} as const;
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -62,6 +69,13 @@ const envSchema = z
     // Path to the Firebase service-account key file; read by Firebase itself. Keep it outside the
     // project folder and never commit it.
     GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
+    // 32 random bytes in base64: key for hashing phone numbers that declined a guardian invite.
+    PHONE_HASH_KEY: z
+      .string()
+      .regex(/^[A-Za-z0-9+/]{43}=$/, { error: 'Must be 32 random bytes in base64 (see README)' })
+      .optional(),
+    // Where the guardian pages are served; used in invite and SOS links.
+    GUARDIAN_WEB_URL: httpUrl.optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.ADMIN_TWO_STEP === 'off') {
@@ -79,6 +93,8 @@ const envSchema = z
         'S3_ACCESS_KEY',
         'S3_SECRET_KEY',
         'FIREBASE_PROJECT_ID',
+        'PHONE_HASH_KEY',
+        'GUARDIAN_WEB_URL',
       ] as const) {
         if (!env[key]) {
           ctx.addIssue({
@@ -138,6 +154,8 @@ const envSchema = z
       S3_BUCKET_TEST: env.S3_BUCKET_TEST ?? local?.S3_BUCKET_TEST,
       S3_ACCESS_KEY: (env.S3_ACCESS_KEY ?? local?.S3_ACCESS_KEY)!,
       S3_SECRET_KEY: (env.S3_SECRET_KEY ?? local?.S3_SECRET_KEY)!,
+      PHONE_HASH_KEY: (env.PHONE_HASH_KEY ?? (local && LOCAL_APP.PHONE_HASH_KEY))!,
+      GUARDIAN_WEB_URL: (env.GUARDIAN_WEB_URL ?? (local && LOCAL_APP.GUARDIAN_WEB_URL))!,
     };
   });
 

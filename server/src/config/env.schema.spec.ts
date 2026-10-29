@@ -17,6 +17,8 @@ const productionStorage = {
   S3_ACCESS_KEY: 'key',
   S3_SECRET_KEY: 'secret',
   FIREBASE_PROJECT_ID: 'sarthi-rakshak',
+  PHONE_HASH_KEY: Buffer.alloc(32, 9).toString('base64'),
+  GUARDIAN_WEB_URL: 'https://g.example.in',
 };
 
 describe('validateEnv', () => {
@@ -206,6 +208,29 @@ describe('FIREBASE_PROJECT_ID', () => {
     expect(() => validateEnv({ ...validDev, FIREBASE_PROJECT_ID: 'My Project!' })).toThrow(
       /FIREBASE_PROJECT_ID: Must be a Firebase project id/,
     );
+  });
+});
+
+describe('PHONE_HASH_KEY and GUARDIAN_WEB_URL', () => {
+  it('have local defaults outside production', () => {
+    const env = validateEnv(validDev);
+    expect(env.PHONE_HASH_KEY).toMatch(/^[A-Za-z0-9+/]{43}=$/);
+    expect(env.GUARDIAN_WEB_URL).toBe('http://localhost:5175');
+  });
+
+  it('are required in production', () => {
+    const settings = {
+      ...productionStorage,
+      PHONE_HASH_KEY: undefined,
+      GUARDIAN_WEB_URL: undefined,
+    };
+    expect(() => validateEnv({ ...validDev, ...settings, NODE_ENV: 'production' })).toThrow(
+      /PHONE_HASH_KEY: Required[\s\S]*GUARDIAN_WEB_URL: Required/,
+    );
+  });
+
+  it('refuses a hash key that is not 32 bytes', () => {
+    expect(() => validateEnv({ ...validDev, PHONE_HASH_KEY: 'short' })).toThrow(/PHONE_HASH_KEY/);
   });
 });
 

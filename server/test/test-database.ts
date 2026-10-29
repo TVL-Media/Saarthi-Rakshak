@@ -15,6 +15,7 @@ export const TABLES = [
   'audit_log',
   'checkins',
   'devices',
+  'guardian_invite_blocklist',
   'guardian_links',
   'guardians',
   'journeys',

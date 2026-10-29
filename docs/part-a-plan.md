@@ -163,7 +163,7 @@ New table `user_sessions`:
 **Database (migration 0011)**
 - `guardians`: add `invite_token_hash`, `invite_expires_at`.
 - New table `guardian_invite_blocklist` (`user_id`, `phone_hash`, `created_at`): numbers that declined, stored only as a hash. Unique on (`user_id`, `phone_hash`).
-- `alerts.type`: add `invite`.
+- (`alerts.type` `invite` moves to Part B, when invites are really sent.)
 
 **API (user)**
 
@@ -322,7 +322,7 @@ New table `user_sessions`:
 | Migration | Change |
 | --- | --- |
 | 0010 | New `user_sessions` |
-| 0011 | `guardians.invite_token_hash`, `invite_expires_at`; new `guardian_invite_blocklist`; `alerts.type` + `invite` |
+| 0011 | `guardians.invite_token_hash`, `invite_expires_at`; new `guardian_invite_blocklist` |
 | 0012 | `sos_events.rules` |
 | 0013 | `location_points.client_point_id` (unique per user) |
 | 0014 | `journeys.rules`, `journeys.route`; `checkins.source`, `checkins.paused_until` |

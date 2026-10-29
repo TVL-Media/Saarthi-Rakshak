@@ -47,8 +47,18 @@ export interface GuardiansTable {
   invite_status: Generated<'pending' | 'accepted' | 'declined'>;
   invited_at: Timestamp;
   responded_at: Date | null;
+  /** SHA-256 of the invite link code; the code itself is never stored. */
+  invite_token_hash: string | null;
+  invite_expires_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
+}
+
+export interface GuardianInviteBlocklistTable {
+  user_id: string;
+  /** HMAC-SHA256 of the declined number with PHONE_HASH_KEY. */
+  phone_hash: string;
+  created_at: CreatedAt;
 }
 
 export interface AdminsTable {
@@ -251,6 +261,7 @@ export interface Database {
   users: UsersTable;
   devices: DevicesTable;
   guardians: GuardiansTable;
+  guardian_invite_blocklist: GuardianInviteBlocklistTable;
   admins: AdminsTable;
   admin_sessions: AdminSessionsTable;
   admin_backup_codes: AdminBackupCodesTable;

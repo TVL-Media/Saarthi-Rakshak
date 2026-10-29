@@ -4,7 +4,7 @@ Every call the Android app makes to the server. The source of truth is
 [`packages/shared/src/app-api.ts`](../packages/shared/src/app-api.ts) (Zod schemas, used by the server to check
 input); this page is the same list for the Flutter app. Change both together.
 
-Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1, A2**.
+Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1, A2, A3**.
 
 ## Basics
 
@@ -108,7 +108,12 @@ The four `permissions` keys are fixed: the admin panel's "Setup complete" check 
 
 `Guardian` = `{ id, name, relation, phoneMasked, status }`; `status` is `pending`, `accepted` or `declined`.
 
-Limits: up to 5 guardians; not your own number; not the same number twice; at most 10 invites a day.
+Limits: up to 5 guardians (Settings → max guardians); not your own number; not the same number twice;
+at most 10 invites a day (resends count). A blocked user can't add or re-invite (`account_blocked`).
+A number that declined can't be invited again by the same user. Guardians can't be removed during an SOS (`conflict`).
+
+The invite SMS has the link `GUARDIAN_WEB_URL/invite/<code>`, valid 7 days; a resend makes a new link and the old one
+stops working. Until Part B, the SMS is only printed in the server console (number masked).
 
 Used by the guardian's invite page (no login):
 
@@ -117,6 +122,11 @@ Used by the guardian's invite page (no login):
 | `GET /g/invite/:code` | `{ inviterFirstName, guardianName, status, expiresAt }` |
 | `POST /g/invite/:code/accept` | `204` |
 | `POST /g/invite/:code/decline` | `204` |
+
+- Expired link → `link_expired` (410); unknown code → `not_found`.
+- Accept twice is fine. An accepted guardian can still decline with the link (while it is valid); a declined one can't accept.
+- Declining deletes the guardian's number.
+- At most 30 calls per minute per network address.
 
 ## A4 — SOS
 
