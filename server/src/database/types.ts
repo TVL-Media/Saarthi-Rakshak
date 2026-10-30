@@ -116,6 +116,8 @@ export interface SosEventsTable {
   ended_at: Date | null;
   end_reason: string | null;
   guardian_link_expires_at: Date | null;
+  /** Safety rules (Settings) when the SOS started; see AppSettings.snapshot(). */
+  rules: Record<string, number> | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }

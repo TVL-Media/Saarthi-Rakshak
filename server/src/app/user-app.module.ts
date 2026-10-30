@@ -15,10 +15,18 @@ import { GuardiansService } from './guardians/guardians.service';
 import { OutgoingMessages } from './messages/outgoing-messages';
 import { ProfileController } from './profile/profile.controller';
 import { ProfileService } from './profile/profile.service';
+import { SosController } from './sos/sos.controller';
+import { SosService } from './sos/sos.service';
 
 /** Everything the Android app and the guardian pages call: /app/... and /g/... */
 @Module({
-  controllers: [AppAuthController, ProfileController, GuardiansController, InviteController],
+  controllers: [
+    AppAuthController,
+    ProfileController,
+    GuardiansController,
+    InviteController,
+    SosController,
+  ],
   providers: [
     {
       provide: PhoneTokenVerifier,
@@ -29,6 +37,7 @@ import { ProfileService } from './profile/profile.service';
     AppAuthService,
     ProfileService,
     GuardiansService,
+    SosService,
     AppSettings,
     OutgoingMessages,
     AppRateLimiter,

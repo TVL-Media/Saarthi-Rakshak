@@ -16,4 +16,19 @@ export class AppSettings {
       .executeTakeFirst();
     return typeof row?.value === 'number' ? row.value : DEFAULT_SETTINGS[key].value;
   }
+
+  /**
+   * Every rule as it is now, to copy onto a new SOS or journey. Timers read the copy, so a
+   * settings change never changes an emergency that is already running.
+   */
+  async snapshot(): Promise<Record<SettingKey, number>> {
+    const rows = await this.database.db.selectFrom('settings').select(['key', 'value']).execute();
+    const saved = new Map(rows.map((r) => [r.key, r.value]));
+    const rules = {} as Record<SettingKey, number>;
+    for (const key of Object.keys(DEFAULT_SETTINGS) as SettingKey[]) {
+      const value = saved.get(key);
+      rules[key] = typeof value === 'number' ? value : DEFAULT_SETTINGS[key].value;
+    }
+    return rules;
+  }
 }

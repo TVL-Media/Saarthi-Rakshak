@@ -4,7 +4,7 @@ Every call the Android app makes to the server. The source of truth is
 [`packages/shared/src/app-api.ts`](../packages/shared/src/app-api.ts) (Zod schemas, used by the server to check
 input); this page is the same list for the Flutter app. Change both together.
 
-Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1, A2, A3**.
+Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1, A2, A3, A4**.
 
 ## Basics
 
@@ -143,6 +143,13 @@ Used by the guardian's invite page (no login):
   `POST /app/sos/cancelled` later (no alerts; it only counts as a false alarm).
 - `Sos` = `{ id, trigger, isTest, status, startedAt, endedAt, guardians: [{ guardianId, name, relation, alertedAt, openedAt, respondingAt }] }`.
 - Works even for a blocked user.
+- The same `id` sent again returns the same SOS (no second alert). While an SOS is active, a new start returns the
+  active one.
+- `startedAt` may be up to a day old (sent late after being offline), but not more than 1 minute in the future.
+- Guardians who accepted **or have not answered yet** get a secret live link each (`GUARDIAN_WEB_URL/g/<code>`);
+  declined ones don't. A test SOS says TEST in the message.
+- After "I'm safe", links stay open 15 more minutes (Settings), then expire; guardians get a "safe" message.
+- `alertedAt` stays `null` until Part B really sends alerts. Until then the messages are printed in the server console.
 
 ## A5 — Live location and heartbeat
 
