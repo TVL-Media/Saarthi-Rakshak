@@ -133,6 +133,8 @@ export interface LocationPointsTable {
   battery_pct: number | null;
   network: string | null;
   recorded_at: Date | string;
+  /** Made on the phone; unique per user, so a point sent twice is saved once. */
+  client_point_id: string | null;
   delete_after: Date | null;
   created_at: CreatedAt;
 }

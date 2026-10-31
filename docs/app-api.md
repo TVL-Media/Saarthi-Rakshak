@@ -4,7 +4,7 @@ Every call the Android app makes to the server. The source of truth is
 [`packages/shared/src/app-api.ts`](../packages/shared/src/app-api.ts) (Zod schemas, used by the server to check
 input); this page is the same list for the Flutter app. Change both together.
 
-Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1, A2, A3, A4**.
+Status: **contract agreed (A0)**. Each call is built in the step shown. Built so far: **A1, A2, A3, A4, A5**.
 
 ## Basics
 
@@ -172,6 +172,12 @@ Each point:
 
 `network`: `wifi`, `mobile`, `none`, `unknown`. Points sent twice are counted as `duplicates`, not saved again.
 Send heartbeat every 30–60 seconds during an SOS or journey.
+
+- Points are accepted for the user's own SOS / journey while it is active and for 2 minutes after it ends (late
+  uploads); after that → `conflict`. Someone else's id → `not_found`.
+- `recordedAt` may be up to a day old (sent late after being offline), not more than 1 minute in the future.
+- Points can arrive in any order; the live map always shows the newest one.
+- At most 120 location calls per minute. Works for blocked users.
 
 ## A6 — Journeys and check-ins
 

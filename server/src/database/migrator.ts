@@ -13,6 +13,7 @@ import * as m0009 from './migrations/0009_guardian_relation';
 import * as m0010 from './migrations/0010_user_sessions';
 import * as m0011 from './migrations/0011_guardian_invites';
 import * as m0012 from './migrations/0012_sos_rules';
+import * as m0013 from './migrations/0013_location_point_ids';
 import type { Database } from './types';
 
 /** Every migration, in order. Add new ones here (listed by hand so they also load in tests). */
@@ -29,6 +30,7 @@ export const migrations: Record<string, Migration> = {
   '0010_user_sessions': m0010,
   '0011_guardian_invites': m0011,
   '0012_sos_rules': m0012,
+  '0013_location_point_ids': m0013,
 };
 
 export function createKysely(pool: Pool): Kysely<Database> {
