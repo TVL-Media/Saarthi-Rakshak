@@ -313,17 +313,27 @@ export const JourneyStatus = z.enum(['active', 'arrived', 'ended', 'lost_contact
 export const CheckinReason = z.enum(['off_route', 'stopped', 'late']);
 export const CheckinStatus = z.enum(['pending', 'fine', 'traffic_pause', 'sos', 'no_reply']);
 
-/** POST /v1/journeys — sending the same `id` again returns the same journey. */
+/**
+ * POST /v1/journeys — sending the same `id` again returns the same journey. Shared with all
+ * accepted guardians (at least one needed). Arrival between 5 minutes and 12 hours from now.
+ */
 export const StartJourneyRequest = z.object({
   id: Id,
   destination: z.object({
     lat: Latitude,
     lng: Longitude,
+    /** The place picked from the search, e.g. "Home" or "Sector 18 Metro Station". */
     label: z.string().trim().min(1).max(200),
   }),
   expectedArrivalAt: DateTime,
-  /** Route as a Google encoded polyline, optional. */
+  /** Route from Google Directions as an encoded polyline; optional (no route = no off-route check). */
   route: z.string().min(1).max(20_000).optional(),
+});
+
+/** POST /v1/journeys/:id/end */
+export const EndJourneyRequest = z.object({
+  /** `arrived` = "I reached safely"; `ended` = ended without arriving. */
+  outcome: z.enum(['arrived', 'ended']),
 });
 
 export const Checkin = z.object({
@@ -344,17 +354,25 @@ export const Journey = z.object({
   openCheckin: Checkin.nullable(),
   /** "Stuck in traffic": no new check-ins until then. */
   checkinsPausedUntil: DateTime.nullable(),
+  /** Encoded polyline, if one was sent. */
+  route: z.string().nullable(),
 });
 
-/** POST /v1/journeys/:id/checkins — the phone noticed a problem. */
+/**
+ * POST /v1/journeys/:id/checkins — the phone found a reason to ask "Are you okay?" (stopped 3 min,
+ * 500 m off route for 2 points in a row, or 15 min late) and shows the alert.
+ */
 export const RaiseCheckinRequest = z.object({
   id: Id,
-  reason: z.enum(['off_route', 'stopped']),
+  reason: CheckinReason,
 });
 
-/** POST /v1/checkins/:id/answer */
+/**
+ * POST /v1/checkins/:id/answer — `traffic_pause` = "Stuck in traffic" (no check-ins for 10 min);
+ * `sos` = "I need help" (the app then starts an SOS with trigger "checkin").
+ */
 export const AnswerCheckinRequest = z.object({
-  answer: z.enum(['fine', 'traffic', 'sos']),
+  answer: z.enum(['fine', 'traffic_pause', 'sos']),
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -426,6 +444,7 @@ export type LocationsRequest = z.infer<typeof LocationsRequest>;
 export type LocationsReply = z.infer<typeof LocationsReply>;
 export type HeartbeatRequest = z.infer<typeof HeartbeatRequest>;
 export type StartJourneyRequest = z.infer<typeof StartJourneyRequest>;
+export type EndJourneyRequest = z.infer<typeof EndJourneyRequest>;
 export type Checkin = z.infer<typeof Checkin>;
 export type Journey = z.infer<typeof Journey>;
 export type RaiseCheckinRequest = z.infer<typeof RaiseCheckinRequest>;

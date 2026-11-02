@@ -5,7 +5,7 @@ Every call the Android app makes to the server. The source of truth is
 input); this page is the same list for the Flutter app. Change both together.
 
 Status: **matches Implementation Plan v2 (31 Oct 2026)**. All app calls start with `/v1`; guardian pages use `/g`.
-Built so far: **A1, A2, A3, A4, A5** (A6–A7 and audio follow the plan; their exact shapes are confirmed when built).
+Built so far: **A1, A2, A3, A4, A5, A6** (A6–A7 and audio follow the plan; their exact shapes are confirmed when built).
 
 ## Basics
 
@@ -193,15 +193,27 @@ Send heartbeat every 30–60 seconds during an SOS or journey.
 | --- | --- | --- |
 | `POST /v1/journeys` | `{ id, destination: { lat, lng, label }, expectedArrivalAt, route? }` | `Journey` |
 | `GET /v1/journeys/active` | — | `Journey` or `204` if none |
-| `POST /v1/journeys/:id/arrived` | — | `Journey` |
-| `POST /v1/journeys/:id/end` | — | `Journey` |
-| `POST /v1/journeys/:id/checkins` | `{ id, reason }` — `off_route` or `stopped` | `Checkin` |
-| `POST /v1/checkins/:id/answer` | `{ answer }` — `fine`, `traffic` or `sos` | `Checkin` |
+| `GET /v1/journeys/:id` | — | `Journey` |
+| `POST /v1/journeys/:id/end` | `{ outcome }` — `arrived` ("I reached safely") or `ended` | `Journey` |
+| `POST /v1/journeys/:id/checkins` | `{ id, reason }` — `stopped`, `off_route` or `late` | `Checkin` |
+| `POST /v1/checkins/:id/answer` | `{ answer }` — `fine`, `traffic_pause` or `sos` | `Checkin` |
 
-- `route`: Google encoded polyline (optional).
-- `Journey` = `{ id, status, destination, expectedArrivalAt, startedAt, endedAt, openCheckin, checkinsPausedUntil }`.
-- `Checkin` = `{ id, reason, source, status, askedAt }`; `reason` can also be `late` (made by the server).
-- Answer `traffic` pauses check-ins for 10 minutes. Answer `sos`: then send `POST /v1/sos` with `trigger: "checkin"`.
+- `Journey` = `{ id, status, destination, expectedArrivalAt, startedAt, endedAt, openCheckin, checkinsPausedUntil, route }`;
+  `status` is `active`, `arrived`, `ended` or `lost_contact`.
+- `Checkin` = `{ id, reason, source, status, askedAt }`; `status` is `pending`, `fine`, `traffic_pause`, `sos` or `no_reply`.
+- A journey is shared with **all accepted guardians**; at least one is needed (`conflict` otherwise). Each gets an SMS
+  with a live link (`GUARDIAN_WEB_URL/l/<code>`): "Priya started a journey to Home, arriving 11:28 pm. Follow: …".
+- `expectedArrivalAt` between 5 minutes and 12 hours from now. One journey at a time (`conflict`: "End it first").
+  The same `id` again returns the same journey. `route` = Google encoded polyline (optional).
+- End: guardians get "Priya reached Home safely." or "Priya ended the journey to Home."; links stay open 15 more
+  minutes (Settings). A check-in still waiting is closed. Ending twice is fine.
+- Check-ins are decided on the phone (stopped 3 min, 500 m off route for 2 points in a row, 15 min late); the phone
+  shows the alert and tells the server. While one waits for an answer, raising again returns that one.
+- Refused (`conflict`) while check-ins are paused after "Stuck in traffic" (10 min, Settings) and, for the same reason,
+  within 5 minutes of "I'm fine".
+- Answer `sos`: the app then sends `POST /v1/sos` with `trigger: "checkin"` and `journeyId`.
+- No answer in 2 minutes → guardians alerted (Part B timer). A late answer is still recorded; an answered check-in
+  can't change.
 
 ## A7 — History, delete account, support
 

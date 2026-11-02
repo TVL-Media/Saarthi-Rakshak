@@ -99,6 +99,11 @@ export interface JourneysTable {
   status: Generated<'active' | 'arrived' | 'ended' | 'lost_contact'>;
   started_at: Timestamp;
   ended_at: Date | null;
+  /** Safety rules (Settings) when the journey started. */
+  rules: Record<string, number> | null;
+  /** Encoded polyline from Google Directions, if sent. */
+  route_polyline: string | null;
+  checkins_paused_until: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }
@@ -144,6 +149,7 @@ export interface CheckinsTable {
   journey_id: string;
   reason: 'off_route' | 'stopped' | 'late';
   status: Generated<'pending' | 'fine' | 'traffic_pause' | 'sos' | 'no_reply'>;
+  source: Generated<'phone' | 'server'>;
   asked_at: Timestamp;
   answered_at: Date | null;
   created_at: CreatedAt;

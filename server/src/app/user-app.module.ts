@@ -15,6 +15,8 @@ import { GuardiansService } from './guardians/guardians.service';
 import { OutgoingMessages } from './messages/outgoing-messages';
 import { ProfileController } from './profile/profile.controller';
 import { ProfileService } from './profile/profile.service';
+import { JourneysController } from './journeys/journeys.controller';
+import { JourneysService } from './journeys/journeys.service';
 import { LocationsController } from './locations/locations.controller';
 import { LocationsService } from './locations/locations.service';
 import { SosController } from './sos/sos.controller';
@@ -29,6 +31,7 @@ import { SosService } from './sos/sos.service';
     InviteController,
     SosController,
     LocationsController,
+    JourneysController,
   ],
   providers: [
     {
@@ -42,6 +45,7 @@ import { SosService } from './sos/sos.service';
     GuardiansService,
     SosService,
     LocationsService,
+    JourneysService,
     AppSettings,
     OutgoingMessages,
     AppRateLimiter,
