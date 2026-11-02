@@ -71,6 +71,36 @@ class MapsService {
     }).toList();
   }
 
+  /// Area name for the Home screen, e.g. "Sector 62, Noida" (Geocoding API). Null when not available.
+  Future<String?> areaName(double lat, double lng) async {
+    if (!available) return null;
+    final res = await _http
+        .get(Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
+          'latlng': '$lat,$lng',
+          'result_type': 'sublocality|locality',
+          'language': 'en',
+          'key': _key,
+        }))
+        .timeout(const Duration(seconds: 10));
+    if (res.statusCode != 200) return null;
+    final results = (jsonDecode(res.body) as Map<String, dynamic>)['results'] as List? ?? const [];
+    if (results.isEmpty) return null;
+    String? part(String type) {
+      for (final r in results) {
+        for (final c in ((r as Map<String, dynamic>)['address_components'] as List? ?? const [])) {
+          final m = c as Map<String, dynamic>;
+          if ((m['types'] as List).contains(type)) return m['long_name'] as String?;
+        }
+      }
+      return null;
+    }
+
+    final area = part('sublocality_level_1') ?? part('sublocality');
+    final city = part('locality');
+    final text = [?area, ?city].join(', ');
+    return text.isEmpty ? null : text;
+  }
+
   /// Driving route from here to the destination, or null if not available.
   Future<RouteResult?> route(double fromLat, double fromLng, Place to) async {
     if (!available) return null;

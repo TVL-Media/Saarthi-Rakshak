@@ -88,7 +88,7 @@ const envSchema = z
     /** Shared secret the SMS providers send with delivery reports (header x-webhook-secret). */
     SMS_WEBHOOK_SECRET: z.string().min(24, { error: 'At least 24 characters' }).optional(),
     /**
-     * Development only: a test login without Firebase (one number + 6-digit code, until a date).
+     * Development only: a test login without Firebase (6-digit code, until a date; one number if DEV_LOGIN_PHONE is set, otherwise any).
      * Refused when NODE_ENV is production.
      */
     DEV_LOGIN_PHONE: z.string().min(10).max(20).optional(),

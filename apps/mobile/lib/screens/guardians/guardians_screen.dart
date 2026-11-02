@@ -99,14 +99,22 @@ class _GuardiansScreenState extends State<GuardiansScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
           children: [
-            ScreenTitle('Trusted Guardians', subtitle: 'People who can keep an eye on you and help when needed. $active/$max added.'),
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: active >= max ? null : _add,
-              icon: const Icon(Icons.add),
-              label: Text(active >= max ? 'You have $max guardians' : 'Add Guardian'),
-            ),
+            const Text('Trusted Guardians', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, height: 1.15, letterSpacing: -0.4)),
             const SizedBox(height: 8),
+            const Text('People who can keep an eye on you and help when needed.',
+                style: TextStyle(fontSize: 17, color: Color(0xFF374151), height: 1.35)),
+            const SizedBox(height: 6),
+            Text('$active/$max Guardians Added', style: const TextStyle(fontSize: 14, color: AppColors.muted, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 56,
+              child: FilledButton.icon(
+                onPressed: active >= max ? null : _add,
+                icon: const Icon(Icons.add, size: 24),
+                label: Text(active >= max ? 'You have $max guardians' : 'Add Guardian'),
+              ),
+            ),
+            const SizedBox(height: 10),
             if (_loading && list.isEmpty)
               const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))
             else if (list.isEmpty)
@@ -115,20 +123,28 @@ class _GuardiansScreenState extends State<GuardiansScreen> {
               for (final g in list)
                 _GuardianTile(guardian: g, onAction: (a) => _menu(g, a)),
             const SizedBox(height: 16),
-            AppCard(
-              color: AppColors.redSoft,
-              child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(Icons.shield_outlined, color: AppColors.red, size: 36),
-                SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Guardians can', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w700, fontSize: 16)),
-                    SizedBox(height: 6),
-                    Text('Get your SOS alerts by SMS\nSee your live location during an SOS or journey\nTap “I’m responding” so you know help is coming',
-                        style: TextStyle(height: 1.5, color: AppColors.ink)),
-                  ]),
-                ),
-              ]),
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+              decoration: BoxDecoration(color: const Color(0xFFFDECEC), borderRadius: BorderRadius.circular(18)),
+              child: IntrinsicHeight(
+                child: Row(children: [
+                  const SizedBox(
+                    width: 64,
+                    child: Center(child: Icon(Icons.shield, color: AppColors.red, size: 52)),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(width: 1.5, color: AppColors.red.withValues(alpha: 0.5)),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Guardians can', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w700, fontSize: 16.5)),
+                      SizedBox(height: 6),
+                      Text('View your live location during an SOS or journey\nReceive your SOS alerts by SMS\nGet notified if you miss a check-in',
+                          style: TextStyle(height: 1.55, color: Color(0xFF4B5563), fontSize: 14.5)),
+                    ]),
+                  ),
+                ]),
+              ),
             ),
             if (widget.setupStep) ...[
               const SizedBox(height: 20),
@@ -164,24 +180,27 @@ class _GuardianTile extends StatelessWidget {
       _ => ('Invite sent', AppColors.amber, AppColors.amberSoft),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.line))),
       child: Row(children: [
-        Initials(g.name, size: 52),
+        Initials(g.name, size: 58),
         const SizedBox(width: 14),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(g.name, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-            if (g.relation != null) Text(g.relation!, style: const TextStyle(color: AppColors.muted)),
-            Text(g.phoneMasked ?? 'Number deleted', style: const TextStyle(color: AppColors.muted)),
+            Text(g.name, style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 2),
+            if (g.relation != null) Text(g.relation!, style: const TextStyle(color: Color(0xFF4B5563), fontSize: 14)),
+            Text(g.phone != null ? prettyPhone(g.phone!) : (g.phoneMasked ?? 'Number deleted'),
+                style: const TextStyle(color: Color(0xFF4B5563), fontSize: 14)),
           ]),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
           child: Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w600, fontSize: 12.5)),
         ),
         PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: AppColors.ink),
           onSelected: onAction,
           itemBuilder: (_) => [
             const PopupMenuItem(value: 'edit', child: Text('Edit name or relation')),

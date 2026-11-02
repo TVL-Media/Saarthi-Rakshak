@@ -29,3 +29,9 @@ String? normaliseIndianMobile(String input) {
   final m = RegExp(r'^(?:\+91|0091|91|0)?([6-9]\d{9})$').firstMatch(digits);
   return m == null ? null : '+91${m.group(1)}';
 }
+
+/// "+919876543210" → "+91 98765 43210" (other formats unchanged).
+String prettyPhone(String phone) {
+  final m = RegExp(r'^\+91(\d{5})(\d{5})$').firstMatch(phone);
+  return m == null ? phone : '+91 ${m[1]} ${m[2]}';
+}

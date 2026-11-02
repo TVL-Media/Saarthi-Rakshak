@@ -19,8 +19,8 @@ describe('POST /v1/auth/dev-login (development only)', () => {
     delete process.env.DEV_LOGIN_UNTIL;
   });
 
-  async function start(until = tomorrow) {
-    process.env.DEV_LOGIN_PHONE = '9999900001';
+  async function start(until = tomorrow, phone: string | null = '9999900001') {
+    if (phone) process.env.DEV_LOGIN_PHONE = phone;
     process.env.DEV_LOGIN_CODE = '482913';
     process.env.DEV_LOGIN_UNTIL = until;
     ctx = await startAppTest();
@@ -49,6 +49,20 @@ describe('POST /v1/auth/dev-login (development only)', () => {
       .post('/v1/auth/dev-login')
       .send({ phone: '9999900001', code: '000000' })
       .expect(400);
+  });
+
+  it('without DEV_LOGIN_PHONE, any Indian mobile logs in with the test code', async () => {
+    await start(tomorrow, null);
+    const res = await http(ctx)
+      .post('/v1/auth/dev-login')
+      .send({ phone: '98765 43210', code: '482913' })
+      .expect(200);
+    expect((res.body as LoginReply).user.phone).toBe('+919876543210');
+    await http(ctx)
+      .post('/v1/auth/dev-login')
+      .send({ phone: '9876543211', code: '000000' })
+      .expect(400);
+    await http(ctx).post('/v1/auth/dev-login').send({ phone: '12345', code: '482913' }).expect(400);
   });
 
   it('is off after the end date', async () => {

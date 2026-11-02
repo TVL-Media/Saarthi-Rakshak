@@ -10,6 +10,7 @@ import '../../config.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/format.dart';
 import '../auth/phone_otp.dart';
 import '../auth/profile_screen.dart';
 import '../guardians/guardians_screen.dart';
@@ -27,46 +28,76 @@ class SettingsScreen extends StatelessWidget {
 
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
         children: [
-          const ScreenTitle('Settings'),
-          const SizedBox(height: 16),
-          if (me != null)
-            AppCard(
+          const SizedBox(
+            height: 44,
+            child: Center(child: Text('Settings', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700))),
+          ),
+          const SizedBox(height: 14),
+          if (me != null) ...[
+            _Row(
               onTap: () => open(const ProfileScreen(fromSettings: true)),
+              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
               child: Row(children: [
                 me.photoUrl != null
-                    ? CircleAvatar(radius: 30, backgroundImage: NetworkImage(me.photoUrl!))
-                    : Initials(me.name ?? '', size: 60),
+                    ? CircleAvatar(radius: 28, backgroundImage: NetworkImage(me.photoUrl!))
+                    : Initials(me.name ?? '', size: 56),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(me.name ?? '', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                    Text(me.phone, style: const TextStyle(color: AppColors.muted)),
+                    Text(me.name ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(prettyPhone(me.phone), style: const TextStyle(color: AppColors.muted, fontSize: 14.5)),
                   ]),
                 ),
-                const Icon(Icons.chevron_right, color: AppColors.muted),
+                const Icon(Icons.chevron_right, color: Color(0xFF4B5563)),
               ]),
             ),
-          const SizedBox(height: 14),
-          _Item(Icons.group_outlined, 'Guardians', () => open(const GuardiansScreen())),
-          _Item(Icons.health_and_safety_outlined, 'Safety setup', () => open(const SafetySetupScreen())),
-          _Item(Icons.place_outlined, 'Saved places', () => open(const SavedPlacesScreen())),
-          _Item(Icons.privacy_tip_outlined, 'Privacy policy', () => launchUrl(Uri.parse(AppConfig.privacyUrl))),
-          _Item(Icons.description_outlined, 'Terms', () => launchUrl(Uri.parse(AppConfig.termsUrl))),
-          _Item(Icons.help_outline, 'Report a problem', () => open(const ReportProblemScreen())),
-          _Item(Icons.logout, 'Log out', () async {
+            const SizedBox(height: 6),
+          ],
+          _Item(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),
+          _Item(Icons.people_outline, 'Guardians', () => open(const GuardiansScreen())),
+          _Item(Icons.location_on_outlined, 'Saved Places', () => open(const SavedPlacesScreen())),
+          _Item(Icons.shield_outlined, 'Privacy Policy', () => launchUrl(Uri.parse(AppConfig.privacyUrl))),
+          _Item(Icons.description_outlined, 'Terms & Conditions', () => launchUrl(Uri.parse(AppConfig.termsUrl))),
+          _Item(Icons.help_outline, 'Help & Support', () => open(const ReportProblemScreen())),
+          _Item(Icons.logout, 'Log Out', () async {
             if (await confirm(context, 'Log out?', 'Protection stops on this phone until you log in again.', yes: 'Log out')) {
               await state.logout();
             }
           }, danger: true),
-          _Item(Icons.delete_outline, 'Delete my account', () => open(const DeleteAccountScreen()), danger: true),
+          _Item(Icons.delete_outline, 'Delete My Account', () => open(const DeleteAccountScreen()), danger: true),
           const SizedBox(height: 18),
           const Text(AppConfig.notMonitoring, textAlign: TextAlign.center, style: TextStyle(color: AppColors.muted, fontSize: 13)),
         ],
       ),
     );
   }
+}
+
+/// A white rounded settings row (design frame 42).
+class _Row extends StatelessWidget {
+  const _Row({required this.child, required this.onTap, this.padding = const EdgeInsets.symmetric(horizontal: 16, vertical: 15)});
+  final Widget child;
+  final VoidCallback onTap;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          shadowColor: Colors.black.withValues(alpha: 0.2),
+          elevation: 0.6,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: Padding(padding: padding, child: child),
+          ),
+        ),
+      );
 }
 
 class _Item extends StatelessWidget {
@@ -77,19 +108,18 @@ class _Item extends StatelessWidget {
   final bool danger;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: AppCard(
-          onTap: onTap,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(children: [
-            Icon(icon, color: danger ? AppColors.red : AppColors.ink),
-            const SizedBox(width: 14),
-            Expanded(child: Text(label, style: TextStyle(fontSize: 16, color: danger ? AppColors.red : AppColors.ink, fontWeight: FontWeight.w500))),
-            const Icon(Icons.chevron_right, color: AppColors.muted),
-          ]),
-        ),
-      );
+  Widget build(BuildContext context) {
+    final color = danger ? AppColors.red : AppColors.ink;
+    return _Row(
+      onTap: onTap,
+      child: Row(children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(width: 18),
+        Expanded(child: Text(label, style: TextStyle(fontSize: 16, color: color, fontWeight: danger ? FontWeight.w600 : FontWeight.w500))),
+        const Icon(Icons.chevron_right, color: Color(0xFF4B5563)),
+      ]),
+    );
+  }
 }
 
 /// Home, Work and other places for Start journey.

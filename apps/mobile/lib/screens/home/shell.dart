@@ -5,9 +5,14 @@ import 'package:flutter/services.dart';
 
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../../widgets/common.dart';
+import '../../widgets/format.dart';
+import '../auth/profile_screen.dart';
+import '../fakecall/fake_call_screen.dart';
 import '../guardians/guardians_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
+import '../setup/safety_setup_screen.dart';
 import '../sos/sos_active_screen.dart';
 import '../sos/sos_countdown_screen.dart';
 import 'home_screen.dart';
@@ -33,25 +38,149 @@ class _ShellState extends State<Shell> {
       const SettingsScreen(),
     ];
     return Scaffold(
+      drawer: _Menu(onOpenTab: (i) => setState(() => _tab = i)),
+      drawerEnableOpenDragGesture: false,
       body: IndexedStack(index: _tab, children: pages),
+      // Fixed height: the bar never grows over the page. The red SOS rises above the white bar
+      // inside this area, so all of it can be pressed.
       bottomNavigationBar: SafeArea(
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+        top: false,
+        child: SizedBox(
+          height: _navHeight,
+          child: Stack(
+            alignment: Alignment.topCenter,
             children: [
-              _NavItem(icon: Icons.home_outlined, active: Icons.home, label: 'Home', selected: _tab == 0, onTap: () => setState(() => _tab = 0)),
-              _NavItem(icon: Icons.history, active: Icons.history, label: 'History', selected: _tab == 1, onTap: () => setState(() => _tab = 1)),
-              const Expanded(child: Center(child: SosHoldButton(size: 66))),
-              _NavItem(icon: Icons.group_outlined, active: Icons.group, label: 'Guardians', selected: _tab == 3, onTap: () => setState(() => _tab = 3)),
-              _NavItem(icon: Icons.settings_outlined, active: Icons.settings, label: 'Settings', selected: _tab == 4, onTap: () => setState(() => _tab = 4)),
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 8,
+                height: _barHeight,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 18, offset: const Offset(0, 4))],
+                  ),
+                  child: Row(
+                    children: [
+                      _NavItem(icon: Icons.home_outlined, active: Icons.home_rounded, label: 'Home', selected: _tab == 0, onTap: () => setState(() => _tab = 0)),
+                      _NavItem(icon: Icons.history, active: Icons.history, label: 'History', selected: _tab == 1, onTap: () => setState(() => _tab = 1)),
+                      const Expanded(child: SizedBox()),
+                      _NavItem(icon: Icons.group_outlined, active: Icons.group, label: 'Guardians', selected: _tab == 3, onTap: () => setState(() => _tab = 3)),
+                      _NavItem(icon: Icons.settings_outlined, active: Icons.settings, label: 'Settings', selected: _tab == 4, onTap: () => setState(() => _tab = 4)),
+                    ],
+                  ),
+                ),
+              ),
+              const Positioned(top: 0, child: SosHoldButton(size: _sosSize)),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+const double _barHeight = 66;
+const double _sosSize = 64;
+const double _navHeight = 8 + _barHeight + 26; // bottom gap + bar + how far the SOS rises above it
+
+/// Side menu from the Home menu button (design frame 6, Phase 1 items only).
+class _Menu extends StatelessWidget {
+  const _Menu({required this.onOpenTab});
+  final void Function(int tab) onOpenTab;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppScope.of(context);
+    final me = state.me;
+    void tab(int i) {
+      Navigator.pop(context);
+      onOpenTab(i);
+    }
+
+    void open(Widget w) {
+      Navigator.pop(context);
+      Navigator.push(context, MaterialPageRoute(builder: (_) => w));
+    }
+
+    return Drawer(
+      backgroundColor: AppColors.night,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(24))),
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => open(const ProfileScreen(fromSettings: true)),
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(children: [
+                  me?.photoUrl != null
+                      ? CircleAvatar(radius: 28, backgroundImage: NetworkImage(me!.photoUrl!))
+                      : Initials(me?.name ?? '', size: 56),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(me?.name ?? '', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                      if (me != null) Text(prettyPhone(me.phone), style: const TextStyle(color: Color(0xFF9CA3AF))),
+                    ]),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.white),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _MenuItem(Icons.home_rounded, 'Home', () => tab(0), selected: true),
+            _MenuItem(Icons.route_outlined, 'My Journeys', () => tab(1)),
+            _MenuItem(Icons.group, 'Guardians', () => tab(3)),
+            _MenuItem(Icons.phone_in_talk_outlined, 'Fake Call', () => open(const FakeCallScreen())),
+            _MenuItem(Icons.place_outlined, 'Saved Places', () => open(const SavedPlacesScreen())),
+            _MenuItem(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),
+            _MenuItem(Icons.settings, 'Settings', () => tab(4)),
+            _MenuItem(Icons.help, 'Help & Support', () => open(const ReportProblemScreen())),
+            _MenuItem(Icons.logout, 'Logout', () async {
+              if (await confirm(context, 'Log out?', 'Protection stops on this phone until you log in again.', yes: 'Log out')) {
+                await state.logout();
+              }
+            }, danger: true),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem(this.icon, this.label, this.onTap, {this.selected = false, this.danger = false});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = danger ? AppColors.red : Colors.white;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: selected ? const Color(0xFF1F2937) : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(children: [
+              Icon(icon, color: color, size: 22),
+              const SizedBox(width: 18),
+              Flexible(
+                child: Text(label,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w500)),
+              ),
+            ]),
           ),
         ),
       ),
@@ -69,19 +198,16 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.red : AppColors.muted;
+    final color = selected ? AppColors.red : const Color(0xFF4B5563);
     return Expanded(
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(14),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(selected ? active : icon, color: color),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(color: color, fontSize: 11.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
-          ]),
-        ),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(selected ? active : icon, color: color, size: 25),
+          const SizedBox(height: 3),
+          Text(label, maxLines: 1, style: TextStyle(color: color, fontSize: 11.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500)),
+        ]),
       ),
     );
   }

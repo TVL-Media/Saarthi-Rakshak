@@ -81,9 +81,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return false;
           },
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
             children: [
-              const ScreenTitle('History'),
+              const SizedBox(
+                height: 44,
+                child: Center(child: Text('History', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700))),
+              ),
               const SizedBox(height: 14),
               Wrap(spacing: 8, children: [
                 for (final (label, type) in [('All', null), ('SOS', 'sos'), ('Journeys', 'journey')])
@@ -91,7 +94,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     label: Text(label),
                     selected: _type == type,
                     selectedColor: AppColors.red,
-                    labelStyle: TextStyle(color: _type == type ? Colors.white : AppColors.ink, fontWeight: FontWeight.w600),
+                    backgroundColor: AppColors.cream,
+                    side: BorderSide(color: _type == type ? AppColors.red : AppColors.line),
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    labelStyle: TextStyle(color: _type == type ? Colors.white : AppColors.ink, fontWeight: FontWeight.w600, fontSize: 15),
                     showCheckmark: false,
                     onSelected: (_) {
                       setState(() => _type = type);
@@ -103,22 +110,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
               for (final i in _items)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: AppCard(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(item: i))),
-                    child: Row(children: [
-                      CircleAvatar(
-                        backgroundColor: i.type == 'sos' ? AppColors.redSoft : AppColors.greenSoft,
-                        child: Icon(i.type == 'sos' ? Icons.sos : Icons.route, color: i.type == 'sos' ? AppColors.red : AppColors.green),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(historyTitle(i), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                          Text('${dateTime(i.startedAt)} · ${historyStatus(i)}', style: const TextStyle(color: AppColors.muted)),
+                  child: Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    shadowColor: Colors.black.withValues(alpha: 0.2),
+                    elevation: 0.6,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(item: i))),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+                        child: Row(children: [
+                          CircleAvatar(
+                            radius: 22,
+                            backgroundColor: i.type == 'sos' ? AppColors.redSoft : AppColors.greenSoft,
+                            child: Icon(i.type == 'sos' ? Icons.sos : Icons.route, color: i.type == 'sos' ? AppColors.red : AppColors.green),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(historyTitle(i), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                              const SizedBox(height: 2),
+                              Text('${dateTime(i.startedAt)} · ${historyStatus(i)}', style: const TextStyle(color: AppColors.muted, fontSize: 14)),
+                            ]),
+                          ),
+                          const Icon(Icons.chevron_right, color: Color(0xFF4B5563)),
                         ]),
                       ),
-                      const Icon(Icons.chevron_right, color: AppColors.muted),
-                    ]),
+                    ),
                   ),
                 ),
               if (_loading && _items.isEmpty)

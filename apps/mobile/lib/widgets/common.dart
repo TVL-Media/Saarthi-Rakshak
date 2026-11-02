@@ -173,3 +173,24 @@ class Initials extends StatelessWidget {
     );
   }
 }
+
+/// White round icon button (design: menu, bell and back buttons at the top of a screen).
+class RoundIconButton extends StatelessWidget {
+  const RoundIconButton({super.key, required this.icon, required this.onPressed, this.tooltip});
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.white,
+        shape: const CircleBorder(),
+        elevation: 0.5,
+        shadowColor: Colors.black26,
+        child: IconButton(
+          tooltip: tooltip,
+          icon: Icon(icon, color: AppColors.ink, size: 24),
+          onPressed: onPressed,
+        ),
+      );
+}

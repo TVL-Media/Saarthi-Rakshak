@@ -32,20 +32,20 @@ export class AppAuthService {
   }
 
   /**
-   * Development only: the test number and code from .env (DEV_LOGIN_*), until DEV_LOGIN_UNTIL.
+   * Development only: the test code from .env (DEV_LOGIN_*), until DEV_LOGIN_UNTIL; any number unless DEV_LOGIN_PHONE is set.
    * Looks like an unknown route when it is off, so nothing reveals that it exists.
    */
   async devLogin(phoneInput: string, code: string): Promise<LoginReply> {
     const env = this.env;
     const on =
       env.NODE_ENV !== 'production' &&
-      !!env.DEV_LOGIN_PHONE &&
       !!env.DEV_LOGIN_CODE &&
       !!env.DEV_LOGIN_UNTIL &&
       new Date(`${env.DEV_LOGIN_UNTIL}T23:59:59+05:30`).getTime() >= Date.now();
     if (!on) throw appError.notFound();
     const phone = normaliseIndianMobile(phoneInput);
-    const allowed = normaliseIndianMobile(env.DEV_LOGIN_PHONE!);
+    // DEV_LOGIN_PHONE set: only that number. Not set: any Indian mobile (sign up for testing).
+    const allowed = env.DEV_LOGIN_PHONE ? normaliseIndianMobile(env.DEV_LOGIN_PHONE) : phone;
     const a = Buffer.from(code);
     const b = Buffer.from(env.DEV_LOGIN_CODE!);
     if (!phone || phone !== allowed || a.length !== b.length || !timingSafeEqual(a, b)) {

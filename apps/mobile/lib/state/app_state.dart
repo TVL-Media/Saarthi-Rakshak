@@ -80,8 +80,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// After Firebase confirmed the OTP.
-  Future<void> loginWithFirebaseToken(String idToken) async {
+  /// Name typed on the Sign up page; saved once the user has accepted the terms.
+  String? _signUpName;
+
+  /// After Firebase confirmed the OTP. [signUpName]: from the Sign up page.
+  Future<void> loginWithFirebaseToken(String idToken, {String? signUpName}) async {
+    _signUpName = signUpName;
     final (token, user, _) = await api.login(idToken);
     api.token = token;
     me = user;
@@ -91,7 +95,8 @@ class AppState extends ChangeNotifier {
   }
 
   /// Development only (debug builds with DEV_LOGIN): the server's test number and code.
-  Future<void> loginWithDevCode(String phone, String code) async {
+  Future<void> loginWithDevCode(String phone, String code, {String? signUpName}) async {
+    _signUpName = signUpName;
     final (token, user, _) = await api.devLogin(phone, code);
     api.token = token;
     me = user;
@@ -104,8 +109,22 @@ class AppState extends ChangeNotifier {
     final m = me!;
     await engine.setSession(api.baseUrl, token, m.firstName.isEmpty ? 'Someone' : m.firstName);
     await refreshGuardians(quiet: true);
-    stage = await _stageFor(m);
+    if (m.consentGiven) await _saveSignUpName();
+    stage = await _stageFor(me!);
     unawaited(registerDevice());
+  }
+
+  /// Saves the Sign up name if the account has no name yet (needs the terms accepted first).
+  Future<void> _saveSignUpName() async {
+    final name = _signUpName?.trim();
+    _signUpName = null;
+    if (name == null || name.isEmpty || (me?.name ?? '').trim().isNotEmpty) return;
+    try {
+      me = await api.updateProfile(name: name);
+      await engine.setSession(api.baseUrl, api.token!, me!.firstName);
+    } on ApiException {
+      // The profile step asks for the name instead.
+    }
   }
 
   Future<Stage> _stageFor(Me m) async {
@@ -119,6 +138,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> giveConsent() async {
     me = await api.giveConsent();
+    await _saveSignUpName();
     stage = await _stageFor(me!);
     notifyListeners();
   }

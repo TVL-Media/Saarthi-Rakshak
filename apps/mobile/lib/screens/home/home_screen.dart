@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../api/maps_service.dart';
 import '../../api/models.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
@@ -25,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<SavedPlace> _places = const [];
   bool _locationOn = true;
   bool _batteryOk = true;
+  String? _area;
 
   @override
   void initState() {
@@ -46,8 +49,22 @@ class _HomeScreenState extends State<HomeScreen> {
         _batteryOk = battery;
       });
     }
+    _loadArea();
     await state.refreshMe();
     await state.refreshGuardians(quiet: true);
+  }
+
+  /// "Sector 62, Noida" under the name, from the last known position (no new GPS fix).
+  Future<void> _loadArea() async {
+    try {
+      if (!await Permission.location.isGranted) return;
+      final pos = await Geolocator.getLastKnownPosition();
+      if (pos == null) return;
+      final area = await MapsService().areaName(pos.latitude, pos.longitude);
+      if (mounted && area != null) setState(() => _area = area);
+    } catch (_) {
+      // The line is simply not shown.
+    }
   }
 
   void _startJourney([SavedPlace? place]) {
@@ -72,12 +89,37 @@ class _HomeScreenState extends State<HomeScreen> {
       child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
           children: [
-            Text('${greeting()},', style: const TextStyle(color: AppColors.muted, fontSize: 15)),
-            const SizedBox(height: 2),
-            Text(me?.name ?? '', style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w500)),
-            const SizedBox(height: 16),
+            Row(children: [
+              RoundIconButton(
+                icon: Icons.menu,
+                tooltip: 'Menu',
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              ),
+              const Spacer(),
+              RoundIconButton(
+                icon: Icons.notifications_none_rounded,
+                tooltip: 'Alerts and journeys',
+                onPressed: () => widget.onOpenTab(1),
+              ),
+            ]),
+            const SizedBox(height: 18),
+            Text('${greeting()},', style: const TextStyle(color: AppColors.muted, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text(
+              me?.name ?? '',
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w400, height: 1.15, letterSpacing: -0.3),
+            ),
+            if (_area != null) ...[
+              const SizedBox(height: 6),
+              Row(children: [
+                const Icon(Icons.location_on_outlined, size: 18, color: AppColors.muted),
+                const SizedBox(width: 4),
+                Flexible(child: Text(_area!, style: const TextStyle(color: AppColors.muted, fontSize: 15))),
+              ]),
+            ],
+            const SizedBox(height: 18),
             if (engine.sosId != null)
               _Banner(
                 color: AppColors.red,
@@ -102,50 +144,69 @@ class _HomeScreenState extends State<HomeScreen> {
                 _load();
               },
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 26),
             const SectionLabel('Next journey'),
-            AppCard(
-              onTap: () => _startJourney(),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: const Row(children: [
-                Icon(Icons.search, color: AppColors.muted),
-                SizedBox(width: 10),
-                Text('Where are you going?', style: TextStyle(fontSize: 17, color: AppColors.muted)),
-              ]),
+            const SizedBox(height: 4),
+            Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              shadowColor: Colors.black.withValues(alpha: 0.25),
+              elevation: 1,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _startJourney(),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                  child: Row(children: [
+                    Icon(Icons.search, color: AppColors.muted, size: 24),
+                    SizedBox(width: 12),
+                    Flexible(
+                      child: Text('Where are you going?',
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 18, color: AppColors.muted)),
+                    ),
+                  ]),
+                ),
+              ),
             ),
             if (_places.isNotEmpty) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final p in _places)
                   ActionChip(
-                    label: Text(p.name),
-                    backgroundColor: Colors.white,
+                    label: Text(p.name, style: const TextStyle(fontSize: 15.5, color: AppColors.ink)),
+                    backgroundColor: AppColors.cream,
                     side: const BorderSide(color: AppColors.line),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    shape: const StadiumBorder(),
                     onPressed: () => _startJourney(p),
                   ),
               ]),
             ],
-            const SizedBox(height: 16),
+            const SizedBox(height: 18),
             Material(
               color: AppColors.red,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(22),
+              elevation: 3,
+              shadowColor: AppColors.red.withValues(alpha: 0.5),
               child: InkWell(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(22),
                 onTap: () => _startJourney(),
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(children: [
-                    const Expanded(
+                child: const Padding(
+                  padding: EdgeInsets.fromLTRB(22, 20, 18, 20),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Icon(Icons.near_me_outlined, color: Colors.white),
-                        SizedBox(height: 14),
-                        Text('Start journey', style: TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w700)),
+                        Icon(Icons.near_me_outlined, color: Colors.white, size: 28),
+                        SizedBox(height: 30),
+                        Text('Start journey', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
                         SizedBox(height: 2),
-                        Text('Your guardians can follow you live', style: TextStyle(color: Colors.white70)),
+                        Text('Your guardians can follow you live', style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 15)),
                       ]),
                     ),
-                    const Icon(Icons.chevron_right, color: Colors.white, size: 28),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 10),
+                      child: Icon(Icons.chevron_right, color: Colors.white, size: 30),
+                    ),
                   ]),
                 ),
               ),
@@ -211,6 +272,9 @@ class _Banner extends StatelessWidget {
       );
 }
 
+const _okGreen = Color(0xFF22C55E);
+const _warnAmber = Color(0xFFFBBF24);
+
 /// The dark "PROTECTED / You are safe" card.
 class _StatusCard extends StatelessWidget {
   const _StatusCard({
@@ -228,33 +292,44 @@ class _StatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dot = protected ? const Color(0xFF34D399) : const Color(0xFFFBBF24);
+    final dot = protected ? _okGreen : _warnAmber;
     return GestureDetector(
       onTap: protected ? null : onFix,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-        decoration: BoxDecoration(color: AppColors.night, borderRadius: BorderRadius.circular(20)),
+        padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+        decoration: BoxDecoration(color: const Color(0xFF16181C), borderRadius: BorderRadius.circular(26)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
-            const SizedBox(width: 6),
-            Text(protected ? 'PROTECTED' : 'SETUP NEEDED',
-                style: TextStyle(color: dot, fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Container(width: 7, height: 7, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Text(protected ? 'PROTECTED' : 'SETUP NEEDED',
+                      style: TextStyle(color: dot, fontSize: 13, letterSpacing: 1.6, fontWeight: FontWeight.w700)),
+                ]),
+                const SizedBox(height: 10),
+                Text(protected ? 'You are safe' : 'Finish safety setup',
+                    style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                const SizedBox(height: 4),
+                Text(protected ? 'All systems active' : 'Tap to see what is missing',
+                    style: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 15.5)),
+              ]),
+            ),
+            Icon(protected ? Icons.verified_user_outlined : Icons.gpp_maybe_outlined, color: dot, size: 44),
           ]),
-          const SizedBox(height: 8),
-          Text(protected ? 'You are protected' : 'Finish safety setup',
-              style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 2),
-          Text(protected ? 'SOS works even with the screen off' : 'Tap to see what is missing',
-              style: const TextStyle(color: Colors.white60)),
+          const SizedBox(height: 18),
+          const Divider(color: Color(0x22FFFFFF), height: 1),
           const SizedBox(height: 14),
-          const Divider(color: Colors.white12, height: 1),
-          const SizedBox(height: 10),
-          Row(children: [
-            _Stat(icon: Icons.group_outlined, text: '$guardians Guardian${guardians == 1 ? '' : 's'}', ok: guardians > 0),
-            _Stat(icon: Icons.near_me_outlined, text: 'Live location', ok: locationOn),
-            _Stat(icon: Icons.battery_charging_full, text: 'Always on', ok: batteryOk),
-          ]),
+          IntrinsicHeight(
+            child: Row(children: [
+              _Stat(icon: Icons.people_outline, text: '$guardians Guardian${guardians == 1 ? '' : 's'}', ok: guardians > 0),
+              const VerticalDivider(color: Color(0x22FFFFFF), width: 1),
+              _Stat(icon: Icons.near_me_outlined, text: 'Live location', ok: locationOn, iconColor: _okGreen),
+              const VerticalDivider(color: Color(0x22FFFFFF), width: 1),
+              _Stat(icon: Icons.smartphone_outlined, text: 'Device protected', ok: batteryOk),
+            ]),
+          ),
         ]),
       ),
     );
@@ -262,17 +337,20 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.icon, required this.text, required this.ok});
+  const _Stat({required this.icon, required this.text, required this.ok, this.iconColor = Colors.white});
   final IconData icon;
   final String text;
   final bool ok;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) => Expanded(
         child: Column(children: [
-          Icon(ok ? icon : Icons.error_outline, color: ok ? const Color(0xFF34D399) : const Color(0xFFFBBF24), size: 20),
-          const SizedBox(height: 4),
-          Text(text, style: const TextStyle(color: Colors.white, fontSize: 12.5)),
+          Icon(ok ? icon : Icons.error_outline, color: ok ? iconColor : _warnAmber, size: 22),
+          const SizedBox(height: 6),
+          Text(text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500)),
         ]),
       );
 }

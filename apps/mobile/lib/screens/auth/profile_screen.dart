@@ -147,6 +147,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
+/// The name rule, also used by the Sign up page.
+String? checkProfileName(String v) => _ProfileScreenState.checkName(v);
+
 /// Exposes the name rule to tests.
 class ProfileScreenTestHook {
   static String? check(String v) => _ProfileScreenState.checkName(v);
