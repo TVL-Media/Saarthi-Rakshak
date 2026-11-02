@@ -5,7 +5,7 @@ Every call the Android app makes to the server. The source of truth is
 input); this page is the same list for the Flutter app. Change both together.
 
 Status: **matches Implementation Plan v2 (31 Oct 2026)**. All app calls start with `/v1`; guardian pages use `/g`.
-Built so far: **A1, A2, A3, A4, A5, A6** (A6–A7 and audio follow the plan; their exact shapes are confirmed when built).
+Built so far: **A1–A7** (audio, A8, follows the plan; its exact shape is confirmed when built).
 
 ## Basics
 
@@ -215,16 +215,33 @@ Send heartbeat every 30–60 seconds during an SOS or journey.
 - No answer in 2 minutes → guardians alerted (Part B timer). A late answer is still recorded; an answered check-in
   can't change.
 
-## A7 — History, delete account, support
+## A7 — History, saved places, report a problem, delete account
 
 | Call | Body | Reply |
 | --- | --- | --- |
-| `GET /v1/history?before=<time>` | — | `{ items, nextBefore }` (20 per page, newest first) |
-| `GET /v1/history/sos/:id` | — | `{ item, timeline }` |
-| `GET /v1/history/journeys/:id` | — | `{ item, timeline }` |
-| `DELETE /v1/me` | `{ firebaseIdToken }` (fresh OTP) | `204` (refused while an SOS or journey is active) |
-| `POST /v1/support-tickets` | `{ category, message }` | `204` |
+| `GET /v1/history?type=&cursor=` | — | `{ items, nextCursor }` (20 per page, newest first) |
+| `GET /v1/history/sos/:id` | — | `{ item, timeline, clips }` |
+| `GET /v1/history/journeys/:id` | — | `{ item, timeline, clips: [] }` |
+| `GET /v1/places` | — | `SavedPlace[]` (Home, Work, then others) |
+| `POST /v1/places` | `{ label, name, address?, lat, lng }` | `SavedPlace` |
+| `DELETE /v1/places/:id` | — | `204` |
+| `POST /v1/support-tickets` | `{ category, message, appVersion?, deviceModel? }` | `204` |
+| `DELETE /v1/me` | `{ firebaseIdToken, confirm: "DELETE" }` | `204` |
 
-- History item: `{ type: "sos" | "journey", id, status, isTest, startedAt, endedAt }`.
-- Timeline entry: `{ at, kind, text }`.
-- Support `category`: `otp`, `guardian_sms`, `app_stopped`, `other`; `message` 10–2000 characters; at most 5 a day.
+- History item: `{ type: "sos" | "journey", id, status, isTest, trigger, destinationLabel, startedAt, endedAt }`.
+  SOS `status`: `active`, `ended`, `cancelled` (stopped in the countdown). Journey `status`: `active`, `arrived`,
+  `ended`, `lost_contact`. `type` filters the list (All · SOS · Journeys); pass `nextCursor` as `cursor` for the next
+  page (null = no more).
+- Timeline entry: `{ at, kind, text }`, oldest first. `kind`: `sos_started`, `sos_cancelled`, `guardian_alerted`,
+  `link_opened`, `guardian_responding`, `sos_ended`, `journey_started`, `checkin`, `checkin_answered`,
+  `journey_ended`. Show `text` as it is ("Ravi opened the live link").
+- `clips` (SOS only): `{ id, recordedAt, durationS, keep, deleteAfter }` — audio clips not yet deleted (A8).
+- Saved place `label`: `home`, `work` or `other`. Saving `home` or `work` again replaces it (same `id`). Up to 8
+  `other` (`limit_reached`). `name` 1–60 characters, `address` up to 200.
+- Support `category`: `otp`, `guardian_sms`, `app_stopped`, `other`; `message` 10–2000 characters; at most 5 a day
+  (`too_many_requests`). Without `appVersion` / `deviceModel` the last ones from `PUT /v1/me/device` are saved.
+- Delete account: the app explains what is deleted, has the user type DELETE, then runs a **new phone OTP** and sends
+  that Firebase token (at most 5 minutes old, same number; otherwise `invalid_input`). Refused while an SOS or journey
+  is active (`conflict`: "End your SOS or journey first."). Removes the profile, guardians, places, journeys,
+  locations, audio and photo files, sessions and the Firebase login; SOS events and alerts stay without the person.
+  Then go to Welcome; the old token gets `not_logged_in`.

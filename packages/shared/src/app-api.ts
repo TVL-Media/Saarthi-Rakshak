@@ -382,36 +382,100 @@ export const AnswerCheckinRequest = z.object({
 export const HistoryItem = z.object({
   type: z.enum(['sos', 'journey']),
   id: Id,
+  /**
+   * SOS: `active`, `ended` or `cancelled` (stopped in the countdown).
+   * Journey: `active`, `arrived`, `ended` or `lost_contact`.
+   */
   status: z.string(),
+  /** A test SOS (journeys: always false). */
   isTest: z.boolean(),
+  /** SOS only: `button`, `widget`, `tile`, `checkin` or `journey`; null for journeys. */
+  trigger: z.string().nullable(),
+  /** Journey only: where to, e.g. "Home"; null for SOS. */
+  destinationLabel: z.string().nullable(),
   startedAt: DateTime,
   endedAt: DateTime.nullable(),
 });
 
-/** GET /v1/history?before=<DateTime> — 20 per page, newest first. */
+/** GET /v1/history?type=sos|journey&cursor=<nextCursor> — 20 per page, newest first. */
+export const HistoryQuery = z.object({
+  type: z.enum(['sos', 'journey']).optional(),
+  cursor: z.string().max(200).optional(),
+});
+
 export const HistoryPage = z.object({
   items: z.array(HistoryItem),
-  /** Pass as `before` to get the next page; null when there are no more. */
-  nextBefore: DateTime.nullable(),
+  /** Pass as `cursor` to get the next page; null when there are no more. */
+  nextCursor: z.string().nullable(),
 });
 
 export const TimelineEntry = z.object({
   at: DateTime,
-  /** e.g. "sos_started", "guardian_alerted", "guardian_responding", "checkin", "sos_ended". */
+  /**
+   * `sos_started`, `sos_cancelled`, `guardian_alerted`, `link_opened`, `guardian_responding`,
+   * `sos_ended`, `journey_started`, `checkin`, `checkin_answered`, `journey_ended`.
+   */
   kind: z.string(),
+  /** Plain text for the row, e.g. "Ravi opened the live link". */
   text: z.string(),
+});
+
+/** An audio clip of an SOS (listed in the SOS timeline; see audio, A8). */
+export const AudioClip = z.object({
+  id: Id,
+  recordedAt: DateTime,
+  durationS: z.number().nullable(),
+  keep: z.boolean(),
+  /** Deleted automatically after this, unless `keep` is true. */
+  deleteAfter: DateTime,
 });
 
 /** GET /v1/history/sos/:id and GET /v1/history/journeys/:id */
 export const HistoryDetail = z.object({
   item: HistoryItem,
   timeline: z.array(TimelineEntry),
+  /** SOS only (empty for journeys). */
+  clips: z.array(AudioClip),
 });
 
-/** POST /v1/support-tickets */
+/** Saved places: one `home`, one `work`, and up to 8 `other`. */
+export const PlaceLabel = z.enum(['home', 'work', 'other']);
+
+/** POST /v1/places — saving `home` or `work` again replaces the old one. */
+export const SavePlaceRequest = z.object({
+  label: PlaceLabel,
+  name: z.string().trim().min(1).max(60),
+  address: z.string().trim().max(200).optional(),
+  lat: Latitude,
+  lng: Longitude,
+});
+
+export const SavedPlace = z.object({
+  id: Id,
+  label: PlaceLabel,
+  name: z.string(),
+  address: z.string().nullable(),
+  lat: z.number(),
+  lng: z.number(),
+});
+
+/** POST /v1/support-tickets — "Report a problem". */
 export const SupportRequest = z.object({
   category: z.enum(['otp', 'guardian_sms', 'app_stopped', 'other']),
   message: z.string().trim().min(10).max(2000),
+  /** The app's version, e.g. "1.0.3 (12)". If left out, the last one sent in PUT /v1/me/device is used. */
+  appVersion: z.string().trim().min(1).max(40).optional(),
+  /** e.g. "Redmi Note 12". If left out, the last one sent in PUT /v1/me/device is used. */
+  deviceModel: z.string().trim().min(1).max(80).optional(),
+});
+
+/**
+ * DELETE /v1/me — the app first runs a new phone OTP (the Firebase token must be at most 5 minutes
+ * old) and has the user type DELETE.
+ */
+export const DeleteAccountRequest = z.object({
+  firebaseIdToken: z.string().min(1),
+  confirm: z.literal('DELETE', { error: 'Type DELETE to confirm' }),
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -450,7 +514,13 @@ export type Journey = z.infer<typeof Journey>;
 export type RaiseCheckinRequest = z.infer<typeof RaiseCheckinRequest>;
 export type AnswerCheckinRequest = z.infer<typeof AnswerCheckinRequest>;
 export type HistoryItem = z.infer<typeof HistoryItem>;
+export type HistoryQuery = z.infer<typeof HistoryQuery>;
 export type HistoryPage = z.infer<typeof HistoryPage>;
 export type TimelineEntry = z.infer<typeof TimelineEntry>;
+export type AudioClip = z.infer<typeof AudioClip>;
 export type HistoryDetail = z.infer<typeof HistoryDetail>;
+export type PlaceLabel = z.infer<typeof PlaceLabel>;
+export type SavePlaceRequest = z.infer<typeof SavePlaceRequest>;
+export type SavedPlace = z.infer<typeof SavedPlace>;
 export type SupportRequest = z.infer<typeof SupportRequest>;
+export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequest>;

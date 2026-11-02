@@ -21,6 +21,7 @@ export const TABLES = [
   'journeys',
   'location_points',
   'media_clips',
+  'saved_places',
   'settings',
   'sos_events',
   'support_tickets',

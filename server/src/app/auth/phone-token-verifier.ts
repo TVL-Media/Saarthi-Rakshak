@@ -8,9 +8,26 @@ import { appError } from '../common/app-http';
  * Turns the token the app got from Firebase phone sign-in into a checked phone number.
  * Tests use FakePhoneTokenVerifier instead (NODE_ENV=test only).
  */
+export interface PhoneLogin {
+  /** The phone number (E.164) the token proves. */
+  phone: string;
+  /** Firebase's id for this login (used to delete it with the account). */
+  uid: string;
+  /** When the user last typed the OTP. */
+  authTime: Date;
+}
+
 export abstract class PhoneTokenVerifier {
+  /** Checks the token. Throws `not_logged_in` for a bad token. */
+  abstract check(token: string): Promise<PhoneLogin>;
+
+  /** Deletes the Firebase login (delete account). A login that is already gone is fine. */
+  abstract deleteLogin(uid: string): Promise<void>;
+
   /** The phone number (E.164) the token proves. Throws `not_logged_in` for a bad token. */
-  abstract verify(token: string): Promise<string>;
+  async verify(token: string): Promise<string> {
+    return (await this.check(token)).phone;
+  }
 }
 
 export class FirebasePhoneTokenVerifier extends PhoneTokenVerifier {
@@ -33,11 +50,16 @@ export class FirebasePhoneTokenVerifier extends PhoneTokenVerifier {
       );
   }
 
-  async verify(token: string): Promise<string> {
+  async check(token: string): Promise<PhoneLogin> {
     if (!this.app) {
       throw appError.serviceUnavailable('Login is not set up on this server yet.');
     }
-    let decoded: { phone_number?: string; firebase?: { sign_in_provider?: string } };
+    let decoded: {
+      uid: string;
+      auth_time: number;
+      phone_number?: string;
+      firebase?: { sign_in_provider?: string };
+    };
     try {
       decoded = await getAuth(this.app).verifyIdToken(token);
     } catch (err) {
@@ -50,23 +72,55 @@ export class FirebasePhoneTokenVerifier extends PhoneTokenVerifier {
     if (decoded.firebase?.sign_in_provider !== 'phone' || !decoded.phone_number) {
       throw appError.notLoggedIn();
     }
-    return decoded.phone_number;
+    return {
+      phone: decoded.phone_number,
+      uid: decoded.uid,
+      authTime: new Date(decoded.auth_time * 1000),
+    };
+  }
+
+  async deleteLogin(uid: string): Promise<void> {
+    if (!this.app) return;
+    try {
+      await getAuth(this.app).deleteUser(uid);
+    } catch (err) {
+      if ((err as { code?: string }).code === 'auth/user-not-found') return;
+      throw err;
+    }
   }
 }
 
 /**
  * For automated tests only: accepts tokens written as "test-phone:<number>", e.g.
- * "test-phone:+919812344521". Anything else is refused like a bad Firebase token.
+ * "test-phone:+919812344521", optionally with "@<OTP time in Unix seconds>" (default: now).
+ * Anything else is refused like a bad Firebase token.
  */
 export class FakePhoneTokenVerifier extends PhoneTokenVerifier {
-  static token(phone: string): string {
-    return `test-phone:${phone}`;
+  /** uids of logins deleted through deleteLogin(), for tests to check. */
+  readonly deleted: string[] = [];
+
+  static token(phone: string, authTime?: Date): string {
+    const at = authTime ? `@${Math.floor(authTime.getTime() / 1000)}` : '';
+    return `test-phone:${phone}${at}`;
   }
 
-  verify(token: string): Promise<string> {
-    const match = /^test-phone:(\+\d{8,15})$/.exec(token);
+  static uid(phone: string): string {
+    return `test-uid-${phone.replace(/\D/g, '')}`;
+  }
+
+  check(token: string): Promise<PhoneLogin> {
+    const match = /^test-phone:(\+\d{8,15})(?:@(\d{1,12}))?$/.exec(token);
     if (!match) return Promise.reject(appError.notLoggedIn());
-    return Promise.resolve(match[1]);
+    return Promise.resolve({
+      phone: match[1],
+      uid: FakePhoneTokenVerifier.uid(match[1]),
+      authTime: match[2] ? new Date(Number(match[2]) * 1000) : new Date(),
+    });
+  }
+
+  deleteLogin(uid: string): Promise<void> {
+    this.deleted.push(uid);
+    return Promise.resolve();
   }
 }
 

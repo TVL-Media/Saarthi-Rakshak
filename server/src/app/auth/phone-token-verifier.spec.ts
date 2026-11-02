@@ -28,4 +28,16 @@ describe('FakePhoneTokenVerifier (tests only)', () => {
     );
     await expect(fake.verify('eyJhbGciOi...')).rejects.toMatchObject({ status: 401 });
   });
+
+  it('reads an optional OTP time ("@<unix seconds>") and records deleted logins', async () => {
+    const fake = new FakePhoneTokenVerifier();
+    const at = new Date('2026-11-02T10:00:00Z');
+    await expect(fake.check(FakePhoneTokenVerifier.token('+919812344521', at))).resolves.toEqual({
+      phone: '+919812344521',
+      uid: 'test-uid-919812344521',
+      authTime: at,
+    });
+    await fake.deleteLogin('test-uid-919812344521');
+    expect(fake.deleted).toEqual(['test-uid-919812344521']);
+  });
 });

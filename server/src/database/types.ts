@@ -263,6 +263,19 @@ export interface SupportTicketsTable {
   status: Generated<'open' | 'in_progress' | 'closed'>;
   assigned_admin_id: string | null;
   closed_at: Date | null;
+  app_version: string | null;
+  device_model: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface SavedPlacesTable {
+  id: Generated<string>;
+  user_id: string;
+  label: 'home' | 'work' | 'other';
+  name: string;
+  address: string | null;
+  location: Geography;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }
@@ -276,6 +289,7 @@ export interface Database {
   admin_sessions: AdminSessionsTable;
   admin_backup_codes: AdminBackupCodesTable;
   user_sessions: UserSessionsTable;
+  saved_places: SavedPlacesTable;
   settings: SettingsTable;
   journeys: JourneysTable;
   sos_events: SosEventsTable;
