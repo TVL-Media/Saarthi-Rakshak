@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import type { CancelledSosRequest, Sos, StartSosRequest } from '@sarthi/shared';
+import type { CancelledSosRequest, Sos, StartSosRequest, TestSosRequest } from '@sarthi/shared';
 import { sql, type Transaction } from 'kysely';
 import { ENV } from '../../config/env.module';
 import type { Env } from '../../config/env.schema';
@@ -8,12 +8,16 @@ import { DatabaseService } from '../../database/database.module';
 import type { Database } from '../../database/types';
 import { appError } from '../common/app-http';
 import { AppSettings } from '../common/app-settings';
+import { AppRateLimiter } from '../common/rate-limit';
 import { OutgoingMessages } from '../messages/outgoing-messages';
 
 /** A phone clock may be a little ahead; more than this in the future is refused. */
 const MAX_CLOCK_AHEAD_MS = 60_000;
 /** An SOS saved offline may arrive late, but not older than this. */
 const MAX_AGE_MS = 24 * 3600_000;
+
+/** Test SOS per user per day. */
+export const TEST_SOS_PER_DAY = 5;
 
 const hashCode = (code: string) => createHash('sha256').update(code).digest('hex');
 
@@ -29,12 +33,13 @@ export class SosService {
     private readonly database: DatabaseService,
     private readonly settings: AppSettings,
     private readonly messages: OutgoingMessages,
+    private readonly rateLimiter: AppRateLimiter,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
   /**
-   * Starts an SOS. Works for blocked users. The same id again returns the same SOS; while one
-   * is active, a new start returns the active one.
+   * Starts a real SOS. The same id again returns the same SOS; while one is active, a new start
+   * returns the active one.
    */
   async start(userId: string, input: StartSosRequest): Promise<Sos> {
     const startedAt = checkTime(input.startedAt, 'startedAt');
@@ -65,7 +70,6 @@ export class SosService {
           user_id: userId,
           journey_id: input.journeyId ?? null,
           trigger: input.trigger,
-          is_test: input.isTest,
           started_at: startedAt,
           rules,
         })
@@ -84,7 +88,7 @@ export class SosService {
           .execute();
       }
 
-      // Decided: guardians who accepted or have not answered yet; never declined ones.
+      // A real SOS reaches guardians who accepted or have not answered yet; never declined ones.
       const guardians = await trx
         .selectFrom('guardians')
         .select(['id', 'phone'])
@@ -116,7 +120,7 @@ export class SosService {
     });
 
     if (created && !created.existing) {
-      await this.alertGuardians(userId, input.isTest, created.links);
+      await this.alertGuardians(userId, created.links, new Set(input.simSmsSentTo ?? []));
     }
     return this.get(userId, created?.id ?? input.id);
   }
@@ -158,6 +162,82 @@ export class SosService {
     return this.get(userId, sosId);
   }
 
+  /**
+   * A practice alert (marked TEST) to accepted guardians only, at most 5 a day. It is saved as an
+   * SOS that has already ended: nothing to stop, no live link.
+   */
+  async test(userId: string, input: TestSosRequest): Promise<Sos> {
+    const startedAt = checkTime(input.startedAt, 'startedAt');
+    const same = await this.database.db
+      .selectFrom('sos_events')
+      .select(['user_id', 'is_test'])
+      .where('id', '=', input.id)
+      .executeTakeFirst();
+    if (same) {
+      if (same.user_id !== userId || !same.is_test) {
+        throw appError.conflict('This SOS id is already used.');
+      }
+      return this.get(userId, input.id);
+    }
+
+    const guardians = await this.database.db
+      .selectFrom('guardians')
+      .select(['id', 'phone'])
+      .where('user_id', '=', userId)
+      .where('invite_status', '=', 'accepted')
+      .where('phone', 'is not', null)
+      .orderBy('created_at')
+      .execute();
+    if (guardians.length === 0) {
+      throw appError.conflict('None of your guardians has accepted the invite yet.');
+    }
+    await this.rateLimiter.check(`test-sos:${userId}`, TEST_SOS_PER_DAY, 24 * 3600);
+
+    const rules = await this.settings.snapshot();
+    const inserted = await this.database.db.transaction().execute(async (trx) => {
+      const row = await trx
+        .insertInto('sos_events')
+        .values({
+          id: input.id,
+          user_id: userId,
+          trigger: 'button',
+          is_test: true,
+          status: 'ended',
+          started_at: startedAt,
+          ended_at: sql<Date>`now()`,
+          end_reason: 'test',
+          rules,
+        })
+        .onConflict((oc) => oc.column('id').doNothing())
+        .returning('id')
+        .executeTakeFirst();
+      if (!row) return false;
+      // One row per guardian so the app can show each guardian's delivery; the link is never
+      // sent and is closed from the start.
+      await trx
+        .insertInto('guardian_links')
+        .values(
+          guardians.map((g) => ({
+            guardian_id: g.id,
+            sos_event_id: input.id,
+            token_hash: hashCode(randomBytes(24).toString('base64url')),
+            expires_at: sql<Date>`now()`,
+          })),
+        )
+        .execute();
+      return true;
+    });
+
+    if (inserted) {
+      const name = await this.userName(userId);
+      const text = `TEST from ${name} on Sarthi Rakshak. This is only a practice, no action needed.`;
+      for (const g of guardians) {
+        await this.messages.sendSms(g.phone!, { guardianId: g.id, kind: 'test', text });
+      }
+    }
+    return this.get(userId, input.id);
+  }
+
   /** An SOS cancelled during the countdown: saved for reports only, nobody is alerted. */
   async reportCancelled(userId: string, input: CancelledSosRequest): Promise<void> {
     const startedAt = checkTime(input.startedAt, 'startedAt');
@@ -172,7 +252,6 @@ export class SosService {
         id: input.id,
         user_id: userId,
         trigger: input.trigger,
-        is_test: input.isTest,
         status: 'cancelled',
         started_at: startedAt,
         ended_at: cancelledAt,
@@ -271,14 +350,29 @@ export class SosService {
     return user.name?.trim() || 'Someone who added you as a guardian';
   }
 
-  private async alertGuardians(userId: string, isTest: boolean, links: NewLink[]): Promise<void> {
+  /**
+   * One SMS per guardian with their own live link. Guardians the phone already reached by SIM SMS
+   * get only the live link, never a second SOS SMS.
+   */
+  private async alertGuardians(
+    userId: string,
+    links: NewLink[],
+    simSmsSentTo: Set<string>,
+  ): Promise<void> {
     const name = await this.userName(userId);
     for (const link of links) {
-      const url = `${this.env.GUARDIAN_WEB_URL}/g/${link.code}`;
-      const text = isTest
-        ? `TEST SOS from ${name} on Sarthi Rakshak. This is only a practice, no action needed. Test link: ${url}`
-        : `SOS from ${name} on Sarthi Rakshak. See their live location: ${url} If you can't reach them, call 112.`;
-      await this.messages.sendSms(link.phone, { guardianId: link.guardianId, kind: 'sos', text });
+      const url = `${this.env.GUARDIAN_WEB_URL}/l/${link.code}`;
+      if (simSmsSentTo.has(link.guardianId)) {
+        const text = `${name}'s SOS live location on Sarthi Rakshak: ${url}`;
+        await this.messages.sendSms(link.phone, {
+          guardianId: link.guardianId,
+          kind: 'sos_link',
+          text,
+        });
+      } else {
+        const text = `SOS from ${name} on Sarthi Rakshak. See their live location: ${url} If you can't reach them, call 112.`;
+        await this.messages.sendSms(link.phone, { guardianId: link.guardianId, kind: 'sos', text });
+      }
     }
   }
 
@@ -291,7 +385,7 @@ export class SosService {
       .where('l.sos_event_id', '=', sosId)
       .where('g.phone', 'is not', null)
       .execute();
-    const text = `${isTest ? 'TEST: ' : ''}${name} has marked themselves safe on Sarthi Rakshak. The SOS has ended.`;
+    const text = `${isTest ? 'TEST: ' : ''}${name} is safe and has ended the SOS on Sarthi Rakshak.`;
     for (const g of guardians) {
       await this.messages.sendSms(g.phone!, { guardianId: g.id, kind: 'safe', text });
     }

@@ -1,10 +1,10 @@
-import { Body, Controller, Get, HttpCode, Patch, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, HttpCode, Patch, Post, Put, Req } from '@nestjs/common';
 import {
   DeviceRequest,
   PhotoUploadRequest,
   SavePhotoRequest,
   UpdateProfileRequest,
-  type Profile,
+  type Me,
   type UploadLink,
 } from '@sarthi/shared';
 import { parseAppBody, type AppRequest } from '../common/app-http';
@@ -14,24 +14,19 @@ import { ProfileService } from './profile.service';
 /** Upload links per user per hour. */
 export const PHOTO_UPLOADS_PER_HOUR = 10;
 
-@Controller('app')
+@Controller('v1/me')
 export class ProfileController {
   constructor(
     private readonly profile: ProfileService,
     private readonly rateLimiter: AppRateLimiter,
   ) {}
 
-  @Get('profile')
-  get(@Req() req: AppRequest): Promise<Profile> {
-    return this.profile.get(req.user!.id);
-  }
-
-  @Patch('profile')
-  update(@Req() req: AppRequest, @Body() body: unknown): Promise<Profile> {
+  @Patch()
+  update(@Req() req: AppRequest, @Body() body: unknown): Promise<Me> {
     return this.profile.update(req.user!.id, parseAppBody(UpdateProfileRequest, body));
   }
 
-  @Post('profile/photo-upload')
+  @Post('photo-upload')
   @HttpCode(200)
   async photoUpload(@Req() req: AppRequest, @Body() body: unknown): Promise<UploadLink> {
     const { sizeBytes } = parseAppBody(PhotoUploadRequest, body);
@@ -39,9 +34,9 @@ export class ProfileController {
     return this.profile.photoUploadLink(req.user!.id, sizeBytes);
   }
 
-  @Post('profile/photo')
+  @Post('photo')
   @HttpCode(200)
-  savePhoto(@Req() req: AppRequest, @Body() body: unknown): Promise<Profile> {
+  savePhoto(@Req() req: AppRequest, @Body() body: unknown): Promise<Me> {
     const { key } = parseAppBody(SavePhotoRequest, body);
     return this.profile.savePhoto(req.user!.id, key);
   }

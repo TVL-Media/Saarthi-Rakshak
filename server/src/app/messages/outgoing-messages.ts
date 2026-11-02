@@ -4,7 +4,7 @@ import { maskPhone } from '../../users/phone';
 export interface OutgoingSms {
   /** Which guardian it is for (kept in place of the number). */
   guardianId: string;
-  kind: 'invite' | 'sos' | 'safe';
+  kind: 'invite' | 'sos' | 'sos_link' | 'safe' | 'test';
   text: string;
 }
 

@@ -3,22 +3,24 @@ import { ConsentRequest, LoginRequest, type LoginReply, type Me } from '@sarthi/
 import { parseAppBody, type AppRequest } from '../common/app-http';
 import { AppRateLimiter } from '../common/rate-limit';
 import { AppPublic, NoConsentNeeded } from './app-auth.decorators';
+import { ProfileService } from '../profile/profile.service';
 import { AppAuthService } from './app-auth.service';
 import { UserSessionsService } from './user-sessions.service';
 
 /** Login attempts per IP address in 15 minutes. */
 export const LOGIN_LIMIT_PER_IP = 10;
 
-@Controller('app')
+@Controller('v1')
 export class AppAuthController {
   constructor(
     private readonly auth: AppAuthService,
+    private readonly profile: ProfileService,
     private readonly sessions: UserSessionsService,
     private readonly rateLimiter: AppRateLimiter,
   ) {}
 
   @AppPublic()
-  @Post('auth/login')
+  @Post('auth/firebase')
   @HttpCode(200)
   async login(@Req() req: AppRequest, @Body() body: unknown): Promise<LoginReply> {
     await this.rateLimiter.check(`login:${req.ip ?? 'unknown'}`, LOGIN_LIMIT_PER_IP, 15 * 60);
@@ -36,7 +38,7 @@ export class AppAuthController {
   @NoConsentNeeded()
   @Get('me')
   me(@Req() req: AppRequest): Promise<Me> {
-    return this.auth.me(req.user!.id);
+    return this.profile.me(req.user!.id);
   }
 
   @NoConsentNeeded()
@@ -44,6 +46,6 @@ export class AppAuthController {
   @HttpCode(200)
   consent(@Req() req: AppRequest, @Body() body: unknown): Promise<Me> {
     const { version } = parseAppBody(ConsentRequest, body);
-    return this.auth.giveConsent(req.user!.id, version);
+    return this.profile.giveConsent(req.user!.id, version);
   }
 }

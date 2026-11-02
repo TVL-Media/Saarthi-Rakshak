@@ -9,7 +9,6 @@ import { requestPath, type HttpRequest } from '../../common/http';
 export interface AuthedUser {
   id: string;
   sessionId: string;
-  status: 'active' | 'blocked';
   consentGiven: boolean;
 }
 
@@ -17,10 +16,10 @@ export interface AppRequest extends HttpRequest {
   user?: AuthedUser;
 }
 
-/** /app/... (user app) and /g/... (guardian pages). */
+/** /v1/... (user app) and /g/... (guardian pages). */
 export function isAppPath(req: HttpRequest): boolean {
   const path = requestPath(req);
-  return path === '/app' || path.startsWith('/app/') || path === '/g' || path.startsWith('/g/');
+  return path === '/v1' || path.startsWith('/v1/') || path === '/g' || path.startsWith('/g/');
 }
 
 /** An error the app understands: `{ error: code, message }` (see docs/app-api.md). */
@@ -38,12 +37,6 @@ export const appError = {
       HttpStatus.FORBIDDEN,
       'consent_required',
       'Please accept the terms and privacy policy to continue.',
-    ),
-  accountBlocked: () =>
-    new AppError(
-      HttpStatus.FORBIDDEN,
-      'account_blocked',
-      'Your account is blocked. Please contact Sarthi Rakshak support.',
     ),
   notFound: (message = 'Not found.') => new AppError(HttpStatus.NOT_FOUND, 'not_found', message),
   conflict: (message: string) => new AppError(HttpStatus.CONFLICT, 'conflict', message),

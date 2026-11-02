@@ -35,7 +35,7 @@ const errorOf = (body: unknown) => (body as { error: string }).error;
 
 async function startSos(t: string): Promise<string> {
   const res = await api()
-    .post('/app/sos')
+    .post('/v1/sos')
     .set(bearer(t))
     .send({
       id: randomUUID(),
@@ -62,9 +62,9 @@ function point(secondsAgo: number, extra: Record<string, unknown> = {}) {
 }
 
 const send = (points: unknown[], t = token) =>
-  api().post('/app/locations').set(bearer(t)).send({ points });
+  api().post('/v1/locations').set(bearer(t)).send({ points });
 
-describe('POST /app/locations', () => {
+describe('POST /v1/locations', () => {
   it('saves a batch of points for the SOS', async () => {
     const res = await send([point(6), point(3), point(0)]).expect(200);
     expect(res.body).toEqual({ saved: 3, duplicates: 0 });
@@ -138,7 +138,7 @@ describe('POST /app/locations', () => {
 
   it('accepts points for 2 minutes after the SOS ends, then refuses', async () => {
     await api()
-      .post(`/app/sos/${sosId}/end`)
+      .post(`/v1/sos/${sosId}/end`)
       .set(bearer(token))
       .send({ reason: 'safe' })
       .expect(200);
@@ -158,11 +158,6 @@ describe('POST /app/locations', () => {
     await send([]).expect(400);
   });
 
-  it('works for a blocked user (SOS must always work)', async () => {
-    await ctx.db.updateTable('users').set({ status: 'blocked' }).execute();
-    await send([point(0)]).expect(200);
-  });
-
   it('stays fast with 50 phones sending at once (test database only)', async () => {
     const users: { token: string }[] = [];
     for (let i = 0; i < 50; i++) {
@@ -176,7 +171,7 @@ describe('POST /app/locations', () => {
     await Promise.all(
       users.map((u, i) =>
         api()
-          .post('/app/locations')
+          .post('/v1/locations')
           .set(bearer(u.token))
           .send({ points: [point(0, { sosId: sos.at(i) })] })
           .expect(200),
@@ -187,11 +182,11 @@ describe('POST /app/locations', () => {
   });
 });
 
-describe('POST /app/heartbeat', () => {
+describe('POST /v1/heartbeat', () => {
   it("records the time, battery and network, and the phone's last seen", async () => {
     const deviceId = randomUUID();
     await api()
-      .put('/app/device')
+      .put('/v1/me/device')
       .set(bearer(token))
       .send({
         deviceId,
@@ -209,7 +204,7 @@ describe('POST /app/heartbeat', () => {
       .execute();
 
     await api()
-      .post('/app/heartbeat')
+      .post('/v1/heartbeat')
       .set(bearer(token))
       .send({ batteryPct: 40, network: 'wifi', sosId })
       .expect(204);
@@ -229,11 +224,11 @@ describe('POST /app/heartbeat', () => {
   });
 
   it('works with an empty body', async () => {
-    await api().post('/app/heartbeat').set(bearer(token)).send({}).expect(204);
+    await api().post('/v1/heartbeat').set(bearer(token)).send({}).expect(204);
   });
 
   it("refuses another user's SOS", async () => {
     const other = await appUser(ctx, '+919812399999');
-    await api().post('/app/heartbeat').set(bearer(other.token)).send({ sosId }).expect(404);
+    await api().post('/v1/heartbeat').set(bearer(other.token)).send({ sosId }).expect(404);
   });
 });

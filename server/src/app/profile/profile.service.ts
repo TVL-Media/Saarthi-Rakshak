@@ -3,7 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   MAX_PHOTO_BYTES,
   type DeviceRequest,
-  type Profile,
+  type Me,
   type UpdateProfileRequest,
   type UploadLink,
 } from '@sarthi/shared';
@@ -11,6 +11,7 @@ import { sql } from 'kysely';
 import { DatabaseService } from '../../database/database.module';
 import { StorageService, UPLOAD_LINK_SECONDS } from '../../storage/storage.module';
 import { appError } from '../common/app-http';
+import { AppSettings } from '../common/app-settings';
 
 /** How long a photo link in a profile reply works. */
 const PHOTO_LINK_SECONDS = 3600;
@@ -26,24 +27,61 @@ export class ProfileService {
   constructor(
     private readonly database: DatabaseService,
     private readonly storage: StorageService,
+    private readonly settings: AppSettings,
   ) {}
 
-  async get(userId: string): Promise<Profile> {
+  /** Everything the app needs about the user (GET /v1/me and after every change). */
+  async me(userId: string): Promise<Me> {
     const user = await this.database.db
-      .selectFrom('users')
-      .select(['name', 'blood_group', 'photo_key'])
-      .where('id', '=', userId)
-      .executeTakeFirstOrThrow();
+      .selectFrom('users as u')
+      .select((eb) => [
+        'u.id',
+        'u.name',
+        'u.phone',
+        'u.blood_group',
+        'u.photo_key',
+        'u.consent_at',
+        eb
+          .selectFrom('guardians as g')
+          .select(eb.fn.countAll<string>().as('n'))
+          .whereRef('g.user_id', '=', 'u.id')
+          .where('g.invite_status', '<>', 'declined')
+          .as('guardians_count'),
+        eb
+          .selectFrom('guardians as g')
+          .select(eb.fn.countAll<string>().as('n'))
+          .whereRef('g.user_id', '=', 'u.id')
+          .where('g.invite_status', '=', 'accepted')
+          .as('accepted_count'),
+      ])
+      .where('u.id', '=', userId)
+      .executeTakeFirst();
+    if (!user) throw appError.notLoggedIn();
     return {
+      id: user.id,
       name: user.name,
+      phone: user.phone,
       bloodGroup: user.blood_group,
       photoUrl: user.photo_key
         ? await this.storage.downloadUrl(user.photo_key, PHOTO_LINK_SECONDS)
         : null,
+      consentGiven: user.consent_at !== null,
+      guardiansCount: Number(user.guardians_count ?? 0),
+      acceptedGuardiansCount: Number(user.accepted_count ?? 0),
+      rules: await this.settings.snapshot(),
     };
   }
 
-  async update(userId: string, change: UpdateProfileRequest): Promise<Profile> {
+  async giveConsent(userId: string, version: string): Promise<Me> {
+    await this.database.db
+      .updateTable('users')
+      .set({ consent_at: sql<Date>`now()`, consent_version: version })
+      .where('id', '=', userId)
+      .execute();
+    return this.me(userId);
+  }
+
+  async update(userId: string, change: UpdateProfileRequest): Promise<Me> {
     await this.database.db
       .updateTable('users')
       .set({
@@ -52,7 +90,7 @@ export class ProfileService {
       })
       .where('id', '=', userId)
       .execute();
-    return this.get(userId);
+    return this.me(userId);
   }
 
   async photoUploadLink(userId: string, sizeBytes: number): Promise<UploadLink> {
@@ -67,7 +105,7 @@ export class ProfileService {
   }
 
   /** Uses an uploaded photo as the profile photo and deletes the previous one. */
-  async savePhoto(userId: string, key: string): Promise<Profile> {
+  async savePhoto(userId: string, key: string): Promise<Me> {
     if (!key.startsWith(photoFolder(userId)) || key.includes('..')) {
       throw appError.invalidInput('key: Not an upload link made for you.');
     }
@@ -94,7 +132,7 @@ export class ProfileService {
         this.logger.error(`Old photo not deleted: ${err.message}`);
       });
     }
-    return this.get(userId);
+    return this.me(userId);
   }
 
   /** Creates or updates this phone and links it to the current login session. */

@@ -45,7 +45,6 @@ export class UserSessionsService {
         's.id as sessionId',
         's.last_seen_at as lastSeenAt',
         'u.id as userId',
-        'u.status',
         'u.consent_at as consentAt',
       ])
       .where('s.token_hash', '=', hashToken(token))
@@ -72,7 +71,6 @@ export class UserSessionsService {
     return {
       id: row.userId,
       sessionId: row.sessionId,
-      status: row.status,
       consentGiven: row.consentAt !== null,
     };
   }

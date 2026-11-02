@@ -8,8 +8,7 @@ import { LocationsService } from './locations.service';
 /** Location batches per user per minute (normal use is about 12–20). */
 export const LOCATION_CALLS_PER_MINUTE = 120;
 
-/** Works for every logged-in user, blocked ones included (SOS must always work). */
-@Controller('app')
+@Controller('v1')
 export class LocationsController {
   constructor(
     private readonly locations: LocationsService,

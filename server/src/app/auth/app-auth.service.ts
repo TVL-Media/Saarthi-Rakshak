@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import type { LoginReply, Me } from '@sarthi/shared';
+import type { LoginReply } from '@sarthi/shared';
 import { sql } from 'kysely';
 import { DatabaseService } from '../../database/database.module';
 import { normaliseIndianMobile } from '../../users/phone';
 import { appError } from '../common/app-http';
+import { ProfileService } from '../profile/profile.service';
 import { PhoneTokenVerifier } from './phone-token-verifier';
 import { UserSessionsService } from './user-sessions.service';
 
@@ -13,6 +14,7 @@ export class AppAuthService {
     private readonly database: DatabaseService,
     private readonly verifier: PhoneTokenVerifier,
     private readonly sessions: UserSessionsService,
+    private readonly profile: ProfileService,
   ) {}
 
   /** Firebase token → our user (created on first login) → a new session. */
@@ -33,11 +35,9 @@ export class AppAuthService {
           .executeTakeFirst();
         const user = await trx
           .selectFrom('users')
-          .select(['id', 'status'])
+          .select('id')
           .where('phone', '=', phone)
           .executeTakeFirstOrThrow();
-        if (user.status === 'blocked') throw appError.accountBlocked();
-
         await trx
           .updateTable('users')
           .set({ last_seen_at: sql<Date>`now()` })
@@ -47,44 +47,6 @@ export class AppAuthService {
         return { userId: user.id, isNewUser: inserted !== undefined, token };
       });
 
-    return { token, user: await this.me(userId), isNewUser };
-  }
-
-  async me(userId: string): Promise<Me> {
-    const user = await this.database.db
-      .selectFrom('users as u')
-      .select((eb) => [
-        'u.id',
-        'u.name',
-        'u.phone',
-        'u.blood_group',
-        'u.consent_at',
-        eb
-          .selectFrom('guardians as g')
-          .select(eb.fn.countAll<string>().as('n'))
-          .whereRef('g.user_id', '=', 'u.id')
-          .where('g.invite_status', '<>', 'declined')
-          .as('guardians_count'),
-      ])
-      .where('u.id', '=', userId)
-      .executeTakeFirst();
-    if (!user) throw appError.notLoggedIn();
-    return {
-      id: user.id,
-      name: user.name,
-      phone: user.phone,
-      bloodGroup: user.blood_group,
-      consentGiven: user.consent_at !== null,
-      guardiansCount: Number(user.guardians_count ?? 0),
-    };
-  }
-
-  async giveConsent(userId: string, version: string): Promise<Me> {
-    await this.database.db
-      .updateTable('users')
-      .set({ consent_at: sql<Date>`now()`, consent_version: version })
-      .where('id', '=', userId)
-      .execute();
-    return this.me(userId);
+    return { token, user: await this.profile.me(userId), isNewUser };
   }
 }

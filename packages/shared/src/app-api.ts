@@ -1,5 +1,5 @@
 /**
- * The user app API (`/app/...`) and the guardian invite API (`/g/invite/...`).
+ * The user app API (`/v1/...`) and the guardian invite API (`/g/i/...`).
  *
  * One source of truth: the server checks every request body with these schemas, and the web apps
  * use the types. The Flutter app follows the same list, written out in docs/app-api.md.
@@ -19,8 +19,21 @@ export const DateTime = z.iso.datetime({ offset: true, error: 'Must be an ISO da
 
 export const BloodGroup = z.enum(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']);
 
-/** A person's name as typed: trimmed, 1–60 characters. */
+/** A guardian's name as typed or picked from contacts: trimmed, 1–60 characters. */
 export const PersonName = z.string().trim().min(1).max(60);
+
+/**
+ * The user's own name: 2–50 characters; letters in any language (Hindi too), spaces and . ' ’ -.
+ * Must start with a letter.
+ */
+export const ProfileName = z
+  .string()
+  .trim()
+  .min(2, { error: 'Enter your name (at least 2 characters)' })
+  .max(50, { error: 'Name can be at most 50 characters' })
+  .regex(/^[\p{L}\p{M}][\p{L}\p{M} .'’-]*$/u, {
+    error: "Use letters, spaces and . ' - only",
+  });
 
 export const Latitude = z.number().min(-90).max(90);
 export const Longitude = z.number().min(-180).max(180);
@@ -48,7 +61,6 @@ export const ERROR_CODES = [
   'invalid_input', // 400: a field is missing or wrong
   'not_logged_in', // 401: no token, or the session has ended
   'consent_required', // 403: the user has not accepted the terms yet
-  'account_blocked', // 403: blocked by the support team (SOS still works if already logged in)
   'not_found', // 404
   'conflict', // 409: e.g. an SOS or journey is already active
   'limit_reached', // 409: e.g. maximum guardians, daily invite limit
@@ -63,20 +75,27 @@ export type ErrorCode = (typeof ERROR_CODES)[number];
 // A1 — Login
 // ---------------------------------------------------------------------------------------------
 
-/** POST /app/auth/login (no login needed) */
+/** POST /v1/auth/firebase (no login needed) */
 export const LoginRequest = z.object({
   /** From Firebase phone sign-in on the phone. */
   firebaseIdToken: z.string().min(10).max(8192),
 });
 
+/** GET /v1/me, also returned by login, PATCH /v1/me, consent and photo calls. */
 export const Me = z.object({
   id: Id,
   name: z.string().nullable(),
   /** The user's own number, E.164 (e.g. "+919812344521"). */
   phone: z.string(),
   bloodGroup: BloodGroup.nullable(),
+  /** Short-lived link (1 hour) to show the profile photo, or null. */
+  photoUrl: z.string().nullable(),
   consentGiven: z.boolean(),
+  /** Guardians who have not declined. */
   guardiansCount: z.number().int(),
+  acceptedGuardiansCount: z.number().int(),
+  /** Safety rules the app needs (Settings), e.g. "sos.countdown_seconds": 5. */
+  rules: z.record(z.string(), z.number()),
 });
 
 export const LoginReply = z.object({
@@ -86,7 +105,7 @@ export const LoginReply = z.object({
   isNewUser: z.boolean(),
 });
 
-/** POST /app/me/consent */
+/** POST /v1/me/consent */
 export const ConsentRequest = z.object({
   /** Version of the terms and privacy text the user accepted, e.g. "2026-10". */
   version: z.string().trim().min(1).max(20),
@@ -96,17 +115,10 @@ export const ConsentRequest = z.object({
 // A2 — Profile and phone details
 // ---------------------------------------------------------------------------------------------
 
-export const Profile = z.object({
-  name: z.string().nullable(),
-  bloodGroup: BloodGroup.nullable(),
-  /** Short-lived link to show the photo, or null. */
-  photoUrl: z.string().nullable(),
-});
-
-/** PATCH /app/profile — send only what changes; `bloodGroup: null` clears it. */
+/** PATCH /v1/me — send only what changes; `bloodGroup: null` clears it. */
 export const UpdateProfileRequest = z
   .object({
-    name: PersonName.optional(),
+    name: ProfileName.optional(),
     bloodGroup: BloodGroup.nullable().optional(),
   })
   .refine((v) => v.name !== undefined || v.bloodGroup !== undefined, {
@@ -115,7 +127,7 @@ export const UpdateProfileRequest = z
 
 export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 
-/** POST /app/profile/photo-upload */
+/** POST /v1/me/photo-upload */
 export const PhotoUploadRequest = z.object({
   /** Exact size of the JPEG the phone will upload. */
   sizeBytes: z.number().int().min(1).max(MAX_PHOTO_BYTES),
@@ -130,7 +142,7 @@ export const UploadLink = z.object({
   expiresAt: DateTime,
 });
 
-/** POST /app/profile/photo */
+/** POST /v1/me/photo — after uploading with the link */
 export const SavePhotoRequest = z.object({ key: z.string().min(1).max(200) });
 
 /** Permission keys the admin panel's "Setup complete" check reads. Keep in step with the app. */
@@ -141,7 +153,7 @@ export const Permissions = z.object({
   microphone: z.boolean(),
 });
 
-/** PUT /app/device */
+/** PUT /v1/me/device */
 export const DeviceRequest = z.object({
   /** Made by the app once per install. */
   deviceId: Id,
@@ -169,7 +181,17 @@ export const Guardian = z.object({
   status: GuardianStatus,
 });
 
-/** POST /app/guardians */
+/** PATCH /v1/guardians/:id — send only what changes; `relation: null` clears it. */
+export const UpdateGuardianRequest = z
+  .object({
+    name: PersonName.optional(),
+    relation: z.string().trim().min(1).max(40).nullable().optional(),
+  })
+  .refine((v) => v.name !== undefined || v.relation !== undefined, {
+    error: 'Send at least one field',
+  });
+
+/** POST /v1/guardians */
 export const AddGuardianRequest = z.object({
   name: PersonName,
   /** Indian mobile in any common form: "98123 44521", "+91 98123 44521", "098123 44521". */
@@ -178,7 +200,7 @@ export const AddGuardianRequest = z.object({
   relation: z.string().trim().min(1).max(40).optional(),
 });
 
-/** GET /g/invite/:code (guardian, no login) */
+/** GET /g/i/:code (guardian, no login) */
 export const InviteInfo = z.object({
   /** First name of the person who invited them. */
   inviterFirstName: z.string(),
@@ -194,15 +216,25 @@ export const InviteInfo = z.object({
 export const SosTrigger = z.enum(['button', 'widget', 'tile', 'checkin', 'journey']);
 export const SosStatus = z.enum(['active', 'ended', 'cancelled']);
 
-/** POST /app/sos — sending the same `id` again returns the same SOS. */
+/** POST /v1/sos — a real SOS. Sending the same `id` again returns the same SOS. */
 export const StartSosRequest = z.object({
   id: Id,
   trigger: SosTrigger,
-  isTest: z.boolean(),
   /** Phone time when the countdown finished. */
   startedAt: DateTime,
   journeyId: Id.optional(),
   location: Place.optional(),
+  /**
+   * Guardians the phone already reached by SMS from its own SIM (no internet at the time).
+   * They get only the live link, never a second SOS SMS.
+   */
+  simSmsSentTo: z.array(Id).max(5).optional(),
+});
+
+/** POST /v1/sos/test — a practice alert to accepted guardians only (5 a day). */
+export const TestSosRequest = z.object({
+  id: Id,
+  startedAt: DateTime,
 });
 
 export const SosGuardian = z.object({
@@ -224,14 +256,13 @@ export const Sos = z.object({
   guardians: z.array(SosGuardian),
 });
 
-/** POST /app/sos/:id/end */
+/** POST /v1/sos/:id/end */
 export const EndSosRequest = z.object({ reason: z.literal('safe') });
 
-/** POST /app/sos/cancelled — an SOS cancelled during the countdown (report only, no alerts). */
+/** POST /v1/sos/cancelled — an SOS cancelled during the countdown (report only, no alerts). */
 export const CancelledSosRequest = z.object({
   id: Id,
   trigger: SosTrigger,
-  isTest: z.boolean(),
   startedAt: DateTime,
   cancelledAt: DateTime,
 });
@@ -257,7 +288,7 @@ export const LocationPoint = z
     error: 'Each point needs sosId or journeyId',
   });
 
-/** POST /app/locations */
+/** POST /v1/locations */
 export const LocationsRequest = z.object({ points: z.array(LocationPoint).min(1).max(50) });
 
 export const LocationsReply = z.object({
@@ -266,7 +297,7 @@ export const LocationsReply = z.object({
   duplicates: z.number().int(),
 });
 
-/** POST /app/heartbeat — every 30–60 seconds while an SOS or journey is active. */
+/** POST /v1/heartbeat — every 30–60 seconds while an SOS or journey is active. */
 export const HeartbeatRequest = z.object({
   batteryPct: BatteryPct.optional(),
   network: Network.optional(),
@@ -282,7 +313,7 @@ export const JourneyStatus = z.enum(['active', 'arrived', 'ended', 'lost_contact
 export const CheckinReason = z.enum(['off_route', 'stopped', 'late']);
 export const CheckinStatus = z.enum(['pending', 'fine', 'traffic_pause', 'sos', 'no_reply']);
 
-/** POST /app/journeys — sending the same `id` again returns the same journey. */
+/** POST /v1/journeys — sending the same `id` again returns the same journey. */
 export const StartJourneyRequest = z.object({
   id: Id,
   destination: z.object({
@@ -315,13 +346,13 @@ export const Journey = z.object({
   checkinsPausedUntil: DateTime.nullable(),
 });
 
-/** POST /app/journeys/:id/checkins — the phone noticed a problem. */
+/** POST /v1/journeys/:id/checkins — the phone noticed a problem. */
 export const RaiseCheckinRequest = z.object({
   id: Id,
   reason: z.enum(['off_route', 'stopped']),
 });
 
-/** POST /app/checkins/:id/answer */
+/** POST /v1/checkins/:id/answer */
 export const AnswerCheckinRequest = z.object({
   answer: z.enum(['fine', 'traffic', 'sos']),
 });
@@ -339,7 +370,7 @@ export const HistoryItem = z.object({
   endedAt: DateTime.nullable(),
 });
 
-/** GET /app/history?before=<DateTime> — 20 per page, newest first. */
+/** GET /v1/history?before=<DateTime> — 20 per page, newest first. */
 export const HistoryPage = z.object({
   items: z.array(HistoryItem),
   /** Pass as `before` to get the next page; null when there are no more. */
@@ -353,13 +384,13 @@ export const TimelineEntry = z.object({
   text: z.string(),
 });
 
-/** GET /app/history/sos/:id and GET /app/history/journeys/:id */
+/** GET /v1/history/sos/:id and GET /v1/history/journeys/:id */
 export const HistoryDetail = z.object({
   item: HistoryItem,
   timeline: z.array(TimelineEntry),
 });
 
-/** POST /app/support */
+/** POST /v1/support-tickets */
 export const SupportRequest = z.object({
   category: z.enum(['otp', 'guardian_sms', 'app_stopped', 'other']),
   message: z.string().trim().min(10).max(2000),
@@ -374,7 +405,6 @@ export type LoginRequest = z.infer<typeof LoginRequest>;
 export type LoginReply = z.infer<typeof LoginReply>;
 export type Me = z.infer<typeof Me>;
 export type ConsentRequest = z.infer<typeof ConsentRequest>;
-export type Profile = z.infer<typeof Profile>;
 export type UpdateProfileRequest = z.infer<typeof UpdateProfileRequest>;
 export type PhotoUploadRequest = z.infer<typeof PhotoUploadRequest>;
 export type UploadLink = z.infer<typeof UploadLink>;
@@ -383,8 +413,10 @@ export type Permissions = z.infer<typeof Permissions>;
 export type DeviceRequest = z.infer<typeof DeviceRequest>;
 export type Guardian = z.infer<typeof Guardian>;
 export type AddGuardianRequest = z.infer<typeof AddGuardianRequest>;
+export type UpdateGuardianRequest = z.infer<typeof UpdateGuardianRequest>;
 export type InviteInfo = z.infer<typeof InviteInfo>;
 export type StartSosRequest = z.infer<typeof StartSosRequest>;
+export type TestSosRequest = z.infer<typeof TestSosRequest>;
 export type SosGuardian = z.infer<typeof SosGuardian>;
 export type Sos = z.infer<typeof Sos>;
 export type EndSosRequest = z.infer<typeof EndSosRequest>;

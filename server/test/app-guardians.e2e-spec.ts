@@ -26,7 +26,7 @@ beforeEach(async () => {
   await resetAppTest(ctx);
   messages.sent.length = 0;
   ({ token, userId } = await appUser(ctx));
-  await http(ctx).patch('/app/profile').set(bearer(token)).send({ name: 'Priya Sharma' });
+  await http(ctx).patch('/v1/me').set(bearer(token)).send({ name: 'Priya Sharma' });
 });
 
 afterAll(() => stopAppTest(ctx));
@@ -35,13 +35,13 @@ const api = () => http(ctx);
 const phoneOf = (i: number) => `98000 0000${i}`;
 
 function add(name: string, phone: string, relation?: string) {
-  return api().post('/app/guardians').set(bearer(token)).send({ name, phone, relation });
+  return api().post('/v1/guardians').set(bearer(token)).send({ name, phone, relation });
 }
 
 /** The invite code from the last SMS (local log provider). */
 function lastInviteCode(): string {
   const text = messages.sent.at(-1)!.text;
-  return /\/invite\/([A-Za-z0-9_-]+)/.exec(text)![1];
+  return /\/i\/([A-Za-z0-9_-]+)/.exec(text)![1];
 }
 
 const errorOf = (body: unknown) => (body as { error: string }).error;
@@ -62,7 +62,7 @@ describe('Adding guardians', () => {
       kind: 'invite',
     });
     expect(messages.sent[0].text).toContain('Priya Sharma added you as a guardian');
-    expect(messages.sent[0].text).toMatch(/http:\/\/localhost:5175\/invite\/[A-Za-z0-9_-]{30,}/);
+    expect(messages.sent[0].text).toMatch(/http:\/\/localhost:5175\/i\/[A-Za-z0-9_-]{30,}/);
 
     const row = await ctx.db.selectFrom('guardians').selectAll().executeTakeFirstOrThrow();
     expect(row.phone).toBe('+919812300001');
@@ -73,7 +73,7 @@ describe('Adding guardians', () => {
   it('lists guardians in the order they were added', async () => {
     await add('A', phoneOf(1)).expect(201);
     await add('B', phoneOf(2)).expect(201);
-    const res = await api().get('/app/guardians').set(bearer(token)).expect(200);
+    const res = await api().get('/v1/guardians').set(bearer(token)).expect(200);
     expect((res.body as Guardian[]).map((g) => g.name)).toEqual(['A', 'B']);
   });
 
@@ -106,18 +106,13 @@ describe('Adding guardians', () => {
     expect((res.body as { message: string }).message).toContain('phone');
   });
 
-  it('refuses a blocked user', async () => {
-    await ctx.db.updateTable('users').set({ status: 'blocked' }).execute();
-    expect(errorOf((await add('Ravi', phoneOf(1)).expect(403)).body)).toBe('account_blocked');
-  });
-
   it(`sends at most ${INVITES_PER_DAY} invites a day (resends count)`, async () => {
     const res = await add('Ravi', phoneOf(1)).expect(201);
     const id = (res.body as Guardian).id;
     for (let i = 1; i < INVITES_PER_DAY; i++) {
-      await api().post(`/app/guardians/${id}/resend`).set(bearer(token)).expect(204);
+      await api().post(`/v1/guardians/${id}/resend-invite`).set(bearer(token)).expect(204);
     }
-    await api().post(`/app/guardians/${id}/resend`).set(bearer(token)).expect(429);
+    await api().post(`/v1/guardians/${id}/resend-invite`).set(bearer(token)).expect(429);
     // A refused add leaves nothing behind.
     await add('Sita', phoneOf(2)).expect(429);
     expect(await ctx.db.selectFrom('guardians').select('id').execute()).toHaveLength(1);
@@ -129,20 +124,20 @@ describe('Resend and remove', () => {
     const res = await add('Ravi', phoneOf(1)).expect(201);
     const oldCode = lastInviteCode();
     await api()
-      .post(`/app/guardians/${(res.body as Guardian).id}/resend`)
+      .post(`/v1/guardians/${(res.body as Guardian).id}/resend-invite`)
       .set(bearer(token))
       .expect(204);
     const newCode = lastInviteCode();
     expect(newCode).not.toBe(oldCode);
-    await api().get(`/g/invite/${oldCode}`).expect(404);
-    await api().get(`/g/invite/${newCode}`).expect(200);
+    await api().get(`/g/i/${oldCode}`).expect(404);
+    await api().get(`/g/i/${newCode}`).expect(200);
   });
 
   it('resend is only for guardians who have not answered', async () => {
     const res = await add('Ravi', phoneOf(1)).expect(201);
-    await api().post(`/g/invite/${lastInviteCode()}/accept`).expect(204);
+    await api().post(`/g/i/${lastInviteCode()}/accept`).expect(204);
     await api()
-      .post(`/app/guardians/${(res.body as Guardian).id}/resend`)
+      .post(`/v1/guardians/${(res.body as Guardian).id}/resend-invite`)
       .set(bearer(token))
       .expect(409);
   });
@@ -150,10 +145,10 @@ describe('Resend and remove', () => {
   it('removes a guardian', async () => {
     const res = await add('Ravi', phoneOf(1)).expect(201);
     await api()
-      .delete(`/app/guardians/${(res.body as Guardian).id}`)
+      .delete(`/v1/guardians/${(res.body as Guardian).id}`)
       .set(bearer(token))
       .expect(204);
-    const list = await api().get('/app/guardians').set(bearer(token)).expect(200);
+    const list = await api().get('/v1/guardians').set(bearer(token)).expect(200);
     expect(list.body).toEqual([]);
   });
 
@@ -164,7 +159,7 @@ describe('Resend and remove', () => {
       .values({ id: randomUUID(), user_id: userId, trigger: 'button', started_at: new Date() })
       .execute();
     const del = await api()
-      .delete(`/app/guardians/${(res.body as Guardian).id}`)
+      .delete(`/v1/guardians/${(res.body as Guardian).id}`)
       .set(bearer(token))
       .expect(409);
     expect(errorOf(del.body)).toBe('conflict');
@@ -174,9 +169,9 @@ describe('Resend and remove', () => {
     const res = await add('Ravi', phoneOf(1)).expect(201);
     const other = await appUser(ctx, '+919812399999');
     const id = (res.body as Guardian).id;
-    await api().delete(`/app/guardians/${id}`).set(bearer(other.token)).expect(404);
-    await api().post(`/app/guardians/${id}/resend`).set(bearer(other.token)).expect(404);
-    await api().delete('/app/guardians/not-a-uuid').set(bearer(token)).expect(404);
+    await api().delete(`/v1/guardians/${id}`).set(bearer(other.token)).expect(404);
+    await api().post(`/v1/guardians/${id}/resend-invite`).set(bearer(other.token)).expect(404);
+    await api().delete('/v1/guardians/not-a-uuid').set(bearer(token)).expect(404);
   });
 });
 
@@ -186,7 +181,7 @@ describe('Invite link (guardian side, no login)', () => {
   });
 
   it('shows who invited them', async () => {
-    const res = await api().get(`/g/invite/${lastInviteCode()}`).expect(200);
+    const res = await api().get(`/g/i/${lastInviteCode()}`).expect(200);
     expect(res.body).toEqual({
       inviterFirstName: 'Priya',
       guardianName: 'Ravi',
@@ -198,9 +193,9 @@ describe('Invite link (guardian side, no login)', () => {
 
   it('accept: status becomes accepted (twice is fine)', async () => {
     const code = lastInviteCode();
-    await api().post(`/g/invite/${code}/accept`).expect(204);
-    await api().post(`/g/invite/${code}/accept`).expect(204);
-    const list = await api().get('/app/guardians').set(bearer(token)).expect(200);
+    await api().post(`/g/i/${code}/accept`).expect(204);
+    await api().post(`/g/i/${code}/accept`).expect(204);
+    const list = await api().get('/v1/guardians').set(bearer(token)).expect(200);
     expect((list.body as Guardian[])[0].status).toBe('accepted');
     const { n } = await ctx.db
       .selectFrom('guardians')
@@ -211,7 +206,7 @@ describe('Invite link (guardian side, no login)', () => {
 
   it('decline: the number is deleted, only a hash is kept, and it cannot be invited again', async () => {
     const code = lastInviteCode();
-    await api().post(`/g/invite/${code}/decline`).expect(204);
+    await api().post(`/g/i/${code}/decline`).expect(204);
 
     const row = await ctx.db.selectFrom('guardians').selectAll().executeTakeFirstOrThrow();
     expect(row.invite_status).toBe('declined');
@@ -226,22 +221,22 @@ describe('Invite link (guardian side, no login)', () => {
     // Another user can still invite that number.
     const other = await appUser(ctx, '+919812399999');
     await api()
-      .post('/app/guardians')
+      .post('/v1/guardians')
       .set(bearer(other.token))
       .send({ name: 'Ravi', phone: phoneOf(1) })
       .expect(201);
   });
 
   it('a declined guardian no longer counts towards the 5', async () => {
-    await api().post(`/g/invite/${lastInviteCode()}/decline`).expect(204);
+    await api().post(`/g/i/${lastInviteCode()}/decline`).expect(204);
     for (let i = 2; i <= 6; i++) await add(`G${i}`, phoneOf(i)).expect(201);
   });
 
   it('an accepted guardian can still decline with the link', async () => {
     const code = lastInviteCode();
-    await api().post(`/g/invite/${code}/accept`).expect(204);
-    await api().post(`/g/invite/${code}/decline`).expect(204);
-    await api().post(`/g/invite/${code}/accept`).expect(409);
+    await api().post(`/g/i/${code}/accept`).expect(204);
+    await api().post(`/g/i/${code}/decline`).expect(204);
+    await api().post(`/g/i/${code}/accept`).expect(409);
   });
 
   it('an expired link answers link_expired', async () => {
@@ -250,15 +245,15 @@ describe('Invite link (guardian side, no login)', () => {
       .updateTable('guardians')
       .set({ invite_expires_at: new Date(Date.now() - 1000) })
       .execute();
-    const res = await api().get(`/g/invite/${code}`).expect(410);
+    const res = await api().get(`/g/i/${code}`).expect(410);
     expect(errorOf(res.body)).toBe('link_expired');
-    await api().post(`/g/invite/${code}/accept`).expect(410);
+    await api().post(`/g/i/${code}/accept`).expect(410);
   });
 
   it('a wrong code answers not_found', async () => {
     await api()
-      .get(`/g/invite/${'x'.repeat(32)}`)
+      .get(`/g/i/${'x'.repeat(32)}`)
       .expect(404);
-    await api().get('/g/invite/short').expect(404);
+    await api().get('/g/i/short').expect(404);
   });
 });

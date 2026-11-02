@@ -6,10 +6,16 @@ import {
   HttpCode,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
 } from '@nestjs/common';
-import { AddGuardianRequest, type Guardian, type InviteInfo } from '@sarthi/shared';
+import {
+  AddGuardianRequest,
+  UpdateGuardianRequest,
+  type Guardian,
+  type InviteInfo,
+} from '@sarthi/shared';
 import { appError, parseAppBody, type AppRequest } from '../common/app-http';
 import { AppRateLimiter } from '../common/rate-limit';
 import { AppPublic } from '../auth/app-auth.decorators';
@@ -22,7 +28,7 @@ const guardianId = new ParseUUIDPipe({
   exceptionFactory: () => appError.notFound('Guardian not found.'),
 });
 
-@Controller('app/guardians')
+@Controller('v1/guardians')
 export class GuardiansController {
   constructor(private readonly guardians: GuardiansService) {}
 
@@ -34,13 +40,22 @@ export class GuardiansController {
   @Post()
   add(@Req() req: AppRequest, @Body() body: unknown): Promise<Guardian> {
     const input = parseAppBody(AddGuardianRequest, body);
-    return this.guardians.add(req.user!.id, req.user!.status === 'blocked', input);
+    return this.guardians.add(req.user!.id, input);
   }
 
-  @Post(':id/resend')
+  @Patch(':id')
+  update(
+    @Req() req: AppRequest,
+    @Param('id', guardianId) id: string,
+    @Body() body: unknown,
+  ): Promise<Guardian> {
+    return this.guardians.update(req.user!.id, id, parseAppBody(UpdateGuardianRequest, body));
+  }
+
+  @Post(':id/resend-invite')
   @HttpCode(204)
   async resend(@Req() req: AppRequest, @Param('id', guardianId) id: string): Promise<void> {
-    await this.guardians.resend(req.user!.id, req.user!.status === 'blocked', id);
+    await this.guardians.resend(req.user!.id, id);
   }
 
   @Delete(':id')
@@ -52,7 +67,7 @@ export class GuardiansController {
 
 /** The guardian's invite page calls these with the code from the SMS link (no login). */
 @AppPublic()
-@Controller('g/invite')
+@Controller('g/i')
 export class InviteController {
   constructor(
     private readonly guardians: GuardiansService,

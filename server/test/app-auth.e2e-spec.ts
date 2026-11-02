@@ -21,7 +21,7 @@ let redis: Redis;
 const PHONE = '+919812344521';
 
 /** A normal /app route (needs login and consent), only in these tests. */
-@Controller('app')
+@Controller('v1')
 class ProbeController {
   @Get('test-probe')
   probe() {
@@ -58,7 +58,7 @@ const http = () => request(app.getHttpServer() as App);
 
 function login(phone = PHONE) {
   return http()
-    .post('/app/auth/login')
+    .post('/v1/auth/firebase')
     .send({ firebaseIdToken: FakePhoneTokenVerifier.token(phone) });
 }
 
@@ -69,7 +69,7 @@ async function loggedIn(phone = PHONE): Promise<string> {
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-describe('POST /app/auth/login', () => {
+describe('POST /v1/auth/firebase', () => {
   it('creates the user on first login and returns a token', async () => {
     const res = await login().expect(200);
     expect(res.body).toEqual({
@@ -80,8 +80,11 @@ describe('POST /app/auth/login', () => {
         name: null,
         phone: PHONE,
         bloodGroup: null,
+        photoUrl: null,
         consentGiven: false,
         guardiansCount: 0,
+        acceptedGuardiansCount: 0,
+        rules: expect.objectContaining({ 'sos.countdown_seconds': 5 }) as unknown,
       },
     });
     const users = await db.selectFrom('users').select('phone').execute();
@@ -105,8 +108,8 @@ describe('POST /app/auth/login', () => {
   it('logs out the old phone when the user logs in again (one phone at a time)', async () => {
     const oldToken = await loggedIn();
     const newToken = await loggedIn();
-    await http().get('/app/me').set(bearer(oldToken)).expect(401);
-    await http().get('/app/me').set(bearer(newToken)).expect(200);
+    await http().get('/v1/me').set(bearer(oldToken)).expect(401);
+    await http().get('/v1/me').set(bearer(newToken)).expect(200);
     const ended = await db
       .selectFrom('user_sessions')
       .select('end_reason')
@@ -115,27 +118,15 @@ describe('POST /app/auth/login', () => {
     expect(ended).toEqual([{ end_reason: 'new_login' }]);
   });
 
-  it('refuses a blocked user', async () => {
+  it('does not use the old admin "blocked" status (blocking is removed for now)', async () => {
     await loggedIn();
     await db.updateTable('users').set({ status: 'blocked' }).execute();
-    const res = await login().expect(403);
-    expect(res.body).toEqual({ error: 'account_blocked', message: expect.any(String) as unknown });
-  });
-
-  it('keeps a blocked user who is already logged in (SOS must always work)', async () => {
-    const token = await loggedIn();
-    await http()
-      .post('/app/me/consent')
-      .set(bearer(token))
-      .send({ version: '2026-10' })
-      .expect(200);
-    await db.updateTable('users').set({ status: 'blocked' }).execute();
-    await http().get('/app/me').set(bearer(token)).expect(200);
+    await login().expect(200);
   });
 
   it('refuses a bad token with not_logged_in', async () => {
     const res = await http()
-      .post('/app/auth/login')
+      .post('/v1/auth/firebase')
       .send({ firebaseIdToken: 'not-a-real-firebase-token' })
       .expect(401);
     expect(res.body).toEqual({ error: 'not_logged_in', message: expect.any(String) as unknown });
@@ -148,7 +139,7 @@ describe('POST /app/auth/login', () => {
   });
 
   it('refuses a missing token with invalid_input and the field name', async () => {
-    const res = await http().post('/app/auth/login').send({}).expect(400);
+    const res = await http().post('/v1/auth/firebase').send({}).expect(400);
     expect(res.body).toEqual({
       error: 'invalid_input',
       message: expect.stringContaining('firebaseIdToken') as unknown,
@@ -164,13 +155,13 @@ describe('POST /app/auth/login', () => {
 
 describe('Login check on /app routes', () => {
   it('refuses a request without a token', async () => {
-    const res = await http().get('/app/me').expect(401);
+    const res = await http().get('/v1/me').expect(401);
     expect(res.body).toEqual({ error: 'not_logged_in', message: 'Please log in again.' });
   });
 
   it('refuses an unknown token', async () => {
     await http()
-      .get('/app/me')
+      .get('/v1/me')
       .set(bearer('x'.repeat(43)))
       .expect(401);
   });
@@ -181,7 +172,7 @@ describe('Login check on /app routes', () => {
       .updateTable('user_sessions')
       .set({ expires_at: new Date(Date.now() - 1000) })
       .execute();
-    await http().get('/app/me').set(bearer(token)).expect(401);
+    await http().get('/v1/me').set(bearer(token)).expect(401);
   });
 
   it('moves the expiry forward when the app is used (90 days from last use)', async () => {
@@ -191,7 +182,7 @@ describe('Login check on /app routes', () => {
       .updateTable('user_sessions')
       .set({ expires_at: soon, last_seen_at: new Date(Date.now() - 5 * 60_000) })
       .execute();
-    await http().get('/app/me').set(bearer(token)).expect(200);
+    await http().get('/v1/me').set(bearer(token)).expect(200);
     const { expires_at } = await db
       .selectFrom('user_sessions')
       .select('expires_at')
@@ -201,7 +192,7 @@ describe('Login check on /app routes', () => {
 
   it('answers unknown /app addresses with not_found in the app error shape', async () => {
     const token = await loggedIn();
-    const res = await http().get('/app/nothing-here').set(bearer(token)).expect(404);
+    const res = await http().get('/v1/nothing-here').set(bearer(token)).expect(404);
     expect(res.body).toEqual({ error: 'not_found', message: 'Not found.' });
   });
 
@@ -215,20 +206,16 @@ describe('Login check on /app routes', () => {
 describe('Consent', () => {
   it('blocks other features until the terms are accepted', async () => {
     const token = await loggedIn();
-    const res = await http().get('/app/test-probe').set(bearer(token)).expect(403);
+    const res = await http().get('/v1/test-probe').set(bearer(token)).expect(403);
     expect((res.body as { error?: string }).error).toBe('consent_required');
-    await http()
-      .post('/app/me/consent')
-      .set(bearer(token))
-      .send({ version: '2026-10' })
-      .expect(200);
-    await http().get('/app/test-probe').set(bearer(token)).expect(200);
+    await http().post('/v1/me/consent').set(bearer(token)).send({ version: '2026-10' }).expect(200);
+    await http().get('/v1/test-probe').set(bearer(token)).expect(200);
   });
 
   it('records consent with the version', async () => {
     const token = await loggedIn();
     const res = await http()
-      .post('/app/me/consent')
+      .post('/v1/me/consent')
       .set(bearer(token))
       .send({ version: '2026-10' })
       .expect(200);
@@ -243,11 +230,11 @@ describe('Consent', () => {
 
   it('refuses an empty version', async () => {
     const token = await loggedIn();
-    await http().post('/app/me/consent').set(bearer(token)).send({ version: '' }).expect(400);
+    await http().post('/v1/me/consent').set(bearer(token)).send({ version: '' }).expect(400);
   });
 });
 
-describe('GET /app/me and logout', () => {
+describe('GET /v1/me and logout', () => {
   it('counts guardians who have not declined', async () => {
     const token = await loggedIn();
     const { id } = await db.selectFrom('users').select('id').executeTakeFirstOrThrow();
@@ -259,14 +246,14 @@ describe('GET /app/me and logout', () => {
         { user_id: id, name: 'C', phone: null, invite_status: 'declined' },
       ])
       .execute();
-    const res = await http().get('/app/me').set(bearer(token)).expect(200);
+    const res = await http().get('/v1/me').set(bearer(token)).expect(200);
     expect((res.body as Me).guardiansCount).toBe(2);
   });
 
   it('ends the session on logout', async () => {
     const token = await loggedIn();
-    await http().post('/app/auth/logout').set(bearer(token)).expect(204);
-    await http().get('/app/me').set(bearer(token)).expect(401);
+    await http().post('/v1/auth/logout').set(bearer(token)).expect(204);
+    await http().get('/v1/me').set(bearer(token)).expect(401);
     const { end_reason } = await db
       .selectFrom('user_sessions')
       .select('end_reason')

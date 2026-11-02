@@ -9,7 +9,13 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
-import { CancelledSosRequest, EndSosRequest, StartSosRequest, type Sos } from '@sarthi/shared';
+import {
+  CancelledSosRequest,
+  EndSosRequest,
+  StartSosRequest,
+  TestSosRequest,
+  type Sos,
+} from '@sarthi/shared';
 import { appError, parseAppBody, type AppRequest } from '../common/app-http';
 import { SosService } from './sos.service';
 
@@ -17,8 +23,7 @@ interface StatusResponse {
   status(code: number): StatusResponse;
 }
 
-/** SOS works for every logged-in user, blocked ones included. */
-@Controller('app/sos')
+@Controller('v1/sos')
 export class SosController {
   constructor(private readonly sos: SosService) {}
 
@@ -26,6 +31,12 @@ export class SosController {
   @HttpCode(200)
   start(@Req() req: AppRequest, @Body() body: unknown): Promise<Sos> {
     return this.sos.start(req.user!.id, parseAppBody(StartSosRequest, body));
+  }
+
+  @Post('test')
+  @HttpCode(200)
+  test(@Req() req: AppRequest, @Body() body: unknown): Promise<Sos> {
+    return this.sos.test(req.user!.id, parseAppBody(TestSosRequest, body));
   }
 
   @Post('cancelled')
@@ -42,6 +53,15 @@ export class SosController {
     const sos = await this.sos.active(req.user!.id);
     if (!sos) res.status(204);
     return sos ?? undefined;
+  }
+
+  @Get(':id')
+  one(
+    @Req() req: AppRequest,
+    @Param('id', new ParseUUIDPipe({ exceptionFactory: () => appError.notFound('SOS not found.') }))
+    id: string,
+  ): Promise<Sos> {
+    return this.sos.get(req.user!.id, id);
   }
 
   @Post(':id/end')

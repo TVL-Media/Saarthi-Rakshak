@@ -6,10 +6,8 @@ import { APP_NO_CONSENT, APP_PUBLIC } from './app-auth.decorators';
 import { UserSessionsService } from './user-sessions.service';
 
 /**
- * Every /app and /g route needs an app login unless marked @AppPublic (default deny).
+ * Every /v1 and /g route needs an app login unless marked @AppPublic (default deny).
  * Until the user accepts the terms, only routes marked @NoConsentNeeded work.
- * Blocked users stay logged in: SOS must always work. Routes that blocked users may not use
- * (new journeys, guardian invites) check `user.status` themselves.
  */
 @Injectable()
 export class AppAuthGuard implements CanActivate {

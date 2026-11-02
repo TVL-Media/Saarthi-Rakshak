@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Guardian, Sos } from '@sarthi/shared';
 import { OutgoingMessages } from '../src/app/messages/outgoing-messages';
+import { TEST_SOS_PER_DAY } from '../src/app/sos/sos.service';
 import {
   appUser,
   bearer,
@@ -24,7 +25,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await resetAppTest(ctx);
   ({ token, userId } = await appUser(ctx));
-  await api().patch('/app/profile').set(bearer(token)).send({ name: 'Priya Sharma' });
+  await api().patch('/v1/me').set(bearer(token)).send({ name: 'Priya Sharma' });
   messages.sent.length = 0;
 });
 
@@ -36,23 +37,23 @@ const now = () => new Date().toISOString();
 
 async function addGuardian(name: string, phone: string, answer?: 'accept' | 'decline') {
   const res = await api()
-    .post('/app/guardians')
+    .post('/v1/guardians')
     .set(bearer(token))
     .send({ name, phone })
     .expect(201);
-  const code = /\/invite\/([A-Za-z0-9_-]+)/.exec(messages.sent.at(-1)!.text)![1];
-  if (answer) await api().post(`/g/invite/${code}/${answer}`).expect(204);
+  const code = /\/i\/([A-Za-z0-9_-]+)/.exec(messages.sent.at(-1)!.text)![1];
+  if (answer) await api().post(`/g/i/${code}/${answer}`).expect(204);
   return res.body as Guardian;
 }
 
 function startSos(extra: Record<string, unknown> = {}) {
   return api()
-    .post('/app/sos')
+    .post('/v1/sos')
     .set(bearer(token))
-    .send({ id: randomUUID(), trigger: 'button', isTest: false, startedAt: now(), ...extra });
+    .send({ id: randomUUID(), trigger: 'button', startedAt: now(), ...extra });
 }
 
-describe('POST /app/sos', () => {
+describe('POST /v1/sos', () => {
   it('saves the SOS with a copy of the safety rules', async () => {
     const res = await startSos({ location: { lat: 28.5706, lng: 77.3272, accuracyM: 8 } }).expect(
       200,
@@ -60,7 +61,6 @@ describe('POST /app/sos', () => {
     const sos = res.body as Sos;
     expect(sos).toMatchObject({
       trigger: 'button',
-      isTest: false,
       status: 'active',
       endedAt: null,
     });
@@ -108,16 +108,16 @@ describe('POST /app/sos', () => {
 
     expect(messages.sent.map((m) => m.kind)).toEqual(['sos', 'sos']);
     expect(messages.sent[0].text).toContain('SOS from Priya Sharma');
-    const codes = messages.sent.map((m) => /\/g\/([A-Za-z0-9_-]+)/.exec(m.text)![1]);
+    const codes = messages.sent.map((m) => /\/l\/([A-Za-z0-9_-]+)/.exec(m.text)![1]);
     expect(new Set(codes).size).toBe(2);
   });
 
   it('the same id twice gives one SOS and one set of alerts', async () => {
     await addGuardian('Ravi', '9800000001', 'accept');
     messages.sent.length = 0;
-    const body = { id: randomUUID(), trigger: 'widget', isTest: false, startedAt: now() };
-    const first = await api().post('/app/sos').set(bearer(token)).send(body).expect(200);
-    const second = await api().post('/app/sos').set(bearer(token)).send(body).expect(200);
+    const body = { id: randomUUID(), trigger: 'widget', startedAt: now() };
+    const first = await api().post('/v1/sos').set(bearer(token)).send(body).expect(200);
+    const second = await api().post('/v1/sos').set(bearer(token)).send(body).expect(200);
     expect((second.body as Sos).id).toBe((first.body as Sos).id);
     expect(await ctx.db.selectFrom('sos_events').select('id').execute()).toHaveLength(1);
     expect(messages.sent).toHaveLength(1);
@@ -135,17 +135,23 @@ describe('POST /app/sos', () => {
     expect(await ctx.db.selectFrom('sos_events').select('id').execute()).toHaveLength(1);
   });
 
-  it('a test SOS says TEST in the message', async () => {
-    await addGuardian('Ravi', '9800000001', 'accept');
+  it('guardians already reached by SIM SMS get only the live link', async () => {
+    const ravi = await addGuardian('Ravi', '9800000001', 'accept');
+    await addGuardian('Sita', '9800000002', 'accept');
     messages.sent.length = 0;
-    const res = await startSos({ isTest: true }).expect(200);
-    expect((res.body as Sos).isTest).toBe(true);
-    expect(messages.sent[0].text).toMatch(/^TEST SOS from Priya Sharma/);
+    await startSos({ simSmsSentTo: [ravi.id] }).expect(200);
+    const byGuardian = new Map(messages.sent.map((m) => [m.guardianId, m]));
+    expect(byGuardian.get(ravi.id)!.kind).toBe('sos_link');
+    expect(byGuardian.get(ravi.id)!.text).toMatch(/^Priya Sharma's SOS live location/);
+    expect([...byGuardian.values()].filter((m) => m.kind === 'sos')).toHaveLength(1);
   });
 
-  it('works for a blocked user', async () => {
-    await ctx.db.updateTable('users').set({ status: 'blocked' }).execute();
-    await startSos().expect(200);
+  it('GET /v1/sos/:id returns the SOS; another user gets not_found', async () => {
+    const sos = (await startSos().expect(200)).body as Sos;
+    const res = await api().get(`/v1/sos/${sos.id}`).set(bearer(token)).expect(200);
+    expect((res.body as Sos).id).toBe(sos.id);
+    const other = await appUser(ctx, '+919812399999');
+    await api().get(`/v1/sos/${sos.id}`).set(bearer(other.token)).expect(404);
   });
 
   it('refuses a start time in the future or more than a day old', async () => {
@@ -160,17 +166,16 @@ describe('POST /app/sos', () => {
     await startSos({ id }).expect(200);
     const other = await appUser(ctx, '+919812399999');
     await api()
-      .post('/app/sos')
+      .post('/v1/sos')
       .set(bearer(other.token))
-      .send({ id, trigger: 'button', isTest: false, startedAt: now() })
+      .send({ id, trigger: 'button', startedAt: now() })
       .expect(409);
     await api()
-      .post('/app/sos')
+      .post('/v1/sos')
       .set(bearer(other.token))
       .send({
         id: randomUUID(),
         trigger: 'button',
-        isTest: false,
         startedAt: now(),
         journeyId: randomUUID(),
       })
@@ -182,14 +187,47 @@ describe('POST /app/sos', () => {
   });
 });
 
-describe('POST /app/sos/:id/end ("I\'m safe")', () => {
+describe('POST /v1/sos/test', () => {
+  const test = () =>
+    api().post('/v1/sos/test').set(bearer(token)).send({ id: randomUUID(), startedAt: now() });
+
+  it('sends a TEST message to accepted guardians only, and nothing to end', async () => {
+    const ravi = await addGuardian('Ravi', '9800000001', 'accept');
+    await addGuardian('Sita', '9800000002'); // has not answered yet
+    messages.sent.length = 0;
+
+    const res = await test().expect(200);
+    const sos = res.body as Sos;
+    expect(sos).toMatchObject({ isTest: true, status: 'ended' });
+    expect(sos.guardians.map((g) => g.guardianId)).toEqual([ravi.id]);
+    expect(messages.sent).toHaveLength(1);
+    expect(messages.sent[0]).toMatchObject({ guardianId: ravi.id, kind: 'test' });
+    expect(messages.sent[0].text).toMatch(/^TEST from Priya Sharma/);
+    expect(messages.sent[0].text).not.toMatch(/https?:/);
+    // A test never blocks a real SOS.
+    await startSos().expect(200);
+  });
+
+  it('refuses when no guardian has accepted yet', async () => {
+    await addGuardian('Sita', '9800000002');
+    expect(errorOf((await test().expect(409)).body)).toBe('conflict');
+  });
+
+  it(`allows ${TEST_SOS_PER_DAY} a day`, async () => {
+    await addGuardian('Ravi', '9800000001', 'accept');
+    for (let i = 0; i < TEST_SOS_PER_DAY; i++) await test().expect(200);
+    await test().expect(429);
+  });
+});
+
+describe('POST /v1/sos/:id/end ("I\'m safe")', () => {
   it('ends the SOS, keeps links open 15 more minutes and tells guardians', async () => {
     await addGuardian('Ravi', '9800000001', 'accept');
     const sos = (await startSos().expect(200)).body as Sos;
     messages.sent.length = 0;
 
     const res = await api()
-      .post(`/app/sos/${sos.id}/end`)
+      .post(`/v1/sos/${sos.id}/end`)
       .set(bearer(token))
       .send({ reason: 'safe' })
       .expect(200);
@@ -207,7 +245,7 @@ describe('POST /app/sos/:id/end ("I\'m safe")', () => {
     expect(new Date(link.expires_at).getTime()).toBe(row.guardian_link_expires_at!.getTime());
 
     expect(messages.sent.map((m) => m.kind)).toEqual(['safe']);
-    expect(messages.sent[0].text).toContain('Priya Sharma has marked themselves safe');
+    expect(messages.sent[0].text).toContain('Priya Sharma is safe and has ended the SOS');
   });
 
   it('uses the link time copied when the SOS started', async () => {
@@ -221,7 +259,7 @@ describe('POST /app/sos/:id/end ("I\'m safe")', () => {
       .set({ value: JSON.stringify(5) })
       .execute();
     await api()
-      .post(`/app/sos/${sos.id}/end`)
+      .post(`/v1/sos/${sos.id}/end`)
       .set(bearer(token))
       .send({ reason: 'safe' })
       .expect(200);
@@ -237,12 +275,12 @@ describe('POST /app/sos/:id/end ("I\'m safe")', () => {
     const sos = (await startSos().expect(200)).body as Sos;
     messages.sent.length = 0;
     await api()
-      .post(`/app/sos/${sos.id}/end`)
+      .post(`/v1/sos/${sos.id}/end`)
       .set(bearer(token))
       .send({ reason: 'safe' })
       .expect(200);
     await api()
-      .post(`/app/sos/${sos.id}/end`)
+      .post(`/v1/sos/${sos.id}/end`)
       .set(bearer(token))
       .send({ reason: 'safe' })
       .expect(200);
@@ -253,7 +291,7 @@ describe('POST /app/sos/:id/end ("I\'m safe")', () => {
     const sos = (await startSos().expect(200)).body as Sos;
     const other = await appUser(ctx, '+919812399999');
     await api()
-      .post(`/app/sos/${sos.id}/end`)
+      .post(`/v1/sos/${sos.id}/end`)
       .set(bearer(other.token))
       .send({ reason: 'safe' })
       .expect(404);
@@ -262,7 +300,7 @@ describe('POST /app/sos/:id/end ("I\'m safe")', () => {
   it('a new SOS can start after the last one ended', async () => {
     const first = (await startSos().expect(200)).body as Sos;
     await api()
-      .post(`/app/sos/${first.id}/end`)
+      .post(`/v1/sos/${first.id}/end`)
       .set(bearer(token))
       .send({ reason: 'safe' })
       .expect(200);
@@ -271,15 +309,15 @@ describe('POST /app/sos/:id/end ("I\'m safe")', () => {
   });
 });
 
-describe('POST /app/sos/cancelled and GET /app/sos/active', () => {
+describe('POST /v1/sos/cancelled and GET /v1/sos/active', () => {
   it('saves a countdown cancel without alerts (admin History shows "Cancelled in the countdown")', async () => {
     await addGuardian('Ravi', '9800000001', 'accept');
     messages.sent.length = 0;
     const id = randomUUID();
     const startedAt = new Date(Date.now() - 4000).toISOString();
-    const body = { id, trigger: 'button', isTest: false, startedAt, cancelledAt: now() };
-    await api().post('/app/sos/cancelled').set(bearer(token)).send(body).expect(204);
-    await api().post('/app/sos/cancelled').set(bearer(token)).send(body).expect(204);
+    const body = { id, trigger: 'button', startedAt, cancelledAt: now() };
+    await api().post('/v1/sos/cancelled').set(bearer(token)).send(body).expect(204);
+    await api().post('/v1/sos/cancelled').set(bearer(token)).send(body).expect(204);
 
     const rows = await ctx.db.selectFrom('sos_events').select(['status', 'end_reason']).execute();
     expect(rows).toEqual([{ status: 'cancelled', end_reason: 'cancelled_in_countdown' }]);
@@ -289,12 +327,11 @@ describe('POST /app/sos/cancelled and GET /app/sos/active', () => {
 
   it('refuses a cancel time before the start time', async () => {
     await api()
-      .post('/app/sos/cancelled')
+      .post('/v1/sos/cancelled')
       .set(bearer(token))
       .send({
         id: randomUUID(),
         trigger: 'button',
-        isTest: false,
         startedAt: now(),
         cancelledAt: new Date(Date.now() - 10_000).toISOString(),
       })
@@ -302,9 +339,9 @@ describe('POST /app/sos/cancelled and GET /app/sos/active', () => {
   });
 
   it('active: 204 when none, the SOS when one is running', async () => {
-    await api().get('/app/sos/active').set(bearer(token)).expect(204);
+    await api().get('/v1/sos/active').set(bearer(token)).expect(204);
     const sos = (await startSos().expect(200)).body as Sos;
-    const res = await api().get('/app/sos/active').set(bearer(token)).expect(200);
+    const res = await api().get('/v1/sos/active').set(bearer(token)).expect(200);
     expect((res.body as Sos).id).toBe(sos.id);
   });
 });

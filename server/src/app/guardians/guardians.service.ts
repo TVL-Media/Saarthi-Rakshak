@@ -1,6 +1,11 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { HttpStatus, Inject, Injectable } from '@nestjs/common';
-import type { AddGuardianRequest, Guardian, InviteInfo } from '@sarthi/shared';
+import type {
+  AddGuardianRequest,
+  Guardian,
+  InviteInfo,
+  UpdateGuardianRequest,
+} from '@sarthi/shared';
 import { sql } from 'kysely';
 import { ENV } from '../../config/env.module';
 import type { Env } from '../../config/env.schema';
@@ -64,8 +69,7 @@ export class GuardiansService {
     return rows.map(toGuardian);
   }
 
-  async add(userId: string, blocked: boolean, input: AddGuardianRequest): Promise<Guardian> {
-    if (blocked) throw appError.accountBlocked();
+  async add(userId: string, input: AddGuardianRequest): Promise<Guardian> {
     const phone = normaliseIndianMobile(input.phone);
     if (!phone) throw appError.invalidInput('phone: Enter a 10-digit Indian mobile number.');
 
@@ -123,8 +127,27 @@ export class GuardiansService {
     return toGuardian(guardian);
   }
 
-  async resend(userId: string, blocked: boolean, guardianId: string): Promise<void> {
-    if (blocked) throw appError.accountBlocked();
+  /** Name and relation only; the number can't change (remove and add again instead). */
+  async update(
+    userId: string,
+    guardianId: string,
+    change: UpdateGuardianRequest,
+  ): Promise<Guardian> {
+    const row = await this.database.db
+      .updateTable('guardians')
+      .set({
+        ...(change.name !== undefined && { name: change.name }),
+        ...(change.relation !== undefined && { relation: change.relation }),
+      })
+      .where('id', '=', guardianId)
+      .where('user_id', '=', userId)
+      .returning(['id', 'name', 'phone', 'relation', 'invite_status'])
+      .executeTakeFirst();
+    if (!row) throw appError.notFound('Guardian not found.');
+    return toGuardian(row);
+  }
+
+  async resend(userId: string, guardianId: string): Promise<void> {
     const row = await this.database.db
       .selectFrom('guardians as g')
       .innerJoin('users as u', 'u.id', 'g.user_id')
@@ -245,7 +268,7 @@ export class GuardiansService {
       .execute();
 
     const who = userName?.trim() || 'Someone you know';
-    const link = `${this.env.GUARDIAN_WEB_URL}/invite/${code}`;
+    const link = `${this.env.GUARDIAN_WEB_URL}/i/${code}`;
     await this.messages.sendSms(phone, {
       guardianId,
       kind: 'invite',
