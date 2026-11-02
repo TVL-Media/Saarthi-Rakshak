@@ -5,7 +5,7 @@ Every call the Android app makes to the server. The source of truth is
 input); this page is the same list for the Flutter app. Change both together.
 
 Status: **matches Implementation Plan v2 (31 Oct 2026)**. All app calls start with `/v1`; guardian pages use `/g`.
-Built so far: **A1–A7** (audio, A8, follows the plan; its exact shape is confirmed when built).
+Built so far: **A1–A8** (the whole app server API; alert sending and timers come in Part B).
 
 ## Basics
 
@@ -245,3 +245,26 @@ Send heartbeat every 30–60 seconds during an SOS or journey.
   is active (`conflict`: "End your SOS or journey first."). Removes the profile, guardians, places, journeys,
   locations, audio and photo files, sessions and the Firebase login; SOS events and alerts stay without the person.
   Then go to Welcome; the old token gets `not_logged_in`.
+
+## A8 — Audio during an SOS
+
+Clips are encrypted **on the phone** with a key kept only in that phone's Android Keystore. The server stores the
+encrypted bytes and can never play them; admins have no play or download option.
+
+| Call | Body | Reply |
+| --- | --- | --- |
+| `POST /v1/sos/:id/audio-upload` | `{ clipId, sizeBytes }` | `{ key, uploadUrl, headers, expiresAt }` |
+| `POST /v1/sos/:id/audio` | `{ clipId, recordedAt, durationS }` | `AudioClip` |
+| `PATCH /v1/audio/:id` | `{ keep }` | `AudioClip` |
+| `GET /v1/audio/:id/play` | — | `{ url, expiresAt }` (10 minutes) |
+
+- Flow per 30-second clip: make a `clipId` (UUID) → ask for an upload link → `PUT` the encrypted file to `uploadUrl`
+  with exactly `headers` (`Content-Type: application/octet-stream`, `Content-Length`) → record it. Offline: keep the
+  file and do the same later. Recording again with the same `clipId` returns the same clip.
+- At most 2 MB per clip, `durationS` 0–120, `recordedAt` during the SOS. 300 upload links per hour.
+- Only for the user's own real SOS (`conflict` for a test or countdown-cancelled SOS).
+- `AudioClip` = `{ id, recordedAt, durationS, keep, deleteAfter }`. Deleted `deleteAfter` (30 days, from the rules
+  copied onto the SOS) unless `keep` is true. The clips of an SOS are listed in `GET /v1/history/sos/:id`.
+- Play: download `url` (the encrypted file) and decrypt it on the phone. Another phone, or the same phone after a
+  reset or reinstall, cannot decrypt it.
+

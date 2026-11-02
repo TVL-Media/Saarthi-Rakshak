@@ -479,6 +479,36 @@ export const DeleteAccountRequest = z.object({
 });
 
 // ---------------------------------------------------------------------------------------------
+// A8 — Audio (clips are encrypted on the phone; the key never leaves it)
+// ---------------------------------------------------------------------------------------------
+
+/** Largest audio clip accepted (a 30-second AAC clip is about 250 KB). */
+export const MAX_CLIP_BYTES = 2 * 1024 * 1024;
+
+/** POST /v1/sos/:id/audio-upload — upload link for one encrypted clip. */
+export const ClipUploadRequest = z.object({
+  /** Made on the phone; the same id always gets the same storage key. */
+  clipId: Id,
+  sizeBytes: z.number().int().min(1).max(MAX_CLIP_BYTES),
+});
+
+/** POST /v1/sos/:id/audio — after the upload: record the clip. Safe to repeat. */
+export const SaveClipRequest = z.object({
+  clipId: Id,
+  recordedAt: DateTime,
+  durationS: z.number().int().min(0).max(120),
+});
+
+/** PATCH /v1/audio/:id — keep stops the automatic delete. */
+export const KeepClipRequest = z.object({ keep: z.boolean() });
+
+/** GET /v1/audio/:id/play — download the encrypted clip; the phone decrypts it with its own key. */
+export const ClipLink = z.object({
+  url: z.string(),
+  expiresAt: DateTime,
+});
+
+// ---------------------------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------------------------
 
@@ -524,3 +554,7 @@ export type SavePlaceRequest = z.infer<typeof SavePlaceRequest>;
 export type SavedPlace = z.infer<typeof SavedPlace>;
 export type SupportRequest = z.infer<typeof SupportRequest>;
 export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequest>;
+export type ClipUploadRequest = z.infer<typeof ClipUploadRequest>;
+export type SaveClipRequest = z.infer<typeof SaveClipRequest>;
+export type KeepClipRequest = z.infer<typeof KeepClipRequest>;
+export type ClipLink = z.infer<typeof ClipLink>;

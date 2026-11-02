@@ -4,6 +4,8 @@ import { ENV } from '../config/env.module';
 import type { Env } from '../config/env.schema';
 import { AccountController } from './account/account.controller';
 import { AccountService } from './account/account.service';
+import { AudioController } from './audio/audio.controller';
+import { AudioService } from './audio/audio.service';
 import { AppAuthController } from './auth/app-auth.controller';
 import { AppAuthGuard } from './auth/app-auth.guard';
 import { AppAuthService } from './auth/app-auth.service';
@@ -44,6 +46,7 @@ import { SosService } from './sos/sos.service';
     PlacesController,
     SupportController,
     AccountController,
+    AudioController,
   ],
   providers: [
     {
@@ -62,6 +65,7 @@ import { SosService } from './sos/sos.service';
     PlacesService,
     SupportService,
     AccountService,
+    AudioService,
     AppSettings,
     OutgoingMessages,
     AppRateLimiter,

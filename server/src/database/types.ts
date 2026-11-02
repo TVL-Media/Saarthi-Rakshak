@@ -196,6 +196,8 @@ export interface MediaClipsTable {
   size_bytes: string | number | null;
   keep: Generated<boolean>;
   delete_after: Date | string;
+  /** When the phone recorded it; NULL for clips saved before migration 0016. */
+  recorded_at: Date | null;
   deleted_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;

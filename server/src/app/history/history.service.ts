@@ -164,11 +164,11 @@ export class HistoryService {
 
     const clips = await db
       .selectFrom('media_clips')
-      .select(['id', 'created_at', 'duration_s', 'keep', 'delete_after'])
+      .select(['id', 'recorded_at', 'created_at', 'duration_s', 'keep', 'delete_after'])
       .where('sos_event_id', '=', id)
       .where('user_id', '=', userId)
       .where('deleted_at', 'is', null)
-      .orderBy('created_at')
+      .orderBy(sql`coalesce(recorded_at, created_at)`)
       .execute();
 
     return {
@@ -176,7 +176,7 @@ export class HistoryService {
       timeline: sortTimeline(timeline),
       clips: clips.map((c): AudioClip => ({
         id: c.id,
-        recordedAt: c.created_at.toISOString(),
+        recordedAt: (c.recorded_at ?? c.created_at).toISOString(),
         durationS: c.duration_s,
         keep: c.keep,
         deleteAfter: at(c.delete_after),
