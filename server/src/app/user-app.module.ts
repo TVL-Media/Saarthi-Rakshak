@@ -1,11 +1,25 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ENV } from '../config/env.module';
+import { activeConnections } from '../config/env.schema';
 import type { Env } from '../config/env.schema';
 import { AccountController } from './account/account.controller';
 import { AccountService } from './account/account.service';
 import { AudioController } from './audio/audio.controller';
 import { AudioService } from './audio/audio.service';
+import { DeliveryController } from './alerts/delivery.controller';
+import { PushSender } from './alerts/push-sender';
+import { SmsProviders } from './alerts/sms-providers';
+import { BullJobQueue } from './jobs/bull-job-queue';
+import { JobHandlers, JobQueue } from './jobs/job-queue';
+import { JobsLifecycle } from './jobs/jobs-lifecycle';
+import { ManualJobQueue } from './jobs/manual-job-queue';
+import { CleanupService } from './timers/cleanup.service';
+import { SafetyTimers } from './timers/safety-timers.service';
+import { LiveController } from './live/live.controller';
+import { LiveEvents } from './live/live-events';
+import { LiveGateway } from './live/live.gateway';
+import { LiveService } from './live/live.service';
 import { AppAuthController } from './auth/app-auth.controller';
 import { AppAuthGuard } from './auth/app-auth.guard';
 import { AppAuthService } from './auth/app-auth.service';
@@ -47,6 +61,8 @@ import { SosService } from './sos/sos.service';
     SupportController,
     AccountController,
     AudioController,
+    DeliveryController,
+    LiveController,
   ],
   providers: [
     {
@@ -66,6 +82,23 @@ import { SosService } from './sos/sos.service';
     SupportService,
     AccountService,
     AudioService,
+    { provide: JobHandlers, useFactory: () => new JobHandlers() },
+    {
+      provide: JobQueue,
+      inject: [ENV, JobHandlers],
+      useFactory: (env: Env, handlers: JobHandlers) =>
+        env.NODE_ENV === 'test'
+          ? new ManualJobQueue(handlers)
+          : new BullJobQueue(activeConnections(env).redisUrl, handlers),
+    },
+    JobsLifecycle,
+    { provide: SmsProviders, inject: [ENV], useFactory: (env: Env) => SmsProviders.fromEnv(env) },
+    { provide: PushSender, inject: [ENV], useFactory: (env: Env) => PushSender.fromEnv(env) },
+    SafetyTimers,
+    CleanupService,
+    LiveEvents,
+    LiveService,
+    LiveGateway,
     AppSettings,
     OutgoingMessages,
     AppRateLimiter,

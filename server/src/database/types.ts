@@ -104,6 +104,8 @@ export interface JourneysTable {
   /** Encoded polyline from Google Directions, if sent. */
   route_polyline: string | null;
   checkins_paused_until: Date | null;
+  /** Guardians were told the phone went silent; cleared when it is back. */
+  lost_contact_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }
@@ -123,6 +125,10 @@ export interface SosEventsTable {
   guardian_link_expires_at: Date | null;
   /** Safety rules (Settings) when the SOS started; see AppSettings.snapshot(). */
   rules: Record<string, number> | null;
+  /** The "no guardian responded" reminder was sent at this time. */
+  no_response_alerted_at: Date | null;
+  /** Guardians were told the phone went silent; cleared when it is back. */
+  lost_contact_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }
@@ -163,12 +169,29 @@ export interface AlertsTable {
   guardian_id: string | null;
   channel: 'push' | 'sms' | 'sim_sms';
   provider: 'main' | 'backup' | null;
-  type: 'sos' | 'resend' | 'lost_contact' | 'checkin_no_reply' | 'safe' | 'cancelled';
+  type:
+    | 'sos'
+    | 'sos_link'
+    | 'resend'
+    | 'lost_contact'
+    | 'back_online'
+    | 'checkin_no_reply'
+    | 'safe'
+    | 'cancelled'
+    | 'invite'
+    | 'test'
+    | 'journey_started'
+    | 'journey_arrived'
+    | 'journey_ended';
   status: Generated<'queued' | 'sent' | 'delivered' | 'failed'>;
   attempt: Generated<number>;
   error: string | null;
   sent_at: Date | null;
   delivered_at: Date | null;
+  /** The SMS provider's id for the message (delivery reports). */
+  provider_message_id: string | null;
+  /** SMS text while waiting to be sent; NULL once sent or finally failed. */
+  body: string | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }

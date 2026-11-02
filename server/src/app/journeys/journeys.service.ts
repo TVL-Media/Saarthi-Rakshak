@@ -1,4 +1,3 @@
-import { createHash, randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type {
   AnswerCheckinRequest,
@@ -15,6 +14,9 @@ import { DatabaseService } from '../../database/database.module';
 import type { Database } from '../../database/types';
 import { appError } from '../common/app-http';
 import { AppSettings } from '../common/app-settings';
+import { newGuardianLink } from '../common/guardian-links';
+import { JobQueue } from '../jobs/job-queue';
+import { LiveEvents } from '../live/live-events';
 import { OutgoingMessages } from '../messages/outgoing-messages';
 
 /** Arrival time must be at least this far ahead… */
@@ -25,8 +27,6 @@ const MAX_AHEAD_MS = 12 * 3600_000;
 const CLOCK_SLACK_MS = 60_000;
 /** After "I'm fine", the same reason is not asked again for this long. */
 export const FINE_QUIET_MINUTES = 5;
-
-const hashCode = (code: string) => createHash('sha256').update(code).digest('hex');
 
 /** "11:28 pm" in India time. */
 const indiaTime = (d: Date) =>
@@ -59,6 +59,8 @@ export class JourneysService {
     private readonly database: DatabaseService,
     private readonly settings: AppSettings,
     private readonly messages: OutgoingMessages,
+    private readonly jobs: JobQueue,
+    private readonly live: LiveEvents,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
@@ -119,15 +121,16 @@ export class JourneysService {
       const links = guardians.map((g) => ({
         guardianId: g.id,
         phone: g.phone!,
-        code: randomBytes(24).toString('base64url'),
+        ...newGuardianLink(this.env),
       }));
       await trx
         .insertInto('guardian_links')
         .values(
           links.map((l) => ({
+            id: l.id,
             guardian_id: l.guardianId,
             journey_id: input.id,
-            token_hash: hashCode(l.code),
+            token_hash: l.tokenHash,
             // Open while the journey is on; set to a real time when it ends.
             expires_at: 'infinity',
           })),
@@ -143,6 +146,7 @@ export class JourneysService {
         await this.messages.sendSms(link.phone, {
           guardianId: link.guardianId,
           kind: 'journey_started',
+          journeyId: input.id,
           text: `${name} started a journey to ${input.destination.label}, arriving ${indiaTime(arrival)}. Follow: ${url}`,
         });
       }
@@ -180,6 +184,7 @@ export class JourneysService {
     });
 
     if (ended) {
+      await this.live.changed('journey', journeyId);
       const name = await this.userName(userId);
       const place = journey.destination_label ?? 'their destination';
       const text =
@@ -191,6 +196,7 @@ export class JourneysService {
           guardianId: g.id,
           kind: input.outcome === 'arrived' ? 'journey_arrived' : 'journey_ended',
           text,
+          journeyId,
         });
       }
     }
@@ -217,7 +223,8 @@ export class JourneysService {
     journeyId: string,
     input: RaiseCheckinRequest,
   ): Promise<Checkin> {
-    return this.database.db.transaction().execute(async (trx) => {
+    let replyWaitMinutes = null as number | null;
+    const checkin = await this.database.db.transaction().execute(async (trx) => {
       await sql`SELECT pg_advisory_xact_lock(hashtext(${'checkin:' + journeyId}))`.execute(trx);
       const journey = await this.own(userId, journeyId, trx);
 
@@ -261,8 +268,21 @@ export class JourneysService {
         .values({ id: input.id, journey_id: journeyId, reason: input.reason, source: 'phone' })
         .returning(['id', 'reason', 'source', 'status', 'asked_at'])
         .executeTakeFirstOrThrow();
+      replyWaitMinutes = journey.rules?.['checkin.reply_wait_minutes'] ?? 2;
       return toCheckin(row);
     });
+
+    if (replyWaitMinutes !== null) {
+      // No answer in time → guardians are alerted (the sweep also catches a missed timer).
+      await this.jobs
+        .add(
+          'checkin-reply',
+          { checkinId: checkin.id },
+          { delayMs: replyWaitMinutes * 60_000, jobId: `checkin-reply-${checkin.id}` },
+        )
+        .catch(() => undefined);
+    }
+    return checkin;
   }
 
   /** "I'm fine", "Stuck in traffic" (pauses check-ins) or "I need help" (the app starts an SOS). */

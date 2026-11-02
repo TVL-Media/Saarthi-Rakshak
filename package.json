@@ -8,10 +8,10 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
-    "test": "pnpm --filter server test && pnpm --filter admin test",
+    "test": "pnpm --filter server test && pnpm --filter admin test && pnpm --filter guardian-web test",
     "lint": "pnpm -r lint",
-    "format": "prettier --write server apps/admin packages/shared",
-    "format:check": "prettier --check server apps/admin packages/shared",
+    "format": "prettier --write server apps/admin apps/guardian-web packages/shared",
+    "format:check": "prettier --check server apps/admin apps/guardian-web packages/shared",
     "db:migrate": "pnpm --filter server db:migrate",
     "db:migrate:test": "pnpm --filter server db:migrate:test",
     "db:rollback": "pnpm --filter server db:rollback",

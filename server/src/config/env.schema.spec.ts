@@ -19,6 +19,8 @@ const productionStorage = {
   FIREBASE_PROJECT_ID: 'sarthi-rakshak',
   PHONE_HASH_KEY: Buffer.alloc(32, 9).toString('base64'),
   GUARDIAN_WEB_URL: 'https://g.example.in',
+  GUARDIAN_LINK_KEY: Buffer.alloc(32, 8).toString('base64'),
+  SMS_WEBHOOK_SECRET: 'a-long-random-shared-secret-123',
 };
 
 describe('validateEnv', () => {

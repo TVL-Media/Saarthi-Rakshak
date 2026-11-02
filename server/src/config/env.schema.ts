@@ -27,6 +27,7 @@ const LOCAL_APP = {
   // A fixed key is fine locally: it only protects hashes of test phone numbers.
   PHONE_HASH_KEY: Buffer.alloc(32, 1).toString('base64'),
   GUARDIAN_WEB_URL: 'http://localhost:5175',
+  GUARDIAN_LINK_KEY: Buffer.alloc(32, 2).toString('base64'),
 } as const;
 
 const envSchema = z
@@ -76,6 +77,18 @@ const envSchema = z
       .optional(),
     // Where the guardian pages are served; used in invite and SOS links.
     GUARDIAN_WEB_URL: httpUrl.optional(),
+    /** Secret for guardian live-link codes (32 random bytes in base64). */
+    GUARDIAN_LINK_KEY: z
+      .string()
+      .regex(/^[A-Za-z0-9+/]{43}=$/, { error: 'Must be 32 random bytes in base64 (see README)' })
+      .optional(),
+    /** SMS providers. `log` only prints messages (never in production). Real providers come with DLT. */
+    SMS_MAIN_PROVIDER: z.enum(['log'], { error: 'Must be: log' }).default('log'),
+    SMS_BACKUP_PROVIDER: z.enum(['none', 'log'], { error: 'Must be: none or log' }).default('none'),
+    /** Shared secret the SMS providers send with delivery reports (header x-webhook-secret). */
+    SMS_WEBHOOK_SECRET: z.string().min(24, { error: 'At least 24 characters' }).optional(),
+    /** Run the background worker (alerts, timers, cleanup) in this server process. */
+    WORKER: z.enum(['on', 'off'], { error: 'Must be on or off' }).default('on'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.ADMIN_TWO_STEP === 'off') {
@@ -95,6 +108,8 @@ const envSchema = z
         'FIREBASE_PROJECT_ID',
         'PHONE_HASH_KEY',
         'GUARDIAN_WEB_URL',
+        'GUARDIAN_LINK_KEY',
+        'SMS_WEBHOOK_SECRET',
       ] as const) {
         if (!env[key]) {
           ctx.addIssue({
@@ -156,6 +171,7 @@ const envSchema = z
       S3_SECRET_KEY: (env.S3_SECRET_KEY ?? local?.S3_SECRET_KEY)!,
       PHONE_HASH_KEY: (env.PHONE_HASH_KEY ?? (local && LOCAL_APP.PHONE_HASH_KEY))!,
       GUARDIAN_WEB_URL: (env.GUARDIAN_WEB_URL ?? (local && LOCAL_APP.GUARDIAN_WEB_URL))!,
+      GUARDIAN_LINK_KEY: (env.GUARDIAN_LINK_KEY ?? (local && LOCAL_APP.GUARDIAN_LINK_KEY))!,
     };
   });
 

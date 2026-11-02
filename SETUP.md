@@ -121,9 +121,14 @@ It prints a **temporary password once**. Copy it now — it is not saved anywher
 pnpm dev
 ```
 
-This starts the server and the admin panel together. Wait until you see both:
+This starts the server (with its background worker), the admin panel and the guardian pages
+together. Wait until you see:
 - `Server running on http://localhost:3000`
-- `Local: http://localhost:5173/`
+- `Local: http://localhost:5173/` (admin panel)
+- `Local: http://localhost:5175/` (guardian pages: the links in invite and SOS messages)
+
+SMS are **not sent** on your computer: each message is printed in the server window instead, so you
+can copy a link from there and open it in the browser.
 
 Leave this window open. To stop, press `Ctrl + C`.
 
@@ -225,6 +230,7 @@ Check it works: open **http://localhost:3000/health** in the phone's browser. It
 
 ```powershell
 pnpm --filter admin exec playwright install chromium   # one time, downloads a test browser
+pnpm db:migrate
 pnpm test
 ```
 

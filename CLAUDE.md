@@ -29,7 +29,7 @@ Automated tests may create temporary records in a separate test database that is
 | Mobile app | Flutter (screens) + Kotlin (native Android "safety engine") — later |
 | Server | Node.js 24 LTS (≥ 24.9) + TypeScript 6.0, NestJS 12 |
 | Admin panel | React + TypeScript, Vite, Ant Design, React Router, TanStack Query, Socket.IO client, Recharts, React Hook Form + Zod |
-| Guardian live page | React + TypeScript, very light (no Ant Design) — later |
+| Guardian pages | React + TypeScript, very light (no Ant Design), Socket.IO client — `apps/guardian-web` |
 | Database | PostgreSQL + PostGIS |
 | Live data, timers, job queue | Redis + BullMQ |
 | File storage (audio) | DigitalOcean Spaces |
@@ -46,7 +46,7 @@ Automated tests may create temporary records in a separate test database that is
 ```
 server/              NestJS backend (API, WebSocket, worker)
 apps/admin/          React admin panel
-apps/guardian-web/   Guardian live-map page (later)
+apps/guardian-web/   Guardian pages from SMS links: invite (/i) and live map (/l)
 apps/mobile/         Flutter app (later)
 packages/shared/     API contract for the user app (Zod schemas + types); written out for Flutter in docs/app-api.md
 docs/                Plans, decisions, specs
@@ -92,7 +92,8 @@ docker-compose.yml   Local PostgreSQL + Redis + SeaweedFS (file storage)
 
 ## Excluded for now (do not build)
 
-Auto-call to guardians · silent alert · fake call · Hindi language · WhatsApp alerts (only if the client approves a Change Request).
+Auto-call to guardians · silent alert · Hindi language · WhatsApp alerts (only if the client approves a Change Request).
+(Fake call is back in Phase 1 — Implementation Plan v2, step D8.)
 
 ## How to work in this repo
 

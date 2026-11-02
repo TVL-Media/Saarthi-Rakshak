@@ -509,6 +509,64 @@ export const ClipLink = z.object({
 });
 
 // ---------------------------------------------------------------------------------------------
+// Guardian live page (C2) — /g/l/:code, no login
+// ---------------------------------------------------------------------------------------------
+
+/** One location as the live page shows it (no names or numbers). */
+export const LivePoint = z.object({
+  sosId: z.string().nullable(),
+  journeyId: z.string().nullable(),
+  lat: z.number(),
+  lng: z.number(),
+  accuracyM: z.number().nullable(),
+  batteryPct: z.number().nullable(),
+  network: z.string().nullable(),
+  recordedAt: DateTime,
+});
+
+export const LiveGuardian = z.object({
+  firstName: z.string(),
+  /** `alerted` = SMS sent, `opened` = opened the link, `responding` = tapped "I'm responding". */
+  status: z.enum(['alerted', 'opened', 'responding']),
+  /** This is the guardian who opened the page. */
+  isYou: z.boolean(),
+});
+
+/** GET /g/l/:code — what the guardian's live page shows. 410 `link_expired` after the end. */
+export const LiveView = z.object({
+  kind: z.enum(['sos', 'journey']),
+  /** `active` while the SOS / journey is on; `ended` for the few minutes the link stays open after. */
+  status: z.enum(['active', 'ended']),
+  /** After the end: `safe` (SOS), `arrived` or `ended` (journey); otherwise null. */
+  outcome: z.enum(['safe', 'arrived', 'ended']).nullable(),
+  person: z.object({
+    firstName: z.string(),
+    /** For "Call Priya" (SOS only; null on a journey). */
+    phone: z.string().nullable(),
+    /** SOS only; null on a journey or if not given. */
+    bloodGroup: BloodGroup.nullable(),
+  }),
+  location: LivePoint.nullable(),
+  /** Battery from the newest point or heartbeat. */
+  batteryPct: z.number().nullable(),
+  /** The phone has been silent too long (guardians were told). */
+  lostContact: z.boolean(),
+  startedAt: DateTime,
+  endedAt: DateTime.nullable(),
+  journey: z
+    .object({
+      destinationLabel: z.string(),
+      destination: z.object({ lat: z.number(), lng: z.number() }),
+      expectedArrivalAt: DateTime,
+      /** Google encoded polyline, if the app sent one. */
+      route: z.string().nullable(),
+    })
+    .nullable(),
+  guardians: z.array(LiveGuardian),
+  youAreResponding: z.boolean(),
+});
+
+// ---------------------------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------------------------
 
@@ -558,3 +616,6 @@ export type ClipUploadRequest = z.infer<typeof ClipUploadRequest>;
 export type SaveClipRequest = z.infer<typeof SaveClipRequest>;
 export type KeepClipRequest = z.infer<typeof KeepClipRequest>;
 export type ClipLink = z.infer<typeof ClipLink>;
+export type LivePoint = z.infer<typeof LivePoint>;
+export type LiveGuardian = z.infer<typeof LiveGuardian>;
+export type LiveView = z.infer<typeof LiveView>;

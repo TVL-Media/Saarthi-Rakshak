@@ -4,6 +4,8 @@ export const liveKeys = {
   latest: (kind: 'sos' | 'journey', id: string) => `loc:last:${kind}:${id}`,
   /** Pub/sub channel: every new point of an SOS or journey (JSON LivePoint). */
   channel: (kind: 'sos' | 'journey', id: string) => `${kind}:${id}:location`,
+  /** Pub/sub channel: something changed (guardian status, ended, lost contact); pages reload. */
+  status: (kind: 'sos' | 'journey', id: string) => `${kind}:${id}:status`,
   /** Sorted set: user id → time of the last heartbeat (ms). Read by the lost-contact check. */
   heartbeats: 'heartbeats',
   /** Hash per user: battery, network and time of the last heartbeat. */

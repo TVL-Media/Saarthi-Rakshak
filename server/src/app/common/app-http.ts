@@ -47,6 +47,7 @@ export const appError = {
       'too_many_requests',
       'Too many tries. Please wait a few minutes and try again.',
     ),
+  linkExpired: (message: string) => new AppError(HttpStatus.GONE, 'link_expired', message),
   serviceUnavailable: (message: string) =>
     new AppError(HttpStatus.SERVICE_UNAVAILABLE, 'service_unavailable', message),
 };

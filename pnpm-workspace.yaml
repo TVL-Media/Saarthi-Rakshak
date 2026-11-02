@@ -2,6 +2,7 @@ packages:
   - packages/shared
   - server
   - apps/admin
+  - apps/guardian-web
 
 # Install scripts are blocked by default. These ship prebuilt binaries, so their scripts are not needed.
 allowBuilds:
@@ -10,6 +11,8 @@ allowBuilds:
   # firebase-admin dependencies: their install scripts are optional (a defaults file, a version notice).
   '@firebase/util': false
   protobufjs: false
+  # bullmq dependency: optional native speed-up for msgpack; the pure JavaScript version is used.
+  msgpackr-extract: false
 
 minimumReleaseAgeExclude:
   - '@tanstack/query-core@5.105.0'

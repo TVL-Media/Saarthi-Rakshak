@@ -1,8 +1,9 @@
 import { Logger } from '@nestjs/common';
-import { applicationDefault, getApps, initializeApp, type App } from 'firebase-admin/app';
+import type { App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import type { Env } from '../../config/env.schema';
 import { appError } from '../common/app-http';
+import { firebaseApp } from './firebase-app';
 
 /**
  * Turns the token the app got from Firebase phone sign-in into a checked phone number.
@@ -36,18 +37,10 @@ export class FirebasePhoneTokenVerifier extends PhoneTokenVerifier {
 
   constructor(env: Env) {
     super();
-    if (!env.FIREBASE_PROJECT_ID) {
+    this.app = firebaseApp(env);
+    if (!this.app) {
       this.logger.warn('FIREBASE_PROJECT_ID is not set: app login is off (see SETUP.md).');
-      this.app = null;
-      return;
     }
-    // The key file comes from GOOGLE_APPLICATION_CREDENTIALS (outside the project, never committed).
-    this.app =
-      getApps().find((a) => a.name === 'sarthi') ??
-      initializeApp(
-        { credential: applicationDefault(), projectId: env.FIREBASE_PROJECT_ID },
-        'sarthi',
-      );
   }
 
   async check(token: string): Promise<PhoneLogin> {

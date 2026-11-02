@@ -5,7 +5,7 @@ Every call the Android app makes to the server. The source of truth is
 input); this page is the same list for the Flutter app. Change both together.
 
 Status: **matches Implementation Plan v2 (31 Oct 2026)**. All app calls start with `/v1`; guardian pages use `/g`.
-Built so far: **A1–A8** (the whole app server API; alert sending and timers come in Part B).
+Built so far: **A1–A8**, push notifications and the guardian pages API (Parts B and C).
 
 ## Basics
 
@@ -267,4 +267,44 @@ encrypted bytes and can never play them; admins have no play or download option.
   copied onto the SOS) unless `keep` is true. The clips of an SOS are listed in `GET /v1/history/sos/:id`.
 - Play: download `url` (the encrypted file) and decrypt it on the phone. Another phone, or the same phone after a
   reset or reinstall, cannot decrypt it.
+
+## Push notifications to the phone (Part B)
+
+The server sends these to the newest phone of the user with a push token (`PUT /v1/me/device`), as
+Firebase Cloud Messaging messages with a notification (Android channel `safety_alerts`, high priority) and
+`data` values (all strings):
+
+| `data.type` | When | Other `data` | App should |
+| --- | --- | --- | --- |
+| `guardian_status` | A guardian opened the live link or tapped "I'm responding" | `sosId` or `journeyId`, `guardianId`, `status` (`opened` / `responding`) | Refresh `GET /v1/sos/:id` (or the journey) |
+| `show_call_112` | No guardian responded within 5 minutes of the SOS (Settings) | `sosId` | Show the big **Call 112** button on the SOS screen |
+| `checkin_no_reply` | A check-in was not answered within 2 minutes; guardians got the live link | `journeyId`, `checkinId` | Show "Your guardians were told" |
+
+A token Firebase reports as no longer valid is removed; the app sends a new one with `PUT /v1/me/device`.
+
+## Guardian pages (Part C) — `/g/...`, no login
+
+The SMS links open the guardian pages (`apps/guardian-web`): `GUARDIAN_WEB_URL/i/<code>` (invite) and
+`GUARDIAN_WEB_URL/l/<code>` (live). The pages call:
+
+| Call | Reply |
+| --- | --- |
+| `GET /g/l/:code` | `LiveView` — `410 link_expired` "This alert has ended." once the link has expired (or for an unknown code) |
+| `POST /g/l/:code/responding` | `LiveView` (SOS only and while active; `conflict` otherwise). Tapping again is fine |
+
+- `LiveView` = `{ kind, status, outcome, person: { firstName, phone, bloodGroup }, location, batteryPct,
+  lostContact, startedAt, endedAt, journey, guardians: [{ firstName, status, isYou }], youAreResponding }`.
+  `phone` and `bloodGroup` only for an SOS. `journey` = `{ destinationLabel, destination, expectedArrivalAt, route }`.
+- The first open of a link is recorded (`opened`) and pushed to the user; "I'm responding" too, and it stops the
+  "no guardian responded" reminder.
+- Live updates: Socket.IO at path `/g/socket.io`, connect with `auth: { code }`. Events: `ready` (joined),
+  `location` (a new point: `{ sosId, journeyId, lat, lng, accuracyM, batteryPct, network, recordedAt }`),
+  `changed` (reload `GET /g/l/:code`), `ended` (the link does not work).
+- Responses carry `X-Robots-Tag: noindex` and `Cache-Control: no-store`; 120 calls per minute per address.
+
+## SMS delivery reports (Part B)
+
+`POST /v1/webhooks/sms/main` (or `/backup`), header `x-webhook-secret: <SMS_WEBHOOK_SECRET>`, body
+`{ messageId, status: "delivered" | "failed", error? }` → `204`. Marks the alert delivered or failed. Each real
+provider gets a small adapter for its own report format when it is added.
 

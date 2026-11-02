@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { CancelledSosRequest, Sos, StartSosRequest, TestSosRequest } from '@sarthi/shared';
 import { sql, type Transaction } from 'kysely';
@@ -9,6 +9,9 @@ import type { Database } from '../../database/types';
 import { appError } from '../common/app-http';
 import { AppSettings } from '../common/app-settings';
 import { AppRateLimiter } from '../common/rate-limit';
+import { hashLinkCode, newGuardianLink } from '../common/guardian-links';
+import { JobQueue } from '../jobs/job-queue';
+import { LiveEvents } from '../live/live-events';
 import { OutgoingMessages } from '../messages/outgoing-messages';
 
 /** A phone clock may be a little ahead; more than this in the future is refused. */
@@ -19,12 +22,12 @@ const MAX_AGE_MS = 24 * 3600_000;
 /** Test SOS per user per day. */
 export const TEST_SOS_PER_DAY = 5;
 
-const hashCode = (code: string) => createHash('sha256').update(code).digest('hex');
-
 interface NewLink {
+  linkId: string;
   guardianId: string;
   phone: string;
   code: string;
+  tokenHash: string;
 }
 
 @Injectable()
@@ -34,6 +37,8 @@ export class SosService {
     private readonly settings: AppSettings,
     private readonly messages: OutgoingMessages,
     private readonly rateLimiter: AppRateLimiter,
+    private readonly jobs: JobQueue,
+    private readonly live: LiveEvents,
     @Inject(ENV) private readonly env: Env,
   ) {}
 
@@ -97,19 +102,25 @@ export class SosService {
         .where('phone', 'is not', null)
         .orderBy('created_at')
         .execute();
-      const links: NewLink[] = guardians.map((g) => ({
-        guardianId: g.id,
-        phone: g.phone!,
-        code: randomBytes(24).toString('base64url'),
-      }));
+      const links: NewLink[] = guardians.map((g) => {
+        const link = newGuardianLink(this.env);
+        return {
+          linkId: link.id,
+          guardianId: g.id,
+          phone: g.phone!,
+          code: link.code,
+          tokenHash: link.tokenHash,
+        };
+      });
       if (links.length > 0) {
         await trx
           .insertInto('guardian_links')
           .values(
             links.map((l) => ({
+              id: l.linkId,
               guardian_id: l.guardianId,
               sos_event_id: input.id,
-              token_hash: hashCode(l.code),
+              token_hash: l.tokenHash,
               // Open while the SOS is active; set to a real time when it ends.
               expires_at: 'infinity',
             })),
@@ -120,7 +131,18 @@ export class SosService {
     });
 
     if (created && !created.existing) {
-      await this.alertGuardians(userId, created.links, new Set(input.simSmsSentTo ?? []));
+      await this.alertGuardians(userId, input.id, created.links, new Set(input.simSmsSentTo ?? []));
+      // "No guardian responded": checked once after the copied number of minutes.
+      await this.jobs
+        .add(
+          'sos-no-response',
+          { sosId: input.id },
+          {
+            delayMs: rules['sos.no_response_minutes'] * 60_000,
+            jobId: `no-response-${input.id}`,
+          },
+        )
+        .catch(() => undefined); // the lost-contact sweep also catches missed timers
     }
     return this.get(userId, created?.id ?? input.id);
   }
@@ -158,7 +180,10 @@ export class SosService {
       return true;
     });
 
-    if (ended) await this.tellGuardiansSafe(userId, sosId, sos.is_test);
+    if (ended) {
+      await this.live.changed('sos', sosId);
+      await this.tellGuardiansSafe(userId, sosId, sos.is_test);
+    }
     return this.get(userId, sosId);
   }
 
@@ -220,7 +245,7 @@ export class SosService {
           guardians.map((g) => ({
             guardian_id: g.id,
             sos_event_id: input.id,
-            token_hash: hashCode(randomBytes(24).toString('base64url')),
+            token_hash: hashLinkCode(randomBytes(24).toString('base64url')),
             expires_at: sql<Date>`now()`,
           })),
         )
@@ -232,7 +257,12 @@ export class SosService {
       const name = await this.userName(userId);
       const text = `TEST from ${name} on Sarthi Rakshak. This is only a practice, no action needed.`;
       for (const g of guardians) {
-        await this.messages.sendSms(g.phone!, { guardianId: g.id, kind: 'test', text });
+        await this.messages.sendSms(g.phone!, {
+          guardianId: g.id,
+          kind: 'test',
+          text,
+          sosId: input.id,
+        });
       }
     }
     return this.get(userId, input.id);
@@ -356,6 +386,7 @@ export class SosService {
    */
   private async alertGuardians(
     userId: string,
+    sosId: string,
     links: NewLink[],
     simSmsSentTo: Set<string>,
   ): Promise<void> {
@@ -363,15 +394,33 @@ export class SosService {
     for (const link of links) {
       const url = `${this.env.GUARDIAN_WEB_URL}/l/${link.code}`;
       if (simSmsSentTo.has(link.guardianId)) {
+        // The phone already sent the SOS SMS from its SIM: record it for the admin's alert log.
+        await this.database.db
+          .insertInto('alerts')
+          .values({
+            guardian_id: link.guardianId,
+            sos_event_id: sosId,
+            channel: 'sim_sms',
+            type: 'sos',
+            status: 'sent',
+            sent_at: sql<Date>`now()`,
+          })
+          .execute();
         const text = `${name}'s SOS live location on Sarthi Rakshak: ${url}`;
         await this.messages.sendSms(link.phone, {
           guardianId: link.guardianId,
           kind: 'sos_link',
           text,
+          sosId,
         });
       } else {
         const text = `SOS from ${name} on Sarthi Rakshak. See their live location: ${url} If you can't reach them, call 112.`;
-        await this.messages.sendSms(link.phone, { guardianId: link.guardianId, kind: 'sos', text });
+        await this.messages.sendSms(link.phone, {
+          guardianId: link.guardianId,
+          kind: 'sos',
+          text,
+          sosId,
+        });
       }
     }
   }
@@ -387,7 +436,7 @@ export class SosService {
       .execute();
     const text = `${isTest ? 'TEST: ' : ''}${name} is safe and has ended the SOS on Sarthi Rakshak.`;
     for (const g of guardians) {
-      await this.messages.sendSms(g.phone!, { guardianId: g.id, kind: 'safe', text });
+      await this.messages.sendSms(g.phone!, { guardianId: g.id, kind: 'safe', text, sosId });
     }
   }
 }
