@@ -87,6 +87,16 @@ const envSchema = z
     SMS_BACKUP_PROVIDER: z.enum(['none', 'log'], { error: 'Must be: none or log' }).default('none'),
     /** Shared secret the SMS providers send with delivery reports (header x-webhook-secret). */
     SMS_WEBHOOK_SECRET: z.string().min(24, { error: 'At least 24 characters' }).optional(),
+    /**
+     * Development only: a test login without Firebase (one number + 6-digit code, until a date).
+     * Refused when NODE_ENV is production.
+     */
+    DEV_LOGIN_PHONE: z.string().min(10).max(20).optional(),
+    DEV_LOGIN_CODE: z
+      .string()
+      .regex(/^\d{6}$/, { error: 'Must be 6 digits' })
+      .optional(),
+    DEV_LOGIN_UNTIL: z.iso.date({ error: 'Must be a date like 2026-11-09' }).optional(),
     /** Run the background worker (alerts, timers, cleanup) in this server process. */
     WORKER: z.enum(['on', 'off'], { error: 'Must be on or off' }).default('on'),
   })
@@ -116,6 +126,15 @@ const envSchema = z
             code: 'custom',
             path: [key],
             message: 'Required when NODE_ENV is production',
+          });
+        }
+      }
+      for (const key of ['DEV_LOGIN_PHONE', 'DEV_LOGIN_CODE', 'DEV_LOGIN_UNTIL'] as const) {
+        if (env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'The test login is for development only and must not be set in production',
           });
         }
       }

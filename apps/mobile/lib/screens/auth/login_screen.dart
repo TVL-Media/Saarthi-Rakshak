@@ -1,10 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
+import '../../config.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
@@ -18,6 +20,9 @@ class LoginScreen extends StatefulWidget {
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
+
+/// Debug builds started with DEV_LOGIN=true: no Firebase SMS, the code is checked by our server.
+bool get _testLogin => kDebugMode && AppConfig.devLogin;
 
 class _LoginScreenState extends State<LoginScreen> {
   final _phone = TextEditingController();
@@ -53,6 +58,13 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Enter a 10-digit Indian mobile number.');
       return;
     }
+    if (_testLogin) {
+      setState(() {
+        _error = null;
+        _e164 = e164;
+      });
+      return;
+    }
     if (!firebaseReady) {
       setState(() => _error = 'Login is not set up in this build of the app (Firebase settings missing).');
       return;
@@ -73,6 +85,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _verify() async {
     if (_code.text.trim().length != 6) {
       setState(() => _error = 'Enter the 6-digit OTP.');
+      return;
+    }
+    if (_testLogin) {
+      try {
+        await AppScope.read(context).loginWithDevCode(_e164!, _code.text.trim());
+      } on ApiException catch (e) {
+        if (mounted) setState(() => _error = e.message);
+      }
       return;
     }
     try {
@@ -132,10 +152,24 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      codeStep ? 'We sent a 6-digit code to $_e164' : 'Let’s make your journey safer',
+                      codeStep
+                          ? (_testLogin ? 'Enter the test code for $_e164' : 'We sent a 6-digit code to $_e164')
+                          : 'Let’s make your journey safer',
                       textAlign: TextAlign.center,
                       style: const TextStyle(fontSize: 16, color: AppColors.muted),
                     ),
+                    if (_testLogin) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: AppColors.amberSoft, borderRadius: BorderRadius.circular(10)),
+                        child: const Text(
+                          'Test login (development only): use the test number and code from the server',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     if (!codeStep)
                       TextField(
@@ -143,7 +177,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _phone,
                         keyboardType: TextInputType.phone,
                         autofillHints: const [AutofillHints.telephoneNumber],
-                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')), LengthLimitingTextInputFormatter(16)],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9 +]')),
+                          LengthLimitingTextInputFormatter(16),
+                        ],
                         decoration: const InputDecoration(
                           prefixIcon: Icon(Icons.phone_android_outlined),
                           prefixText: '+91  ',
@@ -165,7 +202,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     if (_error != null) ...[
                       const SizedBox(height: 10),
-                      Text(_error!, style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w500)),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w500),
+                      ),
                     ],
                     const SizedBox(height: 20),
                     BusyButton(label: codeStep ? 'Verify' : 'Send OTP', onPressed: codeStep ? _verify : _send),
@@ -178,7 +218,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _resends++;
                                 _send();
                               },
-                        child: Text(_wait > 0 ? 'Resend OTP in ${_wait ~/ 60 > 0 ? '${_wait ~/ 60} min' : '$_wait s'}' : 'Resend OTP'),
+                        child: Text(
+                          _wait > 0
+                              ? 'Resend OTP in ${_wait ~/ 60 > 0 ? '${_wait ~/ 60} min' : '$_wait s'}'
+                              : 'Resend OTP',
+                        ),
                       ),
                     ],
                   ],

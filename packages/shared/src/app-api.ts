@@ -81,6 +81,15 @@ export const LoginRequest = z.object({
   firebaseIdToken: z.string().min(10).max(8192),
 });
 
+/**
+ * POST /v1/auth/dev-login — development only (never in production): one test number and code set in
+ * the server's .env (DEV_LOGIN_*), so the app can be tried without Firebase SMS.
+ */
+export const DevLoginRequest = z.object({
+  phone: z.string().trim().min(10).max(20),
+  code: z.string().trim().regex(/^\d{6}$/, { error: 'Enter the 6-digit code' }),
+});
+
 /** GET /v1/me, also returned by login, PATCH /v1/me, consent and photo calls. */
 export const Me = z.object({
   id: Id,
@@ -577,6 +586,7 @@ export const LiveView = z.object({
 
 export type ErrorReply = z.infer<typeof ErrorReply>;
 export type LoginRequest = z.infer<typeof LoginRequest>;
+export type DevLoginRequest = z.infer<typeof DevLoginRequest>;
 export type LoginReply = z.infer<typeof LoginReply>;
 export type Me = z.infer<typeof Me>;
 export type ConsentRequest = z.infer<typeof ConsentRequest>;

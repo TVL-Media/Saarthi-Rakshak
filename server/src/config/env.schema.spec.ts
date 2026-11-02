@@ -61,6 +61,12 @@ describe('validateEnv', () => {
       ).toBe('off');
     });
 
+    it('refuses the development test login in production', () => {
+      expect(() => validateEnv({ ...production, DEV_LOGIN_CODE: '123456' })).toThrow(
+        /DEV_LOGIN_CODE: The test login is for development only/,
+      );
+    });
+
     it('refuses off in production (staging also runs as production), with a clear message', () => {
       expect(() => validateEnv({ ...production, ADMIN_TWO_STEP: 'off' })).toThrow(
         /ADMIN_TWO_STEP: Must be on when NODE_ENV is production\. 2-step login is always required on staging and production\./,

@@ -13,6 +13,10 @@ class AppConfig {
   static bool get firebaseConfigured =>
       firebaseApiKey.isNotEmpty && firebaseAppId.isNotEmpty && firebaseProjectId.isNotEmpty;
 
+  /// Debug builds only: log in with the server's test number and code (DEV_LOGIN_* in the server's
+  /// .env) instead of a Firebase SMS. Ignored in release builds.
+  static const devLogin = bool.fromEnvironment('DEV_LOGIN');
+
   /// Google Maps / Places key for destination search (the map key itself is in the Android build).
   static const mapsApiKey = String.fromEnvironment('MAPS_API_KEY');
 

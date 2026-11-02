@@ -87,6 +87,12 @@ class ApiClient {
     return (j['token'] as String, Me.fromJson(_obj(j['user'])), j['isNewUser'] as bool);
   }
 
+  /// Development only: the server's test number and code (no Firebase).
+  Future<(String, Me, bool)> devLogin(String phone, String code) async {
+    final j = _obj(await _call('POST', '/v1/auth/dev-login', body: {'phone': phone, 'code': code}));
+    return (j['token'] as String, Me.fromJson(_obj(j['user'])), j['isNewUser'] as bool);
+  }
+
   Future<void> logout() => _call('POST', '/v1/auth/logout');
 
   Future<Me> me() async => Me.fromJson(_obj(await _call('GET', '/v1/me')));

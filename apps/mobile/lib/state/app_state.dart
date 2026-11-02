@@ -90,6 +90,16 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Development only (debug builds with DEV_LOGIN): the server's test number and code.
+  Future<void> loginWithDevCode(String phone, String code) async {
+    final (token, user, _) = await api.devLogin(phone, code);
+    api.token = token;
+    me = user;
+    await _storage.write(key: _tokenKey, value: token);
+    await _afterLogin(token);
+    notifyListeners();
+  }
+
   Future<void> _afterLogin(String token) async {
     final m = me!;
     await engine.setSession(api.baseUrl, token, m.firstName.isEmpty ? 'Someone' : m.firstName);

@@ -66,7 +66,11 @@ class PhoneOtp {
         'too-many-requests' => 'Too many tries. Please wait 15 minutes and try again.',
         'network-request-failed' => 'No internet connection. Please try again.',
         'quota-exceeded' => 'OTP service is busy. Please try again later.',
-        _ => 'Could not verify your number. Please try again.',
+        'operation-not-allowed' => 'Phone login is not turned on in Firebase (Authentication → Sign-in method → Phone).',
+        'app-not-authorized' || 'missing-client-identifier' || 'invalid-app-credential' =>
+          'This app is not allowed by Firebase yet. Add the SHA-1 and SHA-256 fingerprints to the Android app in Firebase. ($code)',
+        'billing-not-enabled' => 'Real SMS needs billing in Firebase. Use a Firebase test phone number instead. ($code)',
+        _ => 'Could not verify your number. Please try again. ($code)',
       };
 }
 

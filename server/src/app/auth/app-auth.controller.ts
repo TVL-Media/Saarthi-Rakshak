@@ -1,5 +1,11 @@
 import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
-import { ConsentRequest, LoginRequest, type LoginReply, type Me } from '@sarthi/shared';
+import {
+  ConsentRequest,
+  DevLoginRequest,
+  LoginRequest,
+  type LoginReply,
+  type Me,
+} from '@sarthi/shared';
 import { parseAppBody, type AppRequest } from '../common/app-http';
 import { AppRateLimiter } from '../common/rate-limit';
 import { AppPublic, NoConsentNeeded } from './app-auth.decorators';
@@ -26,6 +32,16 @@ export class AppAuthController {
     await this.rateLimiter.check(`login:${req.ip ?? 'unknown'}`, LOGIN_LIMIT_PER_IP, 15 * 60);
     const { firebaseIdToken } = parseAppBody(LoginRequest, body);
     return this.auth.login(firebaseIdToken);
+  }
+
+  /** Development only (see AppAuthService.devLogin). */
+  @AppPublic()
+  @Post('auth/dev-login')
+  @HttpCode(200)
+  async devLogin(@Req() req: AppRequest, @Body() body: unknown): Promise<LoginReply> {
+    await this.rateLimiter.check(`login:${req.ip ?? 'unknown'}`, LOGIN_LIMIT_PER_IP, 15 * 60);
+    const { phone, code } = parseAppBody(DevLoginRequest, body);
+    return this.auth.devLogin(phone, code);
   }
 
   @NoConsentNeeded()
