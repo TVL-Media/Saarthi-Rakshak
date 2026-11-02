@@ -5,7 +5,7 @@ Every call the Android app makes to the server. The source of truth is
 input); this page is the same list for the Flutter app. Change both together.
 
 Status: **matches Implementation Plan v2 (31 Oct 2026)**. All app calls start with `/v1`; guardian pages use `/g`.
-Built so far: **A1–A8**, push notifications and the guardian pages API (Parts B and C).
+Built so far: **A1–A8**, push notifications and the guardian pages API (Parts B and C). The Android app (Part D) is in `apps/mobile`.
 
 ## Basics
 
@@ -109,7 +109,9 @@ The four `permissions` keys are fixed: the admin panel's "Setup complete" check 
 | `POST /v1/guardians/:id/resend-invite` | — | `204` |
 | `DELETE /v1/guardians/:id` | — | `204` |
 
-`Guardian` = `{ id, name, relation, phoneMasked, status }`; `status` is `pending`, `accepted` or `declined`.
+`Guardian` = `{ id, name, relation, phoneMasked, phone, status }`; `status` is `pending`, `accepted` or `declined`.
+`phone` is the full number (E.164) for the owner's own phone: the app keeps it so an SOS can go out by SMS from the
+phone's SIM without internet (null once declined).
 
 Limits: up to 5 guardians (Settings → max guardians); not your own number; not the same number twice;
 at most 10 invites a day (resends count).

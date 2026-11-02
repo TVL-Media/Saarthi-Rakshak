@@ -47,13 +47,14 @@ function lastInviteCode(): string {
 const errorOf = (body: unknown) => (body as { error: string }).error;
 
 describe('Adding guardians', () => {
-  it('adds a guardian, masks the number and sends an invite with a link', async () => {
+  it('adds a guardian (masked number, and the full one for the owner) and sends an invite with a link', async () => {
     const res = await add('Ravi', '98123 00001', 'brother').expect(201);
     expect(res.body).toEqual({
       id: expect.any(String) as unknown,
       name: 'Ravi',
       relation: 'brother',
       phoneMasked: '+91 98•• ••0001',
+      phone: '+919812300001',
       status: 'pending',
     });
     expect(messages.sent).toHaveLength(1);

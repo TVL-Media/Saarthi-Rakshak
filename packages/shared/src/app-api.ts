@@ -178,6 +178,11 @@ export const Guardian = z.object({
   relation: z.string().nullable(),
   /** e.g. "+91 98•• ••4521"; null once declined (the number is deleted). */
   phoneMasked: z.string().nullable(),
+  /**
+   * Full number (E.164), for the owner's phone only: the app keeps it so an SOS can be sent by
+   * SMS from the phone's own SIM without internet. Null once declined.
+   */
+  phone: z.string().nullable(),
   status: GuardianStatus,
 });
 

@@ -37,6 +37,7 @@ function toGuardian(row: GuardianRow): Guardian {
     name: row.name,
     relation: row.relation,
     phoneMasked: maskPhone(row.phone),
+    phone: row.phone,
     status: row.invite_status,
   };
 }

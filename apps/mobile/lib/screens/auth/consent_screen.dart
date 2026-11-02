@@ -1,0 +1,97 @@
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../config.dart';
+import '../../state/app_state.dart';
+import '../../theme.dart';
+import '../../widgets/common.dart';
+
+/// Terms and privacy, before anything else (A1 consent).
+class ConsentScreen extends StatefulWidget {
+  const ConsentScreen({super.key});
+
+  @override
+  State<ConsentScreen> createState() => _ConsentScreenState();
+}
+
+class _ConsentScreenState extends State<ConsentScreen> {
+  bool _agreed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const SizedBox(height: 20),
+            const ScreenTitle('Before you start', subtitle: 'How Sarthi Rakshak uses your information'),
+            const SizedBox(height: 20),
+            const _Point(Icons.location_on_outlined, 'Your location is shared with your guardians only during an SOS or a journey you start.'),
+            const _Point(Icons.mic_none, 'During an SOS the app records audio. It is locked with a key that stays on this phone; nobody else can listen.'),
+            const _Point(Icons.sms_outlined, 'Without internet, the app sends your SOS by SMS from your own SIM to your guardians.'),
+            const _Point(Icons.delete_outline, 'You can delete your account and your data at any time in Settings.'),
+            const SizedBox(height: 8),
+            AppCard(
+              color: AppColors.amberSoft,
+              child: const Text(AppConfig.notMonitoring, style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.w600)),
+            ),
+            const SizedBox(height: 16),
+            Row(children: [
+              Checkbox(value: _agreed, activeColor: AppColors.red, onChanged: (v) => setState(() => _agreed = v ?? false)),
+              Expanded(
+                child: Wrap(children: [
+                  const Text('I agree to the '),
+                  _Link('Terms', AppConfig.termsUrl),
+                  const Text(' and '),
+                  _Link('Privacy Policy', AppConfig.privacyUrl),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: 16),
+            BusyButton(
+              label: 'Continue',
+              onPressed: !_agreed
+                  ? null
+                  : () async {
+                      try {
+                        await AppScope.read(context).giveConsent();
+                      } catch (e) {
+                        if (context.mounted) showError(context, e);
+                      }
+                    },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Point extends StatelessWidget {
+  const _Point(this.icon, this.text);
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          CircleAvatar(radius: 20, backgroundColor: AppColors.redSoft, child: Icon(icon, color: AppColors.red, size: 22)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 15.5, height: 1.4))),
+        ]),
+      );
+}
+
+class _Link extends StatelessWidget {
+  const _Link(this.text, this.url);
+  final String text;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+        child: Text(text, style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w600)),
+      );
+}

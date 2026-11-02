@@ -26,7 +26,7 @@ Automated tests may create temporary records in a separate test database that is
 
 | Part | Tool |
 | --- | --- |
-| Mobile app | Flutter (screens) + Kotlin (native Android "safety engine") — later |
+| Mobile app | Flutter (screens) + Kotlin (native Android "safety engine") — `apps/mobile`, design: RAKSHAK-APP Figma (`docs/design/mobile/`) |
 | Server | Node.js 24 LTS (≥ 24.9) + TypeScript 6.0, NestJS 12 |
 | Admin panel | React + TypeScript, Vite, Ant Design, React Router, TanStack Query, Socket.IO client, Recharts, React Hook Form + Zod |
 | Guardian pages | React + TypeScript, very light (no Ant Design), Socket.IO client — `apps/guardian-web` |
@@ -47,7 +47,7 @@ Automated tests may create temporary records in a separate test database that is
 server/              NestJS backend (API, WebSocket, worker)
 apps/admin/          React admin panel
 apps/guardian-web/   Guardian pages from SMS links: invite (/i) and live map (/l)
-apps/mobile/         Flutter app (later)
+apps/mobile/         Flutter app + Kotlin safety engine (Android)
 packages/shared/     API contract for the user app (Zod schemas + types); written out for Flutter in docs/app-api.md
 docs/                Plans, decisions, specs
 docker-compose.yml   Local PostgreSQL + Redis + SeaweedFS (file storage)
