@@ -40,3 +40,6 @@ Thumbs.db
 # Test output
 playwright-report/
 test-results/
+
+# This project uses pnpm (pnpm-lock.yaml); npm lock files must not be committed
+package-lock.json
