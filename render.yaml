@@ -20,6 +20,7 @@ services:
     buildCommand: >-
       corepack enable &&
       pnpm install --frozen-lockfile &&
+      pnpm --filter @sarthi/shared build &&
       pnpm --filter server build &&
       VITE_API_URL=$PUBLIC_URL pnpm --filter admin build &&
       pnpm --filter guardian-web exec vite build --base=/gw/
