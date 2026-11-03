@@ -141,6 +141,25 @@ describe('Sending SMS (main → backup → retries)', () => {
     expect(rows[0].provider_message_id).toMatch(/^main-/);
     expect(main.sent).toEqual([expect.objectContaining({ phone: '+919800000001' })]);
     expect(main.sent[0].text).toContain('SOS from Priya Sharma');
+
+    // The app shows "Alerted" (not "Sending…") once the SMS went out.
+    const sos = await api().get(`/v1/sos/${sosId}`).set(bearer(token)).expect(200);
+    expect(
+      (sos.body as { guardians: { alertedAt: string | null }[] }).guardians[0].alertedAt,
+    ).toEqual(expect.any(String));
+  });
+
+  it('shows a guardian as not alerted while every try failed', async () => {
+    await addGuardian('Ravi', '9800000001', 'accept');
+    await jobs.run(); // the invite
+    main.failing = true;
+    backup.failing = true;
+    const sosId = await startSos();
+    await jobs.run();
+    const sos = await api().get(`/v1/sos/${sosId}`).set(bearer(token)).expect(200);
+    expect(
+      (sos.body as { guardians: { alertedAt: string | null }[] }).guardians[0].alertedAt,
+    ).toBeNull();
   });
 
   it('tries the backup provider at once when the main one fails', async () => {

@@ -21,6 +21,7 @@ class EngineState {
         queued = (m['queued'] as int?) ?? 0,
         recording = (m['recording'] as bool?) ?? false,
         audioOff = (m['audioOff'] as bool?) ?? false,
+        audioError = m['audioError'] as String?,
         locationOff = (m['locationOff'] as bool?) ?? false,
         journeyStatus = m['journeyStatus'] as String?;
 
@@ -45,6 +46,9 @@ class EngineState {
   final int queued;
   final bool recording;
   final bool audioOff;
+
+  /// Why recording could not start (the engine keeps trying); null when fine.
+  final String? audioError;
   final bool locationOff;
 
   /// on_route, stopped, off_route, late (journey only).
@@ -145,6 +149,9 @@ class SafetyEngine {
 
   /// `sos` or `checkin` when the app was opened from the widget, tile or a notification.
   Future<Map<dynamic, dynamic>?> takeLaunchAction() => _ch.invokeMethod('takeLaunchAction');
+
+  /// After the user changed permissions: the engine starts what is now allowed (audio, location).
+  Future<void> resume() => _ch.invokeMethod('resume');
 
   Future<Map<dynamic, dynamic>> deviceInfo() async =>
       (await _ch.invokeMethod<Map<dynamic, dynamic>>('deviceInfo')) ?? const {};

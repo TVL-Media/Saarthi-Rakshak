@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
@@ -20,7 +21,7 @@ class SosActiveScreen extends StatefulWidget {
   State<SosActiveScreen> createState() => _SosActiveScreenState();
 }
 
-class _SosActiveScreenState extends State<SosActiveScreen> {
+class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingObserver {
   Sos? _sos;
   Timer? _poll;
   Timer? _tick;
@@ -29,6 +30,7 @@ class _SosActiveScreenState extends State<SosActiveScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
     _poll = Timer.periodic(const Duration(seconds: 8), (_) => _load());
     _tick = Timer.periodic(const Duration(seconds: 15), (_) => setState(() {}));
@@ -36,9 +38,16 @@ class _SosActiveScreenState extends State<SosActiveScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _poll?.cancel();
     _tick?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from the app's settings: start audio / location if they are allowed now.
+    if (state == AppLifecycleState.resumed) AppScope.read(context).engine.resume().catchError((_) {});
   }
 
   Future<void> _load() async {
@@ -106,9 +115,15 @@ class _SosActiveScreenState extends State<SosActiveScreen> {
                       : 'Sharing live location · updated ${ago(engine.lastFixAt!)}',
             ),
             _Status(
-              icon: engine.audioOff ? Icons.mic_off : Icons.mic,
+              icon: engine.audioOff || engine.audioError != null ? Icons.mic_off : Icons.mic,
               ok: engine.recording,
-              text: engine.audioOff ? 'Audio off (no microphone permission)' : engine.recording ? 'Recording audio' : 'Starting audio…',
+              text: engine.audioOff
+                  ? 'Audio off — allow the microphone in App permissions'
+                  : engine.recording
+                      ? 'Recording audio'
+                      : engine.audioError != null
+                          ? 'Audio could not start (${engine.audioError}). Trying again…'
+                          : 'Starting audio…',
             ),
             if (engine.batteryPct != null)
               _Status(icon: Icons.battery_std, ok: engine.batteryPct! > 15, text: 'Battery ${engine.batteryPct}%'),
@@ -121,6 +136,16 @@ class _SosActiveScreenState extends State<SosActiveScreen> {
                     : 'Connecting… If there is no internet, your SOS goes out by SMS.',
               ),
           ],
+          if (!ended)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const Key('app-permissions'),
+                onPressed: openAppSettings,
+                icon: const Icon(Icons.settings_outlined, color: AppColors.red),
+                label: const Text('App permissions (microphone, location)', style: TextStyle(color: AppColors.red)),
+              ),
+            ),
           const SizedBox(height: 10),
           if (!ended)
             FilledButton.icon(

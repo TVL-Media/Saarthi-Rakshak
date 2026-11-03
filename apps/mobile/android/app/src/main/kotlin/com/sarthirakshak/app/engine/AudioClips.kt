@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.os.Build
+import android.util.Log
 import java.io.File
 import java.util.UUID
 
@@ -19,8 +20,13 @@ class AudioClips(private val context: Context, private val onClip: (clipId: Stri
 
     val recording get() = recorder != null
 
+    /** Why the last start failed (shown on the SOS screen); null once recording works. */
+    var lastError: String? = null
+        private set
+
     fun allowed() = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
+    /** Starts recording if allowed and not already recording. Safe to call again (retries). */
     fun start() {
         if (recorder != null || !allowed()) return
         next()
@@ -31,31 +37,38 @@ class AudioClips(private val context: Context, private val onClip: (clipId: Stri
     }
 
     private fun next() {
-        val file = File(context.cacheDir, "clip-${System.currentTimeMillis()}.m4a")
-        val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
-        try {
-            r.setAudioSource(MediaRecorder.AudioSource.MIC)
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            r.setAudioEncodingBitRate(48_000)
-            r.setAudioSamplingRate(22_050)
-            r.setMaxDuration(CLIP_MS)
-            r.setOutputFile(file.absolutePath)
-            r.setOnInfoListener { _, what, _ ->
-                if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
-                    finishCurrent()
-                    next()
+        // Some phones refuse one setting; try the common one first, then simpler ones.
+        for (config in CONFIGS) {
+            val file = File(context.cacheDir, "clip-${System.currentTimeMillis()}.m4a")
+            val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
+            try {
+                r.setAudioSource(config.source)
+                r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                r.setAudioEncodingBitRate(config.bitRate)
+                r.setAudioSamplingRate(config.sampleRate)
+                r.setMaxDuration(CLIP_MS)
+                r.setOutputFile(file.absolutePath)
+                r.setOnInfoListener { _, what, _ ->
+                    if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {
+                        finishCurrent()
+                        next()
+                    }
                 }
+                r.prepare()
+                r.start()
+                recorder = r
+                current = file
+                startedAt = System.currentTimeMillis()
+                lastError = null
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Recorder setting $config failed", e)
+                lastError = e.message ?: e.javaClass.simpleName
+                r.release()
+                file.delete()
+                recorder = null
             }
-            r.prepare()
-            r.start()
-            recorder = r
-            current = file
-            startedAt = System.currentTimeMillis()
-        } catch (e: Exception) {
-            r.release()
-            file.delete()
-            recorder = null
         }
     }
 
@@ -86,7 +99,16 @@ class AudioClips(private val context: Context, private val onClip: (clipId: Stri
         }
     }
 
+    private data class Config(val source: Int, val sampleRate: Int, val bitRate: Int)
+
     companion object {
         const val CLIP_MS = 30_000
+        private const val TAG = "SarthiAudio"
+        private val CONFIGS = listOf(
+            Config(MediaRecorder.AudioSource.MIC, 44_100, 64_000),
+            Config(MediaRecorder.AudioSource.MIC, 22_050, 48_000),
+            Config(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16_000, 32_000),
+            Config(MediaRecorder.AudioSource.DEFAULT, 16_000, 32_000),
+        )
     }
 }

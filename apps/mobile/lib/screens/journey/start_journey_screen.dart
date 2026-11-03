@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' show openAppSettings;
 
 import '../../api/api_client.dart';
 import '../../api/maps_service.dart';
@@ -10,6 +11,7 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/format.dart';
+import '../settings/settings_screen.dart' show SavedPlacesScreen;
 import 'journey_on_screen.dart';
 
 /// Start journey (design: "Plan Your Journey"). Plan v2: no travel mode; every journey is shared
@@ -30,6 +32,10 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
   final _search = TextEditingController();
   Timer? _debounce;
   Position? _here;
+
+  /// Why there is no location yet: null while looking, else a short message.
+  String? _hereProblem;
+  bool _hereNeedsSettings = false;
   List<SavedPlace> _saved = const [];
   List<PlaceResult> _results = const [];
   bool _searching = false;
@@ -52,15 +58,58 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
   }
 
   Future<void> _init() async {
-    try {
-      _saved = await AppScope.read(context).api.places();
-    } catch (_) {}
-    try {
-      _here = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 15)));
-    } catch (_) {}
+    await _loadSaved();
+    await _findHere();
     if (widget.preset != null) {
       await _choose(Place(lat: widget.preset!.lat, lng: widget.preset!.lng, label: widget.preset!.name));
     }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadSaved() async {
+    try {
+      _saved = await AppScope.read(context).api.places();
+    } catch (_) {}
+  }
+
+  /// Current location: asks for permission if needed, says what is wrong, can be tried again.
+  Future<void> _findHere() async {
+    setState(() {
+      _hereProblem = null;
+      _hereNeedsSettings = false;
+    });
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return _noHere('Location is turned off on this phone. Turn it on, then tap to try again.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return _noHere('Location is not allowed for Sarthi Rakshak.', settings: true);
+      }
+      // A recent known position shows at once; then a fresh one.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) setState(() => _here = last);
+      final fresh = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
+      );
+      if (mounted) setState(() => _here = fresh);
+    } catch (_) {
+      if (_here == null) _noHere('Could not find your location yet. Go near a window or outside, then tap to try again.');
+    }
+  }
+
+  void _noHere(String problem, {bool settings = false}) {
+    if (!mounted) return;
+    setState(() {
+      _hereProblem = problem;
+      _hereNeedsSettings = settings;
+    });
+  }
+
+  Future<void> _addPlace() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const SavedPlacesScreen()));
+    await _loadSaved();
     if (mounted) setState(() {});
   }
 
@@ -142,14 +191,22 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
           AppCard(
+            onTap: _hereProblem == null ? null : (_hereNeedsSettings ? openAppSettings : _findHere),
             child: Row(children: [
               const CircleAvatar(backgroundColor: Color(0xFFE6F0FF), child: Icon(Icons.location_on, color: Color(0xFF1D6FE8))),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Your Current Location', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                  Text(_here == null ? 'Finding your location…' : 'Found (accuracy ${_here!.accuracy.round()} m)',
-                      style: const TextStyle(color: AppColors.muted)),
+                  Text(
+                    _here != null
+                        ? 'Found (accuracy ${_here!.accuracy.round()} m)'
+                        : _hereProblem ?? 'Finding your location…',
+                    style: TextStyle(color: _here == null && _hereProblem != null ? AppColors.red : AppColors.muted),
+                  ),
+                  if (_here == null && _hereProblem != null)
+                    Text(_hereNeedsSettings ? 'Tap to open App permissions' : 'Tap to try again',
+                        style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w600)),
                 ]),
               ),
             ]),
@@ -209,6 +266,27 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
               child: Text('At least one guardian must accept your invite first.', style: TextStyle(color: AppColors.red)),
             ),
           const SizedBox(height: 22),
+          if (_saved.isEmpty && !_maps.available)
+            AppCard(
+              color: AppColors.amberSoft,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('No saved places yet',
+                    style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.w700, fontSize: 16)),
+                const SizedBox(height: 4),
+                const Text(
+                  'Place search is not available in this test build. Save places you go to (Home, Office…): '
+                  'when you are there, open Saved places and tap “Use my current location”.',
+                  style: TextStyle(color: AppColors.ink),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  key: const Key('add-place'),
+                  onPressed: _addPlace,
+                  icon: const Icon(Icons.add_location_alt_outlined),
+                  label: const Text('Add a saved place'),
+                ),
+              ]),
+            ),
           if (_saved.isNotEmpty) ...[
             const Text('Saved places', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),

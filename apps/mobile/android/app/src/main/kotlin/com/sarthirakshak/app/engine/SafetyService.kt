@@ -135,6 +135,15 @@ class SafetyService : Service() {
         goForeground()
         startTracking()
         if (batteryPct() >= 5) audio.start()
+        // If the recorder refused at once, try again shortly (the microphone part of the
+        // foreground service can take a moment); the heartbeat keeps retrying after that.
+        handler.postDelayed({
+            if (store.sos?.optString("sosId") == sosId && !audio.recording && audio.allowed()) {
+                goForeground()
+                audio.start()
+                emitState()
+            }
+        }, 3_000L)
         updateNotification()
         flush()
         // No answer from the server in time → SMS from the phone's own SIM.
@@ -339,6 +348,13 @@ class SafetyService : Service() {
             val sos = store.sos
             val journey = store.journey
             if (sos == null && journey == null) return
+            // Audio did not start (or the permission was given later): try again, with the
+            // microphone added to the foreground service first.
+            if (sos != null && !audio.recording && audio.allowed() && batteryPct() >= 5) {
+                goForeground()
+                audio.start()
+                emitState()
+            }
             try {
                 api.call("POST", "/v1/heartbeat", JSONObject().apply {
                     put("batteryPct", batteryPct())
@@ -507,6 +523,7 @@ class SafetyService : Service() {
             "queued" to outbox.count(),
             "recording" to audio.recording,
             "audioOff" to (sos != null && !audio.allowed()),
+            "audioError" to (if (sos != null && !audio.recording) audio.lastError else null),
             "locationOff" to locationOff,
         ))
     }

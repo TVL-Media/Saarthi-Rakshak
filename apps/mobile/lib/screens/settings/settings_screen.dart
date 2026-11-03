@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' show openAppSettings;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
@@ -57,6 +58,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 6),
           ],
           _Item(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),
+          _Item(Icons.admin_panel_settings_outlined, 'App Permissions', openAppSettings),
           _Item(Icons.people_outline, 'Guardians', () => open(const GuardiansScreen())),
           _Item(Icons.location_on_outlined, 'Saved Places', () => open(const SavedPlacesScreen())),
           _Item(Icons.shield_outlined, 'Privacy Policy', () => launchUrl(Uri.parse(AppConfig.privacyUrl))),

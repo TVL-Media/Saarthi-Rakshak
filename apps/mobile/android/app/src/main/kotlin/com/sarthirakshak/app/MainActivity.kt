@@ -122,6 +122,11 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "getState" -> result.success(EngineBus.lastState)
+                    "resume" -> {
+                        // Back from the settings screen: start what is now allowed (audio, location).
+                        if (SafetyService.hasWork(this)) SafetyService.send(this, SafetyService.ACTION_RESUME)
+                        result.success(null)
+                    }
                     "takeLaunchAction" -> {
                         val pending = EngineBus.pendingLaunch
                         EngineBus.pendingLaunch = null

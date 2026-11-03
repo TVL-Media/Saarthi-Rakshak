@@ -321,6 +321,18 @@ export class SosService {
       .selectFrom('guardian_links as l')
       .innerJoin('guardians as g', 'g.id', 'l.guardian_id')
       .select(['g.id', 'g.name', 'g.relation', 'l.opened_at', 'l.responding_at'])
+      // Alerted = the first SOS message that reached this guardian (provider SMS or the
+      // phone's own SIM SMS).
+      .select((eb) =>
+        eb
+          .selectFrom('alerts as a')
+          .select((a) => a.fn.min(sql<Date>`coalesce(a.sent_at, a.created_at)`).as('t'))
+          .whereRef('a.guardian_id', '=', 'g.id')
+          .where('a.sos_event_id', '=', sosId)
+          .where('a.type', 'in', ['sos', 'sos_link'])
+          .where('a.status', 'in', ['sent', 'delivered'])
+          .as('alerted_at'),
+      )
       .where('l.sos_event_id', '=', sosId)
       .orderBy('g.created_at')
       .execute();
@@ -336,8 +348,7 @@ export class SosService {
         guardianId: g.id,
         name: g.name,
         relation: g.relation,
-        // Filled from the alerts table once Part B really sends alerts.
-        alertedAt: null,
+        alertedAt: g.alerted_at ? new Date(g.alerted_at).toISOString() : null,
         openedAt: g.opened_at?.toISOString() ?? null,
         respondingAt: g.responding_at?.toISOString() ?? null,
       })),
