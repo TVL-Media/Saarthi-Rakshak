@@ -21,6 +21,9 @@ import {
   stopAppTest,
   type AppTestContext,
 } from './app-test-support';
+import { MAX_SMS_ATTEMPTS } from '../src/alerts/alerts.constants';
+import { AlertsService } from '../src/alerts/alerts.service';
+import { DashboardService } from '../src/dashboard/dashboard.service';
 
 const WEBHOOK_SECRET = 'test-webhook-secret-0123456789';
 
@@ -152,7 +155,7 @@ describe('Sending SMS (main → backup → retries)', () => {
     expect(backup.sent).toHaveLength(1);
   });
 
-  it('retries after 30 seconds and 2 minutes, then reports that all tries failed', async () => {
+  it('retries after 30 seconds, then reports that all tries failed (MAX_SMS_ATTEMPTS)', async () => {
     await addGuardian('Ravi', '9800000001');
     main.failing = true;
     backup.failing = true;
@@ -160,17 +163,16 @@ describe('Sending SMS (main → backup → retries)', () => {
     await jobs.run();
     expect(await alertRows()).toHaveLength(3); // try 3 waits 30 s
     await jobs.run(30_000);
-    expect(await alertRows()).toHaveLength(4); // try 4 waits 2 min
     await jobs.run(3 * MIN);
 
     const rows = await alertRows();
+    expect(MAX_SMS_ATTEMPTS).toBe(3);
     expect(rows.map((r) => [r.provider, r.attempt, r.status])).toEqual([
       ['main', 1, 'failed'],
       ['backup', 2, 'failed'],
       ['main', 3, 'failed'],
-      ['backup', 4, 'failed'],
     ]);
-    expect(rows[3].error).toContain('All tries failed.');
+    expect(rows[2].error).toContain('All tries failed.');
     expect(rows.every((r) => r.body === null)).toBe(true);
   });
 
@@ -504,5 +506,63 @@ describe('BullMQ queue (real Redis)', () => {
     } finally {
       await queue.close();
     }
+  });
+});
+
+// The admin Alert Log and Dashboard read what this worker writes: they must agree with it.
+describe('Admin screens see what the worker did', () => {
+  it('Alert Log and Dashboard show "all tries failed" after the last (main) try', async () => {
+    await addGuardian('Ravi', '9800000001', 'accept');
+    await jobs.run();
+    await ctx.db.deleteFrom('alerts').execute();
+    main.failing = true;
+    backup.failing = true;
+    await startSos();
+    await jobs.run();
+    await jobs.run(30_000);
+
+    const { rows } = await ctx.app.get(AlertsService).list();
+    const sms = rows.filter((r) => r.channel === 'sms').sort((a, b) => a.attempt - b.attempt);
+    expect(sms.map((r) => [r.provider, r.attempt, r.nextStep])).toEqual([
+      ['main', 1, 'retry_backup'],
+      ['backup', 2, 'retrying'],
+      ['main', MAX_SMS_ATTEMPTS, 'all_failed'],
+    ]);
+    const summary = await ctx.app.get(DashboardService).summary();
+    expect(summary.attention.map((a) => a.kind)).toContain('sms_all_failed');
+  });
+
+  it('Dashboard lists a journey whose phone went silent (journey stays active)', async () => {
+    await addGuardian('Ravi', '9800000001', 'accept');
+    const journeyId = randomUUID();
+    await api()
+      .post('/v1/journeys')
+      .set(bearer(token))
+      .send({
+        id: journeyId,
+        destination: { lat: 28.57, lng: 77.32, label: 'Home' },
+        expectedArrivalAt: new Date(Date.now() + 40 * MIN).toISOString(),
+      })
+      .expect(200);
+    await ctx.db
+      .updateTable('journeys')
+      .set({ started_at: new Date(minutesAgo(6)) })
+      .where('id', '=', journeyId)
+      .execute();
+    jobs.clear();
+    await timers.sweep();
+    await jobs.runOnly('sms');
+
+    const journey = await ctx.db
+      .selectFrom('journeys')
+      .select(['status', 'lost_contact_at'])
+      .where('id', '=', journeyId)
+      .executeTakeFirstOrThrow();
+    expect(journey.status).toBe('active');
+    expect(journey.lost_contact_at).not.toBeNull();
+    const summary = await ctx.app.get(DashboardService).summary();
+    expect(summary.attention).toContainEqual(
+      expect.objectContaining({ kind: 'journey_lost_contact', journeyId }),
+    );
   });
 });

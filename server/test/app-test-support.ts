@@ -51,12 +51,12 @@ export async function appUser(
   phone = '+919812344521',
 ): Promise<{ token: string; userId: string }> {
   const res = await http(ctx)
-    .post('/app/auth/login')
+    .post('/v1/auth/firebase')
     .send({ firebaseIdToken: FakePhoneTokenVerifier.token(phone) })
     .expect(200);
   const { token, user } = res.body as { token: string; user: { id: string } };
   await http(ctx)
-    .post('/app/me/consent')
+    .post('/v1/me/consent')
     .set(bearer(token))
     .send({ version: '2026-10' })
     .expect(200);

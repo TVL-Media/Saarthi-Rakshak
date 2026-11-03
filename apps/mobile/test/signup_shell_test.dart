@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:sarthi_rakshak/api/api_client.dart';
 import 'package:sarthi_rakshak/api/models.dart';
 import 'package:sarthi_rakshak/screens/auth/login_screen.dart';
+import 'package:sarthi_rakshak/screens/guardians/guardians_screen.dart';
 import 'package:sarthi_rakshak/screens/home/shell.dart';
 import 'package:sarthi_rakshak/state/app_state.dart';
 import 'package:sarthi_rakshak/theme.dart';
@@ -51,6 +52,7 @@ void main() {
         'getState' => {'mode': 'idle'},
         'deviceInfo' => {'model': 'Pixel 8', 'androidVersion': '15', 'appVersion': '1.0.0 (1)'},
         'batteryOptimisationOff' => true,
+        'pickContact' => {'name': 'Ravi Kumar', 'phone': '+91 98765-43210'},
         _ => null,
       };
     });
@@ -135,5 +137,20 @@ void main() {
     expect(jsonDecode(patch.body), {'name': 'Priya Sharma'});
     expect(state.me!.name, 'Priya Sharma');
     expect(state.stage, Stage.guardians); // the profile step is skipped: the name is set
+  });
+
+  testWidgets('Add guardian: "Choose from contacts" fills the name and the number', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 860));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final state = AppState(api: ApiClient(baseUrl: 'http://server', client: fakeServer())..token = 't');
+    state.me = Me.fromJson(fixtures.me);
+    await tester.pumpWidget(host(state, const GuardiansScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add Guardian'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('pick-contact')));
+    await tester.pumpAndSettle();
+    expect(find.text('Ravi Kumar'), findsOneWidget);
+    expect(find.text('9876543210'), findsOneWidget);
   });
 }

@@ -8,6 +8,7 @@ import { maskPhone } from '../../users/phone';
 import { PushSender, type PushMessage, type PushType } from '../alerts/push-sender';
 import { SmsProviders } from '../alerts/sms-providers';
 import { JobHandlers, JobQueue } from '../jobs/job-queue';
+import { MAX_SMS_ATTEMPTS } from '../../alerts/alerts.constants';
 
 export type SmsKind = AlertsTable['type'];
 
@@ -25,24 +26,26 @@ interface Step {
   provider: 'main' | 'backup';
   delayMs: number;
 }
+// Cut to MAX_SMS_ATTEMPTS (the one number the admin Alert Log also reads).
 const WITH_BACKUP: Step[] = [
   { provider: 'main', delayMs: 0 },
   { provider: 'backup', delayMs: 0 },
   { provider: 'main', delayMs: 30_000 },
   { provider: 'backup', delayMs: 120_000 },
-];
+].slice(0, MAX_SMS_ATTEMPTS) as Step[];
 const MAIN_ONLY: Step[] = [
   { provider: 'main', delayMs: 0 },
   { provider: 'main', delayMs: 30_000 },
   { provider: 'main', delayMs: 120_000 },
-];
+].slice(0, MAX_SMS_ATTEMPTS) as Step[];
 
 /** An alert still "queued" this long after it was made is put on the queue again. */
 export const STUCK_ALERT_MINUTES = 5;
 
 /**
  * Messages to guardians (SMS) and to the user's own phone (push). Every SMS is an `alerts` row per
- * try and a background job: main provider → backup → again after 30 s and 2 min.
+ * try and a background job, MAX_SMS_ATTEMPTS tries: main → backup → main after 30 s
+ * (without a backup provider: main, again after 30 s and 2 min).
  */
 @Injectable()
 export class OutgoingMessages implements OnModuleInit {

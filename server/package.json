@@ -14,7 +14,8 @@
     "db:migrate:test": "nest build && node dist/database/migrate.js latest --test",
     "db:rollback": "nest build && node dist/database/migrate.js down",
     "db:status": "nest build && node dist/database/migrate.js status",
-    "app:setup": "nest build && node dist/setup/cli.js"
+    "app:setup": "nest build && node dist/setup/cli.js",
+    "test:load": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config test/jest-e2e.json --runInBand --testRegex '.*[.]load-spec[.]ts$'"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1156.0",

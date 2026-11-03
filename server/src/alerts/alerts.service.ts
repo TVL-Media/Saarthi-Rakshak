@@ -86,8 +86,9 @@ function nextStepOf(r: {
   // Failed.
   if (r.fixed_later) return 'sent_again';
   if (r.channel !== 'sms') return 'none';
-  if (r.provider === 'main') return 'retry_backup';
-  return r.attempt < MAX_SMS_ATTEMPTS ? 'retrying' : 'all_failed';
+  // The last try first: the worker's last try can be the main provider.
+  if (r.attempt >= MAX_SMS_ATTEMPTS) return 'all_failed';
+  return r.provider === 'main' ? 'retry_backup' : 'retrying';
 }
 
 function encodeCursor(stillFailed: boolean, at: Date, id: string): string {

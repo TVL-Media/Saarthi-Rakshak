@@ -161,4 +161,11 @@ class SafetyEngine {
   Future<void> startRingtone() => _ch.invokeMethod('startRingtone');
 
   Future<void> stopRingtone() => _ch.invokeMethod('stopRingtone');
+
+  /// Opens the phone's contact picker (no contacts permission needed). Null when cancelled.
+  Future<({String name, String phone})?> pickContact() async {
+    final r = await _ch.invokeMethod<Map<dynamic, dynamic>>('pickContact');
+    if (r == null) return null;
+    return (name: (r['name'] as String?) ?? '', phone: (r['phone'] as String?) ?? '');
+  }
 }

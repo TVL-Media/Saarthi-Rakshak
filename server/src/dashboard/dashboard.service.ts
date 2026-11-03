@@ -183,7 +183,7 @@ export class DashboardService {
       created_at: Date;
     }>`
       SELECT a.sos_event_id, a.journey_id, a.created_at FROM alerts a
-      WHERE a.channel = 'sms' AND a.status = 'failed' AND a.provider = 'backup'
+      WHERE a.channel = 'sms' AND a.status = 'failed'
         AND a.attempt >= ${MAX_SMS_ATTEMPTS}
         AND a.created_at >= now() - interval '24 hours'
         AND NOT EXISTS (
@@ -204,19 +204,26 @@ export class DashboardService {
       })),
     );
 
-    // 5. Journeys with lost contact in the last 24 hours.
-    const lostJourneys = await db
-      .selectFrom('journeys')
-      .select(['id', 'ended_at', 'started_at'])
-      .where('status', '=', 'lost_contact')
-      .where(sql<boolean>`coalesce(ended_at, started_at) >= now() - interval '24 hours'`)
-      .orderBy('started_at', 'desc')
-      .execute();
+    // 5. Journeys with lost contact in the last 24 hours. The worker keeps such a journey active
+    // and sets lost_contact_at (cleared when the phone is heard again), and sends guardians a
+    // lost_contact SMS; an old-style status 'lost_contact' still counts.
+    const { rows: lostJourneys } = await sql<{ id: string; since: Date }>`
+      SELECT j.id,
+             coalesce(j.lost_contact_at, max(a.created_at), j.ended_at, j.started_at) AS since
+      FROM journeys j
+      LEFT JOIN alerts a ON a.journey_id = j.id AND a.type = 'lost_contact'
+        AND a.created_at >= now() - interval '24 hours'
+      WHERE j.lost_contact_at IS NOT NULL
+         OR a.id IS NOT NULL
+         OR (j.status = 'lost_contact' AND coalesce(j.ended_at, j.started_at) >= now() - interval '24 hours')
+      GROUP BY j.id
+      ORDER BY since DESC
+    `.execute(db);
     items.push(
       ...lostJourneys.map((r) => ({
         kind: 'journey_lost_contact' as const,
         journeyId: r.id,
-        since: r.ended_at ?? r.started_at,
+        since: r.since,
       })),
     );
 

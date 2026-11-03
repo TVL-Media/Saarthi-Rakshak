@@ -235,6 +235,22 @@ class _GuardianFormState extends State<_GuardianForm> {
     super.dispose();
   }
 
+  /// Fills name and number from the phone's contact picker.
+  Future<void> _pickContact() async {
+    try {
+      final c = await AppScope.read(context).engine.pickContact();
+      if (c == null || !mounted) return;
+      final phone = normaliseIndianMobile(c.phone);
+      setState(() {
+        if (c.name.trim().isNotEmpty && _name.text.trim().isEmpty) _name.text = c.name.trim();
+        _phone.text = phone == null ? c.phone : phone.substring(3); // the +91 is shown in front
+        _error = phone == null ? 'This contact has no Indian mobile number.' : null;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not open your contacts.');
+    }
+  }
+
   Future<void> _save() async {
     final api = AppScope.read(context).api;
     final name = _name.text.trim();
@@ -272,9 +288,19 @@ class _GuardianFormState extends State<_GuardianForm> {
         if (!editing) ...[
           const SizedBox(height: 12),
           TextField(
+            key: const Key('guardian-phone'),
             controller: _phone,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(prefixIcon: Icon(Icons.phone_outlined), prefixText: '+91  ', hintText: 'Mobile number'),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('pick-contact'),
+              onPressed: _pickContact,
+              icon: const Icon(Icons.contacts_outlined, color: AppColors.red),
+              label: const Text('Choose from contacts', style: TextStyle(color: AppColors.red)),
+            ),
           ),
         ],
         const SizedBox(height: 12),

@@ -1,5 +1,7 @@
 package com.sarthirakshak.app
 
+import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -9,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.provider.ContactsContract
 import android.provider.Settings
 import com.sarthirakshak.app.engine.Alerts
 import com.sarthirakshak.app.engine.Crypto
@@ -27,6 +30,9 @@ import org.json.JSONObject
 class MainActivity : FlutterActivity() {
     private var player: MediaPlayer? = null
     private var ringtone: Ringtone? = null
+
+    /** Waiting answer for "pickContact" (the system contact picker; no contacts permission needed). */
+    private var pickResult: MethodChannel.Result? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -157,11 +163,56 @@ class MainActivity : FlutterActivity() {
                         ringtone = null
                         result.success(null)
                     }
+                    "pickContact" -> {
+                        pickResult?.success(null) // an older picker that never answered
+                        pickResult = result
+                        try {
+                            @Suppress("DEPRECATION")
+                            startActivityForResult(
+                                Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI),
+                                PICK_CONTACT,
+                            )
+                        } catch (e: ActivityNotFoundException) {
+                            pickResult = null
+                            result.success(null)
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) {
                 result.error("engine_error", e.message, null)
             }
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_CONTACT) return
+        val result = pickResult ?: return
+        pickResult = null
+        val uri = data?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) return result.success(null)
+        try {
+            // The picker grants read access to this one row only.
+            contentResolver.query(
+                uri,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ),
+                null,
+                null,
+                null,
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    return result.success(mapOf("name" to (c.getString(0) ?: ""), "phone" to (c.getString(1) ?: "")))
+                }
+            }
+            result.success(null)
+        } catch (e: Exception) {
+            result.success(null)
         }
     }
 
@@ -205,5 +256,6 @@ class MainActivity : FlutterActivity() {
     companion object {
         const val EXTRA_ACTION = "sarthi_action"
         const val EXTRA_TRIGGER = "sarthi_trigger"
+        private const val PICK_CONTACT = 4711
     }
 }
