@@ -50,7 +50,11 @@ function ScreenPage({ screen }: { screen: Screen }) {
   const Body = screen.body;
   return (
     <>
-      <PageHead title={screen.title} sub={blocked ? undefined : screen.sub} />
+      <PageHead
+        title={screen.title}
+        sub={blocked ? undefined : screen.sub}
+        note={blocked ? undefined : screen.note}
+      />
       {blocked ? <NoAccessState /> : Body && <Body />}
     </>
   );

@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Button, DatePicker, Drawer, Select, Table, Tag, Timeline } from 'antd';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { api } from '../api';
 import { EmptyState, ErrorState, LoadingState, SectionCard } from '../components/states';
 import { formatTime, formatTimeExact } from '../format';
@@ -48,6 +48,11 @@ const TRIGGER: Record<string, string> = {
   checkin: 'Check-in',
   journey: 'Journey',
 };
+
+/** Router state to open a timeline on arrival. */
+export interface HistoryLinkState {
+  open?: { type: 'sos' | 'journey'; id: string };
+}
 
 interface Filters {
   type: 'all' | 'sos' | 'journey';
@@ -108,7 +113,9 @@ function OutcomeCell({ row, onOpenSos }: { row: HistoryRow; onOpenSos: (id: stri
 
 export function HistoryBody() {
   const [filters, setFilters] = useState<Filters>({ type: 'all', real: 'all' });
-  const [open, setOpen] = useState<{ type: 'sos' | 'journey'; id: string } | null>(null);
+  // Other screens (e.g. the Dashboard) can open a timeline directly (router state, memory only).
+  const opened = (useLocation().state as HistoryLinkState | null)?.open ?? null;
+  const [open, setOpen] = useState<{ type: 'sos' | 'journey'; id: string } | null>(opened);
 
   const history = useInfiniteQuery({
     queryKey: ['history', filters],
@@ -270,7 +277,7 @@ export function HistoryBody() {
   );
 }
 
-function TimelineView(props: {
+export function TimelineView(props: {
   type: 'sos' | 'journey';
   id: string;
   onOpenSos: (id: string) => void;

@@ -288,6 +288,255 @@ export async function createHistoryForTest(): Promise<{
   });
 }
 
+/**
+ * Alerts for the Alert Log (test database only), all from today: an SMS fixed by the backup
+ * provider, an SMS that used every try, a failed push where an SMS got through, a sent SMS.
+ */
+export async function createAlertsForTest(maxAttempts: number): Promise<{ sosId: string }> {
+  const ago = (m: number) => new Date(Date.now() - m * 60_000);
+  return withTestDatabase(async (db) => {
+    const user = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919812344521', name: 'Priya' })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const g1 = (
+      await db
+        .insertInto('guardians')
+        .values({
+          user_id: user,
+          name: 'Rohan',
+          phone: '+919800000001',
+          relation: 'brother',
+          invite_status: 'accepted',
+          created_at: ago(100),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const g2 = (
+      await db
+        .insertInto('guardians')
+        .values({
+          user_id: user,
+          name: 'Meera',
+          phone: '+919800000002',
+          invite_status: 'accepted',
+          created_at: ago(90),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const sosId = randomUUID();
+    await db
+      .insertInto('sos_events')
+      .values({ id: sosId, user_id: user, trigger: 'button', started_at: ago(10) })
+      .execute();
+    const base = { sos_event_id: sosId, type: 'sos' as const };
+    await db
+      .insertInto('alerts')
+      .values([
+        {
+          ...base,
+          guardian_id: g1,
+          channel: 'sms',
+          provider: 'main',
+          status: 'failed',
+          attempt: 1,
+          created_at: ago(9),
+        },
+        {
+          ...base,
+          guardian_id: g1,
+          channel: 'sms',
+          provider: 'backup',
+          status: 'delivered',
+          attempt: 2,
+          created_at: ago(8),
+        },
+        {
+          ...base,
+          guardian_id: g2,
+          channel: 'sms',
+          provider: 'backup',
+          status: 'failed',
+          attempt: maxAttempts,
+          created_at: ago(7),
+        },
+        { ...base, guardian_id: g1, channel: 'push', status: 'failed', created_at: ago(6) },
+        {
+          ...base,
+          guardian_id: g2,
+          channel: 'sms',
+          provider: 'main',
+          status: 'sent',
+          created_at: ago(30),
+        },
+      ])
+      .execute();
+    return { sosId };
+  });
+}
+
+/**
+ * A Dashboard scene (test database only): one user with unfinished setup, an active SOS that no
+ * guardian has answered, and an SOS that ended earlier today.
+ */
+export async function createDashboardSceneForTest(): Promise<{
+  activeSos: string;
+  endedSos: string;
+}> {
+  const ago = (m: number) => new Date(Date.now() - m * 60_000);
+  return withTestDatabase(async (db) => {
+    const user = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919812344521', name: 'Priya', created_at: ago(60) })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const endedSos = randomUUID();
+    const activeSos = randomUUID();
+    await db
+      .insertInto('sos_events')
+      .values([
+        {
+          id: endedSos,
+          user_id: user,
+          trigger: 'button',
+          started_at: ago(40),
+          status: 'ended',
+          ended_at: ago(30),
+        },
+        { id: activeSos, user_id: user, trigger: 'button', started_at: ago(2) },
+      ])
+      .execute();
+    await db
+      .insertInto('location_points')
+      .values({
+        user_id: user,
+        sos_event_id: activeSos,
+        location: sql<string>`ST_MakePoint(77.3, 28.5)::geography`,
+        recorded_at: ago(0.2),
+      })
+      .execute();
+    return { activeSos, endedSos };
+  });
+}
+
+/**
+ * Live SOS scene (test database only): a calm SOS (guardian responding, location 30 s ago) and
+ * an SOS with lost contact (last location 9 min ago, nobody responding).
+ */
+export async function createLiveSceneForTest(): Promise<{ calm: string; lost: string }> {
+  const ago = (m: number) => new Date(Date.now() - m * 60_000);
+  const point = sql<string>`ST_MakePoint(77.3123, 28.5678)::geography`;
+  return withTestDatabase(async (db) => {
+    const u1 = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919811111111', name: 'Priya' })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const u2 = (
+      await db
+        .insertInto('users')
+        .values({ phone: '+919822222222', name: 'Rahul' })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    const calm = randomUUID();
+    const lost = randomUUID();
+    await db
+      .insertInto('sos_events')
+      .values([
+        { id: calm, user_id: u1, trigger: 'button', started_at: ago(30) },
+        { id: lost, user_id: u2, trigger: 'widget', started_at: ago(12) },
+      ])
+      .execute();
+    const g = (
+      await db
+        .insertInto('guardians')
+        .values({
+          user_id: u1,
+          name: 'Rohan',
+          phone: '+919800000001',
+          relation: 'brother',
+          invite_status: 'accepted',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow()
+    ).id;
+    await db
+      .insertInto('alerts')
+      .values({
+        sos_event_id: calm,
+        type: 'sos',
+        guardian_id: g,
+        channel: 'sms',
+        status: 'delivered',
+      })
+      .execute();
+    await db
+      .insertInto('guardian_links')
+      .values({
+        sos_event_id: calm,
+        guardian_id: g,
+        token_hash: randomUUID(),
+        expires_at: ago(-60),
+        opened_at: ago(25),
+        responding_at: ago(24),
+      })
+      .execute();
+    await db
+      .insertInto('location_points')
+      .values([
+        {
+          user_id: u1,
+          sos_event_id: calm,
+          location: point,
+          recorded_at: ago(0.5),
+          accuracy_m: 15,
+          battery_pct: 42,
+          network: '4G',
+        },
+        {
+          user_id: u2,
+          sos_event_id: lost,
+          location: point,
+          recorded_at: ago(9),
+          accuracy_m: 30,
+          battery_pct: 8,
+          network: '2G',
+        },
+      ])
+      .execute();
+    return { calm, lost };
+  });
+}
+
+/** End an SOS as the app would ("I'm safe"). */
+export async function endSosForTest(id: string): Promise<void> {
+  await withTestDatabase((db) =>
+    db
+      .updateTable('sos_events')
+      .set({ status: 'ended', ended_at: new Date() })
+      .where('id', '=', id)
+      .execute(),
+  );
+}
+
+/** How many times an action is in the audit log. */
+export async function auditCountForTest(action: string): Promise<number> {
+  return withTestDatabase(
+    async (db) =>
+      (await db.selectFrom('audit_log').select('id').where('action', '=', action).execute()).length,
+  );
+}
+
 export async function userStatusForTest(id: string): Promise<string | undefined> {
   return withTestDatabase(
     async (db) =>

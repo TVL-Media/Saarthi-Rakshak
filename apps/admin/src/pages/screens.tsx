@@ -1,13 +1,14 @@
-import { Alert, Table } from 'antd';
+import { Table } from 'antd';
 import type { ReactNode } from 'react';
-import { useLocation } from 'react-router';
 import { EmptyState, SectionCard, type IconName } from '../components/states';
+import { AlertsBody } from './AlertsPage';
 import { AuditBody } from './AuditPage';
+import { DashboardBody } from './DashboardPage';
 import { HistoryBody } from './HistoryPage';
+import { LiveBody } from './LivePage';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
-import type { DashboardState } from '../auth/TwoStepPage';
 
 // Step 6: each screen has its title and the empty states from the design. Data comes with each
 // screen's own step (filters, stat cards and health are left out until then).
@@ -23,95 +24,6 @@ function EmptyTable(props: { columns: string[]; icon: IconName; title: string; t
       scroll={{ x: 'max-content' }}
       locale={{ emptyText: <EmptyState icon={props.icon} title={props.title} text={props.text} /> }}
     />
-  );
-}
-
-function Dashboard() {
-  const left = (useLocation().state as DashboardState | null)?.backupCodesLeft;
-  return (
-    <>
-      {left !== undefined && (
-        <Alert type="warning" title={`You used a backup code. ${left} left.`} />
-      )}
-      <SectionCard title="Noida map">
-        <div className="sr-map">
-          <EmptyState
-            icon="sos"
-            title="No active SOS"
-            text="SOS locations appear here only while an SOS is active. Journeys are shown as a count, not on the map."
-          />
-        </div>
-      </SectionCard>
-      <div className="sr-cols">
-        <SectionCard title="Needs attention">
-          <EmptyState
-            icon="inbox"
-            title="Nothing needs attention"
-            text="Failed alerts, lost contact and users whose setup is unfinished will show here."
-          />
-        </SectionCard>
-        <SectionCard title="Recent events">
-          <EmptyState
-            icon="list"
-            title="No events yet"
-            text="Sign-ups, SOS and journeys appear here as they happen."
-          />
-        </SectionCard>
-      </div>
-    </>
-  );
-}
-
-function LiveSos() {
-  return (
-    <>
-      <Alert
-        type="warning"
-        title={
-          <span>
-            <b>View only.</b> Admins cannot act on an SOS. Guardians and 112 respond. Sarthi Rakshak
-            alerts your guardians and helps you call 112. It is not a 24/7 monitoring service.
-          </span>
-        }
-      />
-      <div className="sr-cols">
-        <SectionCard title="Active SOS">
-          <EmptyState
-            icon="sos"
-            title="No active SOS right now"
-            text="When a user presses SOS, it appears here within seconds."
-          />
-        </SectionCard>
-        <SectionCard title="Details">
-          <EmptyState
-            icon="list"
-            title="Select an SOS"
-            text="Its live map, guardians and alert status will show here."
-          />
-        </SectionCard>
-      </div>
-      <SectionCard title="Guardians for the selected SOS">
-        <EmptyTable
-          columns={['Guardian', 'Phone', 'SMS', 'Push', 'Opened link', 'Responding']}
-          icon="user"
-          title="No SOS selected"
-          text="Guardian alert status appears when an SOS is selected."
-        />
-      </SectionCard>
-    </>
-  );
-}
-
-function AlertLog() {
-  return (
-    <SectionCard title="Messages">
-      <EmptyTable
-        columns={['Time', 'Channel', 'Provider', 'To', 'Result', 'Next step']}
-        icon="inbox"
-        title="No alerts sent yet"
-        text="Every SMS and push sent for an SOS, check-in or lost contact will be logged here."
-      />
-    </SectionCard>
   );
 }
 
@@ -151,6 +63,8 @@ export interface Screen {
   menu: string;
   title: string;
   sub: string;
+  /** An extra line under the subtitle. */
+  note?: string;
   superOnly?: boolean;
   body?: () => ReactNode;
 }
@@ -161,9 +75,9 @@ export const MAIN_SCREENS: Screen[] = [
     menu: 'Dashboard',
     title: 'Dashboard',
     sub: 'Noida pilot · updates live',
-    body: Dashboard,
+    body: DashboardBody,
   },
-  { path: '/live', menu: 'Live SOS', title: 'Live SOS', sub: 'View only', body: LiveSos },
+  { path: '/live', menu: 'Live SOS', title: 'Live SOS', sub: 'View only', body: LiveBody },
   { path: '/users', menu: 'Users', title: 'Users', sub: 'Search by phone number', body: UsersBody },
   {
     path: '/history',
@@ -177,7 +91,8 @@ export const MAIN_SCREENS: Screen[] = [
     menu: 'Alert Log',
     title: 'Alert Log',
     sub: 'Every SMS and push message, failed first',
-    body: AlertLog,
+    note: "Login OTPs are sent by Firebase and don't appear here.",
+    body: AlertsBody,
   },
   {
     path: '/support',

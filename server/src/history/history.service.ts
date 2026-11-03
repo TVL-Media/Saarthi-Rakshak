@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { sql, type RawBuilder } from 'kysely';
 import { DatabaseService } from '../database/database.module';
+import { GUARDIAN_NUMBER, guardianLabel } from '../alerts/guardian-label';
 import { maskPhone } from '../users/phone';
 
 export const HISTORY_PAGE_SIZE = 50;
@@ -190,26 +191,20 @@ export class HistoryService {
     const row = await this.rowById(type, id);
     const column = type === 'sos' ? sql.ref('sos_event_id') : sql.ref('journey_id');
 
-    // Guardians involved, numbered in the order the user added them.
+    // Guardians involved, numbered in the order the user added them (same as the Alert Log).
     const { rows: guardians } = await sql<{
       id: string;
+      number: number;
       relation: string | null;
       phone: string | null;
     }>`
-      SELECT g.id, g.relation, g.phone FROM guardians g
+      SELECT g.id, ${GUARDIAN_NUMBER} AS number, g.relation, g.phone FROM guardians g
       WHERE g.id IN (SELECT guardian_id FROM alerts WHERE ${column} = ${id}
                      UNION SELECT guardian_id FROM guardian_links WHERE ${column} = ${id})
-      ORDER BY g.created_at, g.id
     `.execute(this.database.db);
-    const label = new Map(
-      guardians.map((g, i) => {
-        const relation = g.relation ? ` (${g.relation})` : '';
-        const phone = g.phone ? ` ${maskPhone(g.phone)}` : '';
-        return [g.id, `Guardian ${i + 1}${relation}${phone}`];
-      }),
-    );
+    const label = new Map(guardians.map((g) => [g.id, guardianLabel(g)]));
     const who = (guardianId: string | null) =>
-      (guardianId && label.get(guardianId)) ?? 'a guardian (no longer listed)';
+      (guardianId && label.get(guardianId)) ?? guardianLabel(null);
 
     const events: TimelineEvent[] = [];
     if (type === 'sos') {

@@ -597,3 +597,75 @@ body {
 .sr-timeline-text {
   font-size: 14px;
 }
+
+/* ---------- alert log ---------- */
+.sr-stat-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.sr-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sr-stat span {
+  color: var(--sr-text-secondary);
+  font-size: 13px;
+}
+.sr-stat b {
+  font-family: var(--sr-font-mono);
+  font-size: 26px;
+  font-weight: 500;
+}
+.sr-stat.sos b {
+  color: var(--sr-error);
+}
+.sr-strong {
+  font-weight: 600;
+}
+.sr-row-failed td:first-child {
+  box-shadow: inset 3px 0 0 var(--sr-error);
+}
+.sr-tags {
+  align-items: flex-start;
+}
+.sr-tags .ant-tag {
+  flex: none;
+  height: auto;
+}
+/* A red, bold line at normal size (e.g. an active SOS in "Needs attention"). */
+.sr-urgent {
+  color: var(--sr-error);
+  font-weight: 600;
+}
+
+/* ---------- live sos ---------- */
+.sr-sos-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sr-sos-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--sr-border);
+  border-radius: 8px;
+  background: var(--sr-card);
+  color: var(--sr-text);
+  cursor: pointer;
+  font: inherit;
+}
+.sr-sos-item.on {
+  border-color: var(--sr-primary);
+  background: var(--sr-primary-light);
+}
+.sr-sos-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
