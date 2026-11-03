@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -26,8 +25,9 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-/// Debug builds started with DEV_LOGIN=true: no Firebase SMS, the code is checked by our server.
-bool get _testLogin => kDebugMode && AppConfig.devLogin;
+/// Builds made with DEV_LOGIN=true (debug or the closed-test APK): no Firebase SMS, the code is
+/// checked by our server.
+bool get _testLogin => AppConfig.devLogin;
 
 class _LoginScreenState extends State<LoginScreen> {
   late bool _signUp = widget.signUp;
