@@ -1,0 +1,112 @@
+# Render Blueprint: CLOSED TEST server for Sarthi Rakshak (NODE_ENV=development).
+# Not for real users: guardian SMS are only printed in the Render logs, and Render has no India
+# region (Singapore is used). Step-by-step guide: docs/render-test-deploy.md
+#
+# One web service serves everything on one address: the API, the admin panel and the guardian
+# pages (SERVE_WEB=on), so the admin login cookie and the guardian live updates work.
+# "sync: false" values are typed in the Render dashboard (never put secrets in this file).
+
+services:
+  - type: web
+    name: sarthi-rakshak-test
+    runtime: node
+    region: singapore
+    # Paid plan on purpose: a free service sleeps when idle, and then SOS timers
+    # ("no guardian responded", lost contact) stop running.
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true # every push to the connected branch deploys
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter server build &&
+      VITE_API_URL=$PUBLIC_URL pnpm --filter admin build &&
+      pnpm --filter guardian-web exec vite build --base=/gw/
+    # Database changes first, then the server (with the background worker inside).
+    startCommand: cd server && node dist/database/migrate.js latest && node dist/main.js
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: development
+      - key: SERVE_WEB
+        value: "on"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: WORKER
+        value: "on"
+      - key: ADMIN_TWO_STEP
+        value: "on" # public address: admins always use 2-step login
+      # The service address, e.g. https://sarthi-rakshak-test.onrender.com (same value 3 times).
+      - key: PUBLIC_URL
+        sync: false
+      - key: ADMIN_PANEL_ORIGIN
+        sync: false
+      - key: GUARDIAN_WEB_URL
+        sync: false
+      # Database and Redis (made by this Blueprint). The *_TEST values are required by the
+      # development settings check but are never used by the running server.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sarthi-rakshak-test-db
+          property: connectionString
+      - key: DATABASE_URL_TEST
+        fromDatabase:
+          name: sarthi-rakshak-test-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: sarthi-rakshak-test-redis
+          property: connectionString
+      - key: REDIS_URL_TEST
+        fromService:
+          type: keyvalue
+          name: sarthi-rakshak-test-redis
+          property: connectionString
+      # Secrets: 32 random bytes in base64 each (command in the guide). Never reuse local ones.
+      - key: ADMIN_TOTP_ENCRYPTION_KEY
+        sync: false
+      - key: PHONE_HASH_KEY
+        sync: false
+      - key: GUARDIAN_LINK_KEY
+        sync: false
+      # File storage (photos, audio): an S3-compatible bucket, e.g. DigitalOcean Spaces blr1.
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY
+        sync: false
+      - key: S3_SECRET_KEY
+        sync: false
+      # App login with Firebase phone OTP. The key file is a Render "Secret File" named
+      # firebase.json (Render puts it at /etc/secrets/firebase.json).
+      - key: FIREBASE_PROJECT_ID
+        value: sarthi-rakshak
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/firebase.json
+      # Optional test login for debug APKs (any number + this code, until the date). Anyone
+      # with the code can log in as any number: share it only with your testers, keep it short.
+      - key: DEV_LOGIN_CODE
+        sync: false
+      - key: DEV_LOGIN_UNTIL
+        sync: false
+
+  - type: keyvalue
+    name: sarthi-rakshak-test-redis
+    region: singapore
+    plan: starter # keeps data on disk (BullMQ timers survive a restart)
+    maxmemoryPolicy: noeviction # required by BullMQ: jobs must never be dropped
+    ipAllowList: [] # only reachable from Render services
+
+databases:
+  - name: sarthi-rakshak-test-db
+    region: singapore
+    plan: basic-256mb
+    postgresMajorVersion: "17" # PostGIS is enabled by the first database migration
+    databaseName: sarthi
+    user: sarthi
+    ipAllowList: [] # only Render services (first admin: run setup in the web service's Shell)

@@ -99,6 +99,16 @@ const envSchema = z
     DEV_LOGIN_UNTIL: z.iso.date({ error: 'Must be a date like 2026-11-09' }).optional(),
     /** Run the background worker (alerts, timers, cleanup) in this server process. */
     WORKER: z.enum(['on', 'off'], { error: 'Must be on or off' }).default('on'),
+    /**
+     * Also serve the built admin panel and guardian page from this server (one address for
+     * everything, e.g. a test server on Render). Off: the pages run on their own (pnpm dev).
+     */
+    SERVE_WEB: z.enum(['on', 'off'], { error: 'Must be on or off' }).default('off'),
+    /**
+     * Proxies in front of the server (they add X-Forwarded-For), so rate limits see the real
+     * phone's address. Default: 1 in production, 0 otherwise. Render: 1.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.ADMIN_TWO_STEP === 'off') {

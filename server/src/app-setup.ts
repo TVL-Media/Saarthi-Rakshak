@@ -13,11 +13,13 @@ export function configureApp(app: INestApplication, env: Env): void {
     maxAge: 600,
   });
 
-  // Behind DigitalOcean's load balancer the client's address comes from X-Forwarded-For.
-  if (env.NODE_ENV === 'production') {
+  // Behind DigitalOcean's load balancer (or Render) the client's address comes from
+  // X-Forwarded-For.
+  const hops = env.TRUST_PROXY_HOPS ?? (env.NODE_ENV === 'production' ? 1 : 0);
+  if (hops > 0) {
     const express = app.getHttpAdapter().getInstance() as {
       set(key: string, value: unknown): void;
     };
-    express.set('trust proxy', 1);
+    express.set('trust proxy', hops);
   }
 }
