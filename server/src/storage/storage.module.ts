@@ -31,6 +31,9 @@ export interface StoredFile {
   contentType: string | undefined;
 }
 
+/** How often a server that started without file storage tries again. */
+const BUCKET_RETRY_MS = 30_000;
+
 function client(settings: StorageSettings, endpoint: string): S3Client {
   return new S3Client({
     endpoint,
@@ -76,8 +79,21 @@ export class StorageService implements OnModuleInit, OnApplicationShutdown {
       this.logger.warn(
         `File storage not reachable (${(err as Error).message}). Start it with: docker compose up -d`,
       );
+      // Storage may start after the server (e.g. on a test server): try again until it answers.
+      this.retry = setInterval(() => {
+        this.ensureBucket().then(
+          () => {
+            clearInterval(this.retry);
+            this.logger.log('File storage reachable; bucket ready.');
+          },
+          () => undefined,
+        );
+      }, BUCKET_RETRY_MS);
+      this.retry.unref();
     }
   }
+
+  private retry?: NodeJS.Timeout;
 
   async ensureBucket(): Promise<void> {
     try {
@@ -129,6 +145,7 @@ export class StorageService implements OnModuleInit, OnApplicationShutdown {
   }
 
   onApplicationShutdown(): void {
+    clearInterval(this.retry);
     this.s3.destroy();
     this.publicS3.destroy();
   }

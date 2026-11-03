@@ -16,47 +16,45 @@ Run `pnpm lint` and `pnpm test` on your laptop before pushing (Render does not r
 
 ## What Render makes (from `render.yaml`)
 
+Everything runs on Render; nothing else (no DigitalOcean) is needed.
+
 | Part | Render service | Why |
 | --- | --- | --- |
 | Server + worker + admin panel + guardian page | Web Service `sarthi-rakshak-test` (Starter) | One address for everything; paid so it never sleeps (timers keep running) |
+| File storage (photos, audio) | Web Service `sarthi-rakshak-test-files` (Starter + 10 GB disk) | SeaweedFS, the same storage as on your laptop; phones upload with short signed links |
 | Database | Postgres `sarthi-rakshak-test-db` (PostgreSQL 17) | PostGIS is switched on by the first migration |
 | Redis | Key Value `sarthi-rakshak-test-redis` (Starter, `noeviction`) | Live data and the job queue |
 
-Paid plans cost money every month — check Render's pricing page before you start.
+All four are paid plans — check Render's pricing page before you start. Render makes all secret
+keys itself (`generateValue`), so you never type or copy keys.
 
-## 1. Before you start (once)
+## 1. Before you start
 
-1. **File storage** (photos and audio): make a DigitalOcean Space in **blr1** (Bangalore), e.g.
-   `sarthi-test-files`, and a Spaces access key. You need: endpoint
-   `https://blr1.digitaloceanspaces.com`, region `blr1`, bucket name, access key, secret key.
-2. **Three secret keys** — run this three times in the VS Code terminal and keep each line:
-   ```
-   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-   ```
-   They are for `ADMIN_TOTP_ENCRYPTION_KEY`, `PHONE_HASH_KEY` and `GUARDIAN_LINK_KEY`. Never use the
-   local ones from your `.env`.
-3. **Firebase key file**: the same service-account JSON you use locally
-   (`C:\Users\hp\firebase-credentials_...json`). It is uploaded to Render as a secret file — never
-   put it in git.
+Have the Firebase key file ready: the same service-account JSON you use locally
+(`C:\Users\hp\firebase-credentials_...json`). It is uploaded to Render as a secret file — never put
+it in git.
 
 ## 2. Create the services
 
 1. Push `main` to GitHub (`render.yaml` must be on `main`).
 2. Render dashboard → **New → Blueprint** → connect GitHub → choose `TVL-Media/Saarthi-Rakshak`,
-   branch `main`. Render reads `render.yaml` and lists the three services.
-3. It asks for every `sync: false` value:
+   branch `main`. Render reads `render.yaml` and lists the four services.
+3. It asks for these values:
 
    | Setting | Value |
    | --- | --- |
-   | `PUBLIC_URL`, `ADMIN_PANEL_ORIGIN`, `GUARDIAN_WEB_URL` | `https://sarthi-rakshak-test.onrender.com` (all three the same; if Render gives the service another address, use that one everywhere) |
-   | `ADMIN_TOTP_ENCRYPTION_KEY`, `PHONE_HASH_KEY`, `GUARDIAN_LINK_KEY` | the three keys from step 1.2 (a different one each) |
-   | `S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` | from step 1.1 |
+   | `PUBLIC_URL`, `ADMIN_PANEL_ORIGIN`, `GUARDIAN_WEB_URL` | `https://sarthi-rakshak-test.onrender.com` (all three the same) |
+   | `S3_ENDPOINT` | `https://sarthi-rakshak-test-files.onrender.com` |
    | `DEV_LOGIN_CODE` | a 6-digit code only your testers know (not `159344`) — or leave empty to use only real Firebase OTP |
    | `DEV_LOGIN_UNTIL` | last test day, e.g. `2026-11-20` (empty if no test login) |
 
-4. Click **Apply**. Then open the web service → **Environment → Secret Files → Add**:
+   If Render gives a service a different address (the name was taken), use the address it shows
+   on the service page instead, then **Manual Deploy** the main service again.
+4. Click **Apply**. Then open `sarthi-rakshak-test` → **Environment → Secret Files → Add**:
    filename `firebase.json`, paste the whole Firebase JSON → Save → **Manual Deploy → Deploy latest commit**.
-5. Wait for the deploy to show **Live**. Check `https://<your address>/health` shows `"status":"ok"`.
+5. Wait for all services to show **Live**. Check `https://sarthi-rakshak-test.onrender.com/health`
+   shows `"status":"ok"`, and `https://sarthi-rakshak-test-files.onrender.com/healthz` answers (an
+   empty page is fine).
 
 ## 3. First admin account
 
@@ -95,7 +93,7 @@ Change `API_URL` back to `http://10.0.2.2:3000` for the emulator on your laptop.
 ## 6. When the test is over
 
 Turn off the test login: delete `DEV_LOGIN_CODE` in Render (or let `DEV_LOGIN_UNTIL` pass). Delete
-the Render services and the Space when you no longer need them (test data lives only there).
+the Render services when you no longer need them (test data lives only there).
 
 ## Problems
 
@@ -106,5 +104,6 @@ the Render services and the Space when you no longer need them (test data lives 
 | `SERVE_WEB=on but .../index.html is missing` | The admin or guardian build failed; look higher up in the build log |
 | Admin login loops back to the login page | `ADMIN_PANEL_ORIGIN` is not exactly the address in the browser (https, no `/` at the end) |
 | App says it cannot reach the server | `API_URL` in the APK must be the `https://` address; rebuild the APK after changing it |
-| Photos or audio fail to upload | Check the five `S3_*` values and that the access key can write to the bucket |
+| Photos or audio fail to upload | `S3_ENDPOINT` must be the files service's `https://` address and that service must be Live |
+| Server stops: a key "Must be 32 random bytes in base64" | Replace that key's value with the output of `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
 | "Too many requests" for every tester | `TRUST_PROXY_HOPS` must be `1` |

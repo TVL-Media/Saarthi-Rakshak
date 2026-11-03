@@ -1,6 +1,7 @@
 # Render Blueprint: CLOSED TEST server for Sarthi Rakshak (NODE_ENV=development).
 # Not for real users: guardian SMS are only printed in the Render logs, and Render has no India
-# region (Singapore is used). Step-by-step guide: docs/render-test-deploy.md
+# region (Singapore is used). Everything runs on Render, nothing else is needed.
+# Step-by-step guide: docs/render-test-deploy.md
 #
 # One web service serves everything on one address: the API, the admin panel and the guardian
 # pages (SERVE_WEB=on), so the admin login cookie and the guardian live updates work.
@@ -64,24 +65,31 @@ services:
           type: keyvalue
           name: sarthi-rakshak-test-redis
           property: connectionString
-      # Secrets: 32 random bytes in base64 each (command in the guide). Never reuse local ones.
+      # Secrets: Render makes a random 256-bit base64 value for each (never the local ones).
       - key: ADMIN_TOTP_ENCRYPTION_KEY
-        sync: false
+        generateValue: true
       - key: PHONE_HASH_KEY
-        sync: false
+        generateValue: true
       - key: GUARDIAN_LINK_KEY
-        sync: false
-      # File storage (photos, audio): an S3-compatible bucket, e.g. DigitalOcean Spaces blr1.
+        generateValue: true
+      # File storage (photos, audio): the SeaweedFS service below. S3_ENDPOINT is its address,
+      # e.g. https://sarthi-rakshak-test-files.onrender.com (phones upload there directly).
       - key: S3_ENDPOINT
         sync: false
       - key: S3_REGION
-        sync: false
+        value: us-east-1
       - key: S3_BUCKET
-        sync: false
+        value: sarthi-test-files
       - key: S3_ACCESS_KEY
-        sync: false
+        fromService:
+          type: web
+          name: sarthi-rakshak-test-files
+          envVarKey: AWS_ACCESS_KEY_ID
       - key: S3_SECRET_KEY
-        sync: false
+        fromService:
+          type: web
+          name: sarthi-rakshak-test-files
+          envVarKey: AWS_SECRET_ACCESS_KEY
       # App login with Firebase phone OTP. The key file is a Render "Secret File" named
       # firebase.json (Render puts it at /etc/secrets/firebase.json).
       - key: FIREBASE_PROJECT_ID
@@ -94,6 +102,31 @@ services:
         sync: false
       - key: DEV_LOGIN_UNTIL
         sync: false
+
+  # File storage: SeaweedFS (the same as docker-compose locally) with an S3 API, on a disk.
+  # Public on purpose: phones upload with short signed links; anything unsigned is refused.
+  - type: web
+    name: sarthi-rakshak-test-files
+    runtime: image
+    image:
+      url: docker.io/chrislusf/seaweedfs:4.48
+    region: singapore
+    plan: starter # disks need a paid plan
+    # Render's Docker Command replaces the image's entrypoint, so call it here. 30 volumes of
+    # 256 MB fit the 10 GB disk.
+    dockerCommand: /entrypoint.sh server -dir=/data -s3 -s3.port=8333 -master.volumeSizeLimitMB=256 -volume.max=30
+    healthCheckPath: /healthz
+    disk:
+      name: files
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: PORT
+        value: "8333" # the S3 port is the only one Render makes public
+      - key: AWS_ACCESS_KEY_ID
+        value: sarthi_test
+      - key: AWS_SECRET_ACCESS_KEY
+        generateValue: true
 
   - type: keyvalue
     name: sarthi-rakshak-test-redis
