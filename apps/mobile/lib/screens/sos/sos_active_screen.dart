@@ -6,10 +6,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
+import '../../engine/engine.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/format.dart';
+import 'recordings_screen.dart';
 
 /// SOS active (design: "Live Location Sharing"). Status comes from the engine (works offline) and,
 /// when online, the guardians' status from the server.
@@ -33,7 +35,8 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
     WidgetsBinding.instance.addObserver(this);
     _load();
     _poll = Timer.periodic(const Duration(seconds: 8), (_) => _load());
-    _tick = Timer.periodic(const Duration(seconds: 15), (_) => setState(() {}));
+    // Every second: the recorded time counts up while recording.
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
   }
 
   @override
@@ -114,17 +117,7 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
                       ? 'Finding your location…'
                       : 'Sharing live location · updated ${ago(engine.lastFixAt!)}',
             ),
-            _Status(
-              icon: engine.audioOff || engine.audioError != null ? Icons.mic_off : Icons.mic,
-              ok: engine.recording,
-              text: engine.audioOff
-                  ? 'Audio off — allow the microphone in App permissions'
-                  : engine.recording
-                      ? 'Recording audio'
-                      : engine.audioError != null
-                          ? 'Audio could not start (${engine.audioError}). Trying again…'
-                          : 'Starting audio…',
-            ),
+            _AudioStatus(engine: engine, onListen: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecordingsScreen(sosId: widget.sosId)))),
             if (engine.batteryPct != null)
               _Status(icon: Icons.battery_std, ok: engine.batteryPct! > 15, text: 'Battery ${engine.batteryPct}%'),
             if (!engine.online || !engine.sosSentToServer)
@@ -196,6 +189,102 @@ class _Status extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
           ]),
+        ),
+      );
+}
+
+/// Audio: a red dot that pulses while recording, the time recorded so far and the saved clips.
+class _AudioStatus extends StatelessWidget {
+  const _AudioStatus({required this.engine, required this.onListen});
+  final EngineState engine;
+  final VoidCallback onListen;
+
+  @override
+  Widget build(BuildContext context) {
+    final recorded = engine.audioRecorded(DateTime.now());
+    final mm = recorded.inMinutes.toString().padLeft(2, '0');
+    final ss = (recorded.inSeconds % 60).toString().padLeft(2, '0');
+    final String title;
+    final String? detail;
+    if (engine.audioOff) {
+      title = 'Audio off';
+      detail = 'Allow the microphone in App permissions below';
+    } else if (engine.recording) {
+      title = 'Recording audio · $mm:$ss';
+      detail = engine.audioClips == 0
+          ? 'First clip is saved after 30 seconds'
+          : '${engine.audioClips} clip${engine.audioClips == 1 ? '' : 's'} saved on this phone';
+    } else if (engine.audioError != null) {
+      title = 'Audio could not start';
+      detail = '${engine.audioError}. Trying again…';
+    } else {
+      title = 'Starting audio…';
+      detail = null;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: AppCard(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            engine.recording
+                ? const _RecordingDot()
+                : Icon(engine.audioOff || engine.audioError != null ? Icons.mic_off : Icons.mic, color: AppColors.amber),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(title, key: const Key('audio-title'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                if (detail != null) Text(detail, style: const TextStyle(color: AppColors.muted)),
+              ]),
+            ),
+          ]),
+          if (engine.audioClips > 0)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const Key('listen'),
+                onPressed: onListen,
+                icon: const Icon(Icons.headphones, color: AppColors.red),
+                label: const Text('Listen', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w700)),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _RecordingDot extends StatefulWidget {
+  const _RecordingDot();
+
+  @override
+  State<_RecordingDot> createState() => _RecordingDotState();
+}
+
+class _RecordingDotState extends State<_RecordingDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 24,
+        height: 24,
+        child: Center(
+          child: FadeTransition(
+            opacity: Tween<double>(begin: 0.35, end: 1).animate(_pulse),
+            child: Container(
+              key: const Key('recording-dot'),
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(color: AppColors.red, shape: BoxShape.circle),
+            ),
+          ),
         ),
       );
 }

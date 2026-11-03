@@ -107,7 +107,11 @@ class _BusyButtonState extends State<BusyButton> {
 
 /// Shows an error from the server (or any exception) at the bottom.
 void showError(BuildContext context, Object error) {
-  final text = error is ApiException ? error.message : 'Something went wrong. Please try again.';
+  // Not from the server: say what failed in the app, so it can be reported and fixed.
+  if (error is! ApiException) debugPrint('App error: $error');
+  final text = error is ApiException
+      ? error.message
+      : 'Something went wrong in the app (${error.runtimeType}). Please try again.';
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(text)));

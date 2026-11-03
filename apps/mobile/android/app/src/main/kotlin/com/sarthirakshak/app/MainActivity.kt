@@ -16,6 +16,7 @@ import android.provider.Settings
 import com.sarthirakshak.app.engine.Alerts
 import com.sarthirakshak.app.engine.Crypto
 import com.sarthirakshak.app.engine.EngineBus
+import com.sarthirakshak.app.engine.LocalClips
 import com.sarthirakshak.app.engine.SafetyService
 import com.sarthirakshak.app.engine.Store
 import io.flutter.embedding.android.FlutterActivity
@@ -87,7 +88,30 @@ class MainActivity : FlutterActivity() {
                     }
                     "clearSession" -> {
                         store.clearSession()
+                        // Recordings are private: nobody who logs in next on this phone may hear them.
+                        LocalClips.dir(this).deleteRecursively()
                         result.success(null)
+                    }
+                    "listClips" -> {
+                        val clips = LocalClips.list(this, call.argument<String>("sosId"))
+                        result.success(clips.map { c ->
+                            mapOf(
+                                "id" to c.optString("id"),
+                                "sosId" to c.optString("sosId"),
+                                "recordedAt" to c.optLong("recordedAt"),
+                                "seconds" to c.optInt("seconds"),
+                                "uploaded" to c.optBoolean("uploaded"),
+                            )
+                        })
+                    }
+                    "playClip" -> {
+                        val file = LocalClips.file(this, call.argument<String>("id")!!)
+                        if (!file.exists()) {
+                            result.error("not_found", "This recording is no longer on the phone.", null)
+                        } else {
+                            playEncrypted(file.readBytes())
+                            result.success(null)
+                        }
                     }
                     "cacheGuardians" -> {
                         val list = call.argument<List<Map<String, Any?>>>("guardians") ?: emptyList()
@@ -240,7 +264,10 @@ class MainActivity : FlutterActivity() {
         file.writeBytes(Crypto.decrypt(Crypto.AUDIO_KEY, bytes))
         player = MediaPlayer().apply {
             setDataSource(file.absolutePath)
-            setOnCompletionListener { stopPlayback() }
+            setOnCompletionListener {
+                stopPlayback()
+                EngineBus.emit("playback", mapOf("playing" to false))
+            }
             prepare()
             start()
         }

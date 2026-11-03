@@ -16,6 +16,7 @@ import '../auth/phone_otp.dart';
 import '../auth/profile_screen.dart';
 import '../guardians/guardians_screen.dart';
 import '../setup/safety_setup_screen.dart';
+import '../sos/recordings_screen.dart';
 
 /// Settings tab (design frame 42 / "My Profile", Phase 1 items only).
 class SettingsScreen extends StatelessWidget {
@@ -59,6 +60,7 @@ class SettingsScreen extends StatelessWidget {
           ],
           _Item(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),
           _Item(Icons.admin_panel_settings_outlined, 'App Permissions', openAppSettings),
+          _Item(Icons.headphones_outlined, 'My Recordings', () => open(const RecordingsScreen())),
           _Item(Icons.people_outline, 'Guardians', () => open(const GuardiansScreen())),
           _Item(Icons.location_on_outlined, 'Saved Places', () => open(const SavedPlacesScreen())),
           _Item(Icons.shield_outlined, 'Privacy Policy', () => launchUrl(Uri.parse(AppConfig.privacyUrl))),

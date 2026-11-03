@@ -6,6 +6,7 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/format.dart';
+import '../sos/recordings_screen.dart';
 
 String historyTitle(HistoryItem i) {
   if (i.type == 'journey') return 'Journey to ${i.destinationLabel ?? 'destination'}';
@@ -175,14 +176,17 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _engine; // looked up now, while the screen is open
     _load();
   }
 
   @override
   void dispose() {
-    AppScope.read(context).engine.stopPlayback().catchError((_) {});
+    _engine.stopPlayback().catchError((_) {});
     super.dispose();
   }
+
+  late final _engine = AppScope.read(context).engine;
 
   Future<void> _load() async {
     try {
@@ -248,6 +252,19 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                       Expanded(child: Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(e.text, style: const TextStyle(fontSize: 15.5)))),
                     ]),
                   ),
+                if (d.item.type == 'sos' && !d.item.isTest) ...[
+                  const SizedBox(height: 4),
+                  OutlinedButton.icon(
+                    key: const Key('phone-recordings'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => RecordingsScreen(sosId: d.item.id)),
+                    ),
+                    icon: const Icon(Icons.headphones, color: AppColors.red),
+                    label: const Text('Recordings on this phone'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 if (d.clips.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   const SectionLabel('Audio recordings'),

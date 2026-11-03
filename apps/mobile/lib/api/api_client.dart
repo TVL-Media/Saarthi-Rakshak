@@ -36,7 +36,8 @@ class ApiClient {
   /// Called when the server says the session has ended (logout elsewhere, new phone, deleted).
   void Function()? onSessionEnded;
 
-  static const _timeout = Duration(seconds: 20);
+  /// Long enough for a test server that was asleep to wake up (about a minute on Render's free plan).
+  static const _timeout = Duration(seconds: 70);
 
   Future<dynamic> _call(String method, String path, {Object? body, Map<String, String>? query}) async {
     final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
@@ -68,14 +69,28 @@ class ApiClient {
     if (res.statusCode >= 200 && res.statusCode < 300) return json;
 
     final map = json is Map<String, dynamic> ? json : const <String, dynamic>{};
-    final err = ApiException(
-      res.statusCode,
-      (map['error'] as String?) ?? 'server_error',
-      (map['message'] as String?) ?? 'Something went wrong. Please try again.',
-    );
+    final err = map['error'] is String
+        ? ApiException(
+            res.statusCode,
+            map['error'] as String,
+            res.statusCode >= 500
+                // The server's own "something went wrong": add the number so it can be found in its log.
+                ? '${(map['message'] as String?) ?? 'Something went wrong on the server.'} (error ${res.statusCode})'
+                : (map['message'] as String?) ?? 'Please try again. (error ${res.statusCode})',
+          )
+        : _noServerReply(res.statusCode);
     if (err.notLoggedIn && token != null) onSessionEnded?.call();
     throw err;
   }
+
+  /// A reply that did not come from our server (no `{ error, message }`), e.g. from the hosting
+  /// while the server is starting, restarting or busy.
+  ApiException _noServerReply(int status) => switch (status) {
+        502 || 503 || 504 => ApiException(
+            status, 'server_busy', 'The server is starting or busy. Please try again in a minute.'),
+        404 => ApiException(status, 'not_found', 'The server does not know this request. Update the app. (error 404)'),
+        _ => ApiException(status, 'server_error', 'Something went wrong on the server. Please try again. (error $status)'),
+      };
 
   Map<String, dynamic> _obj(dynamic v) => v as Map<String, dynamic>;
 

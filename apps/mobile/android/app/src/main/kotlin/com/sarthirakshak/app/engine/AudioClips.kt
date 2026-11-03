@@ -20,6 +20,9 @@ class AudioClips(private val context: Context, private val onClip: (clipId: Stri
 
     val recording get() = recorder != null
 
+    /** When the clip being recorded now started (0 when not recording). */
+    val currentSince get() = if (recorder != null) startedAt else 0L
+
     /** Why the last start failed (shown on the SOS screen); null once recording works. */
     var lastError: String? = null
         private set

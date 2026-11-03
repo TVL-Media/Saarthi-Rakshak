@@ -67,8 +67,11 @@ class SafetyService : Service() {
         thread = HandlerThread("safety-engine").apply { start() }
         handler = Handler(thread.looper)
         fused = LocationServices.getFusedLocationProviderClient(this)
+        LocalClips.cleanup(this)
         audio = AudioClips(this) { clipId, file, recordedAt, seconds ->
             val sosId = store.sos?.optString("sosId") ?: return@AudioClips
+            // Kept on the phone so the user can listen to it in the app (also if the upload fails).
+            LocalClips.save(this, clipId, sosId, recordedAt, seconds)
             outbox.add("clip", JSONObject().apply {
                 put("sosId", sosId)
                 put("clipId", clipId)
@@ -338,7 +341,7 @@ class SafetyService : Service() {
     private val flushTick = object : Runnable {
         override fun run() {
             flush()
-            if (store.sos != null || store.journey != null || outbox.count() > 0) handler.postDelayed(this, FLUSH_MS)
+            if (store.sos != null || store.journey != null || outbox.countOrdered() > 0) handler.postDelayed(this, FLUSH_MS)
             else stopIfIdle()
         }
     }
@@ -375,8 +378,11 @@ class SafetyService : Service() {
         flushing = true
         try {
             while (true) {
-                val items = outbox.peek()
-                if (items.isEmpty()) break
+                val items = outbox.peekOrdered()
+                if (items.isEmpty()) {
+                    flushClips() // only once everything before them (e.g. the SOS) is on the server
+                    break
+                }
                 val first = items.first()
                 val done: List<Long> = when (first.kind) {
                     "sos_start" -> sendSosStart(first)
@@ -384,7 +390,6 @@ class SafetyService : Service() {
                     "sos_end" -> simple(first, "POST", "/v1/sos/${first.body.getString("sosId")}/end", JSONObject().put("reason", "safe"))
                     "checkin" -> simple(first, "POST", "/v1/journeys/${first.body.getString("journeyId")}/checkins",
                         JSONObject().put("id", first.body.getString("id")).put("reason", first.body.getString("reason")))
-                    "clip" -> sendClip(first)
                     else -> listOf(first.id)
                 }
                 if (done.isEmpty()) break
@@ -454,6 +459,31 @@ class SafetyService : Service() {
         return points.map { it.id }
     }
 
+    /**
+     * Uploads waiting audio clips. A clip that fails waits longer each time (30 s … 10 min) and is
+     * given up after a day; it stays on the phone either way. Never stops the other sending.
+     */
+    private fun flushClips() {
+        val now = System.currentTimeMillis()
+        for (item in outbox.peekClips()) {
+            val b = item.body
+            if (b.optLong("nextTryAt") > now) continue
+            try {
+                outbox.remove(sendClip(item))
+                LocalClips.setUploaded(this, b.getString("clipId"), true)
+            } catch (e: Exception) {
+                val tries = b.optInt("tries") + 1
+                if (now - b.optLong("recordedAt", now) > CLIP_GIVE_UP_MS) {
+                    Log.w(TAG, "Clip ${b.optString("clipId")} not uploaded after a day; kept on the phone only")
+                    outbox.remove(listOf(item.id))
+                } else {
+                    val wait = (30_000L shl (tries - 1).coerceAtMost(5)).coerceAtMost(600_000L)
+                    outbox.update(item.id, b.put("tries", tries).put("nextTryAt", now + wait))
+                }
+            }
+        }
+    }
+
     private fun sendClip(item: Outbox.Item): List<Long> {
         val b = item.body
         val file = File(b.getString("path"))
@@ -463,8 +493,7 @@ class SafetyService : Service() {
         val link = api.call("POST", "/v1/sos/$sosId/audio-upload", JSONObject().put("clipId", b.getString("clipId")).put("sizeBytes", bytes.size))
         if (!link.ok) {
             check(link, "clip link")
-            file.delete()
-            return listOf(item.id)
+            return listOf(item.id) // refused for good (e.g. a test SOS); the clip stays on the phone
         }
         val l = link.json
         val headers = HashMap<String, String>()
@@ -478,8 +507,7 @@ class SafetyService : Service() {
             put("durationS", b.getInt("seconds"))
         })
         check(saved, "clip")
-        file.delete()
-        return listOf(item.id)
+        return listOf(item.id) // the encrypted file stays on the phone for listening (LocalClips)
     }
 
     // ---- Phone state ------------------------------------------------------------------------------
@@ -499,6 +527,7 @@ class SafetyService : Service() {
 
     private fun emitState() {
         val sos = store.sos
+        val clips = if (sos != null) LocalClips.list(this, sos.optString("sosId")) else emptyList()
         val journey = store.journey
         val fix = lastFix
         val reached = sos?.optJSONArray("simSmsSentTo")
@@ -520,10 +549,14 @@ class SafetyService : Service() {
             "accuracyM" to fix?.accuracy?.toDouble(),
             "batteryPct" to batteryPct(),
             "online" to online,
-            "queued" to outbox.count(),
+            "queued" to outbox.countOrdered(),
             "recording" to audio.recording,
             "audioOff" to (sos != null && !audio.allowed()),
             "audioError" to (if (sos != null && !audio.recording) audio.lastError else null),
+            // How much was recorded in this SOS: saved clips + the clip being recorded now.
+            "audioClips" to clips.size,
+            "audioSavedSeconds" to clips.sumOf { it.optInt("seconds") },
+            "audioClipSince" to (if (sos != null) audio.currentSince else 0L),
             "locationOff" to locationOff,
         ))
     }
@@ -554,7 +587,7 @@ class SafetyService : Service() {
         store.sos != null && store.sos!!.optBoolean("sentToServer") -> "SOS active — your guardians can see your location"
         store.sos != null -> "SOS active — sending…"
         store.journey != null -> "Journey on — your guardians can follow you"
-        outbox.count() > 0 -> "Sending saved updates…"
+        outbox.countOrdered() > 0 -> "Sending saved updates…"
         else -> "Protection on"
     }
 
@@ -568,7 +601,7 @@ class SafetyService : Service() {
         if (store.sos != null || store.journey != null) {
             startTracking()
             scheduleTicks()
-        } else if (outbox.count() > 0) {
+        } else if (outbox.count() > 0) { // also tries waiting clips once
             handler.postDelayed(flushTick, 0)
         }
         updateNotification()
@@ -577,7 +610,7 @@ class SafetyService : Service() {
     }
 
     private fun stopIfIdle() {
-        if (store.sos == null && store.journey == null && outbox.count() == 0) {
+        if (store.sos == null && store.journey == null && outbox.countOrdered() == 0) {
             stopTracking()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -607,6 +640,7 @@ class SafetyService : Service() {
         const val ACTION_RESUME = "sarthi.RESUME"
         private const val FLUSH_MS = 5_000L
         private const val HEARTBEAT_MS = 45_000L
+        private const val CLIP_GIVE_UP_MS = 24 * 3600_000L
 
         private val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 

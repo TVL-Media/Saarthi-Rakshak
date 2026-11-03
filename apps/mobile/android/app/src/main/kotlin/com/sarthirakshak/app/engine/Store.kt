@@ -95,8 +95,29 @@ class Outbox(context: Context) : SQLiteOpenHelper(context, "sarthi_outbox.db", n
         return out
     }
 
+    /** Items sent strictly in order (everything except audio clips). */
+    @Synchronized
+    fun peekOrdered(limit: Int = 200): List<Item> = query("SELECT id, kind, body FROM outbox WHERE kind != 'clip' ORDER BY id LIMIT $limit")
+
+    /** Audio clips: sent on their own, so a failed upload never holds up locations or "I'm safe". */
+    @Synchronized
+    fun peekClips(limit: Int = 20): List<Item> = query("SELECT id, kind, body FROM outbox WHERE kind = 'clip' ORDER BY id LIMIT $limit")
+
+    private fun query(sql: String): List<Item> {
+        val out = ArrayList<Item>()
+        readableDatabase.rawQuery(sql, null).use { c ->
+            while (c.moveToNext()) out.add(Item(c.getLong(0), c.getString(1), JSONObject(c.getString(2))))
+        }
+        return out
+    }
+
     @Synchronized
     fun count(): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+    /** Waiting items that are not audio clips (clips retry slowly and never keep the engine awake). */
+    @Synchronized
+    fun countOrdered(): Int =
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE kind != 'clip'", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
 
     @Synchronized
     fun clear() {

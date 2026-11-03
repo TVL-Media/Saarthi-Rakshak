@@ -22,6 +22,9 @@ class EngineState {
         recording = (m['recording'] as bool?) ?? false,
         audioOff = (m['audioOff'] as bool?) ?? false,
         audioError = m['audioError'] as String?,
+        audioClips = (m['audioClips'] as int?) ?? 0,
+        audioSavedSeconds = (m['audioSavedSeconds'] as int?) ?? 0,
+        audioClipSince = (m['audioClipSince'] as int?) ?? 0,
         locationOff = (m['locationOff'] as bool?) ?? false,
         journeyStatus = m['journeyStatus'] as String?;
 
@@ -49,6 +52,19 @@ class EngineState {
 
   /// Why recording could not start (the engine keeps trying); null when fine.
   final String? audioError;
+
+  /// 30-second clips saved on this phone for the running SOS, and their total length.
+  final int audioClips;
+  final int audioSavedSeconds;
+
+  /// When the clip being recorded now started (ms since epoch; 0 when not recording).
+  final int audioClipSince;
+
+  /// Total recorded in this SOS so far, including the clip being recorded now.
+  Duration audioRecorded(DateTime now) {
+    final current = recording && audioClipSince > 0 ? now.millisecondsSinceEpoch - audioClipSince : 0;
+    return Duration(seconds: audioSavedSeconds) + Duration(milliseconds: current.clamp(0, 120000));
+  }
   final bool locationOff;
 
   /// on_route, stopped, off_route, late (journey only).
@@ -153,6 +169,14 @@ class SafetyEngine {
   /// After the user changed permissions: the engine starts what is now allowed (audio, location).
   Future<void> resume() => _ch.invokeMethod('resume');
 
+  /// SOS recordings kept on this phone (newest first); only this phone can play them.
+  Future<List<LocalClip>> listClips({String? sosId}) async {
+    final list = await _ch.invokeMethod<List<dynamic>>('listClips', {'sosId': sosId}) ?? const [];
+    return list.map((m) => LocalClip(m as Map<dynamic, dynamic>)).toList();
+  }
+
+  Future<void> playClip(String id) => _ch.invokeMethod('playClip', {'id': id});
+
   Future<Map<dynamic, dynamic>> deviceInfo() async =>
       (await _ch.invokeMethod<Map<dynamic, dynamic>>('deviceInfo')) ?? const {};
 
@@ -175,4 +199,20 @@ class SafetyEngine {
     if (r == null) return null;
     return (name: (r['name'] as String?) ?? '', phone: (r['phone'] as String?) ?? '');
   }
+}
+
+/// One SOS recording kept (encrypted) on this phone.
+class LocalClip {
+  LocalClip(Map<dynamic, dynamic> m)
+      : id = m['id'] as String,
+        sosId = m['sosId'] as String,
+        recordedAt = DateTime.fromMillisecondsSinceEpoch((m['recordedAt'] as num).toInt()),
+        seconds = (m['seconds'] as num?)?.toInt() ?? 0,
+        uploaded = (m['uploaded'] as bool?) ?? false;
+
+  final String id;
+  final String sosId;
+  final DateTime recordedAt;
+  final int seconds;
+  final bool uploaded;
 }

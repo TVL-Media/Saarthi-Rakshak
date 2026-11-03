@@ -43,6 +43,9 @@ class AppState extends ChangeNotifier {
   /// The check-in the engine asks the user to answer (null when none).
   final ValueNotifier<Map<dynamic, dynamic>?> checkinAlert = ValueNotifier(null);
 
+  /// Goes up each time a recording finished playing.
+  final ValueNotifier<int> playbackDone = ValueNotifier(0);
+
   static const _tokenKey = 'session_token';
   static const _seenWelcomeKey = 'seen_welcome';
   static const _setupDoneKey = 'setup_done';
@@ -252,6 +255,8 @@ class AppState extends ChangeNotifier {
         checkinAlert.value = e.data;
       case 'launch':
         launchAction.value = e.data;
+      case 'playback':
+        playbackDone.value++;
     }
   }
 

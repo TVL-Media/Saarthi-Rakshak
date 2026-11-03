@@ -53,8 +53,30 @@ export class AppExceptionFilter extends BaseExceptionFilter {
     this.logger.error(
       exception instanceof Error ? (exception.stack ?? exception.message) : exception,
     );
+    if (isUnreachable(exception)) {
+      // e.g. file storage not running: tell the phone it is temporary, not a broken request.
+      res.status(HttpStatus.SERVICE_UNAVAILABLE).json({
+        error: 'service_unavailable',
+        message: 'A service the server needs is not reachable right now. Please try again later.',
+      });
+      return;
+    }
     res
       .status(HttpStatus.INTERNAL_SERVER_ERROR)
       .json({ error: 'server_error', message: 'Something went wrong. Please try again.' });
   }
+}
+
+/** Network errors from a service the server calls (file storage, database, Redis). */
+const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN']);
+
+export function isUnreachable(e: unknown): boolean {
+  for (let cur = e, depth = 0; cur && typeof cur === 'object' && depth < 4; depth++) {
+    const err = cur as { code?: unknown; name?: unknown; cause?: unknown; errors?: unknown[] };
+    if (typeof err.code === 'string' && UNREACHABLE.has(err.code)) return true;
+    if (err.name === 'TimeoutError') return true;
+    if (Array.isArray(err.errors) && err.errors.some((x) => isUnreachable(x))) return true;
+    cur = err.cause;
+  }
+  return false;
 }
