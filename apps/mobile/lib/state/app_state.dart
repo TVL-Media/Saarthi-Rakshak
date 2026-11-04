@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -45,6 +47,22 @@ class AppState extends ChangeNotifier {
 
   /// Goes up each time a recording finished playing.
   final ValueNotifier<int> playbackDone = ValueNotifier(0);
+
+  /// Profile photo kept on this phone (shown even when the server has no file storage).
+  Uint8List? localPhoto;
+
+  String get _photoKey => 'profile_photo_${me?.id ?? ''}';
+
+  Future<void> _loadLocalPhoto() async {
+    final saved = (await SharedPreferences.getInstance()).getString(_photoKey);
+    localPhoto = saved == null ? null : base64Decode(saved);
+  }
+
+  Future<void> setLocalPhoto(Uint8List bytes) async {
+    localPhoto = bytes;
+    await (await SharedPreferences.getInstance()).setString(_photoKey, base64Encode(bytes));
+    notifyListeners();
+  }
 
   static const _tokenKey = 'session_token';
   static const _seenWelcomeKey = 'seen_welcome';
@@ -110,6 +128,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> _afterLogin(String token) async {
     final m = me!;
+    await _loadLocalPhoto();
     await engine.setSession(api.baseUrl, token, m.firstName.isEmpty ? 'Someone' : m.firstName);
     await refreshGuardians(quiet: true);
     if (m.consentGiven) await _saveSignUpName();
@@ -236,6 +255,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> _endLocally({bool toWelcome = false}) async {
     await _storage.delete(key: _tokenKey);
+    // The photo is private: the next person to log in on this phone must not see it.
+    if (me != null) (await SharedPreferences.getInstance()).remove(_photoKey).ignore();
+    localPhoto = null;
     api.token = null;
     me = null;
     guardians = const [];

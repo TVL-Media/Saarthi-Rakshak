@@ -72,6 +72,9 @@ void main() {
     m.setMockMethodCallHandler(const MethodChannel('sarthi/engine'), (call) async {
       engineCalls.add(call);
       return switch (call.method) {
+        'geocodeSearch' => [
+          {'name': 'Sector 18', 'address': 'Sector 18, Noida, Uttar Pradesh', 'lat': 28.57, 'lng': 77.32},
+        ],
         'listClips' => [
           {'id': 'c2', 'sosId': 's1', 'recordedAt': 1793700030000, 'seconds': 30, 'uploaded': false},
           {'id': 'c1', 'sosId': 's1', 'recordedAt': 1793700000000, 'seconds': 30, 'uploaded': true},
@@ -136,7 +139,9 @@ void main() {
   testWidgets('Journey: no location says what to do; no saved places offers to add one', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 1000));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(host(makeState(), StartJourneyScreen(maps: MapsService(apiKey: ''))));
+    await tester.pumpWidget(
+      host(makeState(), StartJourneyScreen(maps: MapsService(apiKey: '', deviceGeocoder: false))),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('Location is turned off'), findsOneWidget); // not stuck on "Finding…"
     expect(find.text('Tap to try again'), findsOneWidget);
@@ -233,5 +238,21 @@ void main() {
     expect(e.audioRecorded(now.add(const Duration(seconds: 1))), const Duration(seconds: 103));
     final stopped = EngineState({'recording': false, 'audioSavedSeconds': 90, 'audioClipSince': 0});
     expect(stopped.audioRecorded(now), const Duration(seconds: 90));
+  });
+
+  testWidgets('Journey without a Google key: the phone\'s geocoder finds the destination', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(host(makeState(), StartJourneyScreen(maps: MapsService(apiKey: ''))));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('add-place')), findsNothing); // search works, no dead end
+    await tester.enterText(find.byType(TextField).first, 'sector 18 noida');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    final search = engineCalls.lastWhere((c) => c.method == 'geocodeSearch');
+    expect((search.arguments as Map)['query'], 'sector 18 noida');
+    await tester.tap(find.text('Sector 18'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reach by'), findsOneWidget); // destination chosen
   });
 }

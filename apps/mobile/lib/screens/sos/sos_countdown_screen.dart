@@ -35,11 +35,15 @@ class _SosCountdownScreenState extends State<SosCountdownScreen> {
     _sosId = state.newId();
     _total = state.me?.rule('sos.countdown_seconds', 5) ?? 5;
     _left = _total;
-    HapticFeedback.heavyImpact();
+    // Strong vibration all through the countdown, so an SOS started by mistake is noticed.
+    _buzz(700);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      HapticFeedback.mediumImpact();
       setState(() => _left--);
-      if (_left <= 0) _send();
+      if (_left <= 0) {
+        _send();
+      } else {
+        _buzz(450);
+      }
     });
   }
 
@@ -49,11 +53,17 @@ class _SosCountdownScreenState extends State<SosCountdownScreen> {
     super.dispose();
   }
 
+  void _buzz(int ms) {
+    HapticFeedback.heavyImpact();
+    AppScope.read(context).engine.vibrate(ms).catchError((_) {});
+  }
+
   Future<void> _send() async {
     if (_done) return;
     _done = true;
     _timer?.cancel();
     final state = AppScope.read(context);
+    _buzz(1200); // SOS is being sent
     await state.engine.startSos(
       sosId: _sosId,
       trigger: widget.trigger,

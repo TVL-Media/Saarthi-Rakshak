@@ -10,6 +10,7 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/format.dart';
+import '../legal/legal_screen.dart';
 import 'phone_otp.dart';
 import 'profile_screen.dart';
 
@@ -275,7 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       const SizedBox(width: 6),
                                       const Text('I agree to ', style: TextStyle(fontSize: 15)),
                                       GestureDetector(
-                                        onTap: () => launchUrl(Uri.parse(AppConfig.termsUrl)),
+                                        onTap: () => LegalScreen.open(context, LegalPage.terms),
                                         child: const Text(
                                           'Terms & Conditions',
                                           style: TextStyle(

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../config.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../legal/legal_screen.dart';
 
 /// Terms and privacy, before anything else (A1 consent).
 class ConsentScreen extends StatefulWidget {
@@ -42,9 +42,9 @@ class _ConsentScreenState extends State<ConsentScreen> {
               Expanded(
                 child: Wrap(children: [
                   const Text('I agree to the '),
-                  _Link('Terms', AppConfig.termsUrl),
+                  const _Link('Terms', LegalPage.terms),
                   const Text(' and '),
-                  _Link('Privacy Policy', AppConfig.privacyUrl),
+                  const _Link('Privacy Policy', LegalPage.privacy),
                 ]),
               ),
             ]),
@@ -85,13 +85,13 @@ class _Point extends StatelessWidget {
 }
 
 class _Link extends StatelessWidget {
-  const _Link(this.text, this.url);
+  const _Link(this.text, this.page);
   final String text;
-  final String url;
+  final LegalPage page;
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+        onTap: () => LegalScreen.open(context, page),
         child: Text(text, style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w600)),
       );
 }

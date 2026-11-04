@@ -138,7 +138,9 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
           _Check(
             icon: Icons.my_location,
             title: 'Location all the time',
-            text: 'Keeps sharing when the screen is off. Choose “Allow all the time”.',
+            text: _location
+                ? 'Keeps sharing when the screen is off. Choose “Allow all the time”.'
+                : 'Allow “Location” above first. Then choose “Allow all the time” here.',
             ok: _locationAlways,
             onFix: _location ? () => _ask(Permission.locationAlways) : null,
           ),

@@ -3,6 +3,8 @@ package com.sarthirakshak.app
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.location.Address
+import android.location.Geocoder
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.Ringtone
@@ -11,6 +13,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.ContactsContract
 import android.provider.Settings
 import com.sarthirakshak.app.engine.Alerts
@@ -24,6 +30,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -187,6 +194,26 @@ class MainActivity : FlutterActivity() {
                         }
                         result.success(null)
                     }
+                    "geocodeSearch" -> {
+                        val query = call.argument<String>("query") ?: ""
+                        geocode(result) { g ->
+                            // Within India only (bounding box), best matches first.
+                            @Suppress("DEPRECATION")
+                            g.getFromLocationName(query, 6, 6.5, 68.0, 37.5, 97.5).orEmpty().map { a -> addressMap(a) }
+                        }
+                    }
+                    "geocodeReverse" -> {
+                        val lat = call.argument<Double>("lat")!!
+                        val lng = call.argument<Double>("lng")!!
+                        geocode(result) { g ->
+                            @Suppress("DEPRECATION")
+                            g.getFromLocation(lat, lng, 1).orEmpty().firstOrNull()?.let { a -> addressMap(a) }
+                        }
+                    }
+                    "vibrate" -> {
+                        vibrate(call.argument<Int>("ms") ?: 400)
+                        result.success(null)
+                    }
                     "stopRingtone" -> {
                         ringtone?.stop()
                         ringtone = null
@@ -270,6 +297,54 @@ class MainActivity : FlutterActivity() {
             }
             prepare()
             start()
+        }
+    }
+
+    /**
+     * Place names and search with the phone's own geocoder (no Google Maps key needed). Runs off the
+     * main thread; answers null / an empty list when the phone has no geocoder or no internet.
+     */
+    private fun geocode(result: MethodChannel.Result, work: (Geocoder) -> Any?) {
+        if (!Geocoder.isPresent()) return result.success(null)
+        Thread {
+            val answer = try {
+                work(Geocoder(this, Locale("en", "IN")))
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread { result.success(answer) }
+        }.start()
+    }
+
+    private fun addressMap(a: Address): Map<String, Any?> {
+        val area = a.subLocality ?: a.locality ?: a.subAdminArea
+        val city = a.locality ?: a.subAdminArea ?: a.adminArea
+        val name = a.featureName?.takeIf { it.isNotBlank() && !it.matches(Regex("^[0-9 ,-]+$")) && it != area } ?: area ?: city ?: "Place"
+        val line = (0..a.maxAddressLineIndex).mapNotNull { a.getAddressLine(it) }.joinToString(", ")
+        return mapOf(
+            "name" to name,
+            "address" to line,
+            "area" to listOfNotNull(area, city.takeIf { it != area }).joinToString(", "),
+            "lat" to a.latitude,
+            "lng" to a.longitude,
+        )
+    }
+
+    /** A strong buzz (alarm type, so it works even when touch vibration is off). */
+    private fun vibrate(ms: Int) {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(VIBRATOR_SERVICE) as Vibrator
+        }
+        if (!vibrator.hasVibrator()) return
+        val effect = VibrationEffect.createOneShot(ms.toLong().coerceIn(50, 2000), VibrationEffect.DEFAULT_AMPLITUDE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            vibrator.vibrate(effect, VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(effect, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
         }
     }
 

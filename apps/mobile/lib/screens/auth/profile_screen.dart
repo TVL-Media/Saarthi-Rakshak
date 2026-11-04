@@ -64,19 +64,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  bool _photoBusy = false;
+
   Future<void> _pickPhoto() async {
+    if (_photoBusy) return;
     final state = AppScope.read(context);
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
-    if (file == null) return;
+    final XFile? file;
     try {
-      final bytes = await file.readAsBytes();
-      if (bytes.length > 2 * 1024 * 1024) throw ApiException(400, 'invalid_input', 'The photo must be at most 2 MB.');
+      file = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
+    } catch (_) {
+      if (mounted) showInfo(context, 'Could not open your photos. Allow photo access for Sarthi Rakshak.');
+      return;
+    }
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    if (bytes.length > 2 * 1024 * 1024) {
+      if (mounted) showInfo(context, 'The photo must be at most 2 MB. Choose a smaller one.');
+      return;
+    }
+    setState(() => _photoBusy = true);
+    // Shown at once and kept on this phone.
+    await state.setLocalPhoto(bytes);
+    try {
       final link = await state.api.photoUploadLink(bytes.length);
       await state.api.upload(link, bytes);
       await state.profileSaved(await state.api.savePhoto(link.key));
-      setState(() {});
-    } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted) showInfo(context, 'Photo updated.');
+    } on ApiException catch (e) {
+      if (mounted) {
+        showInfo(context, e.isOffline || e.code == 'upload_failed' || e.status >= 500
+            ? 'Photo saved on this phone. It could not be uploaded to your account right now.'
+            : e.message);
+      }
+    } catch (_) {
+      // The file storage could not be reached (e.g. a test server without it).
+      if (mounted) showInfo(context, 'Photo saved on this phone. It could not be uploaded to your account right now.');
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
     }
   }
 
@@ -98,9 +122,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: GestureDetector(
               onTap: _pickPhoto,
               child: Stack(children: [
-                me.photoUrl != null
-                    ? CircleAvatar(radius: 48, backgroundImage: NetworkImage(me.photoUrl!))
-                    : Initials(me.name ?? '', size: 96),
+                ProfileAvatar(
+                  name: me.name ?? '',
+                  photoUrl: me.photoUrl,
+                  localPhoto: AppScope.of(context).localPhoto,
+                  size: 96,
+                ),
+                if (_photoBusy)
+                  const Positioned.fill(child: Center(child: CircularProgressIndicator())),
                 const Positioned(
                   right: 0,
                   bottom: 0,

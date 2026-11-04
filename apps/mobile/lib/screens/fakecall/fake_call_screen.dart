@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../engine/engine.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
@@ -105,23 +106,33 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   int _seconds = 0;
   Timer? _timer;
 
+  /// Kept from the start: while the screen closes it can no longer look the engine up, and the
+  /// ringtone must always stop (Decline, End, Back or swipe).
+  late final SafetyEngine _engine = AppScope.read(context).engine;
+
   @override
   void initState() {
     super.initState();
-    AppScope.read(context).engine.startRingtone().catchError((_) {});
+    _engine.startRingtone().catchError((_) {});
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    AppScope.read(context).engine.stopRingtone().catchError((_) {});
+    _engine.stopRingtone().catchError((_) {});
     super.dispose();
   }
 
   void _answer() {
-    AppScope.read(context).engine.stopRingtone().catchError((_) {});
+    _engine.stopRingtone().catchError((_) {});
     setState(() => _answered = true);
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() => _seconds++));
+  }
+
+  void _hangUp() {
+    _timer?.cancel();
+    _engine.stopRingtone().catchError((_) {});
+    Navigator.pop(context);
   }
 
   @override
@@ -143,7 +154,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
             child: Row(
               mainAxisAlignment: _answered ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween,
               children: [
-                _CallButton(color: AppColors.red, icon: Icons.call_end, label: _answered ? 'End' : 'Decline', onTap: () => Navigator.pop(context)),
+                _CallButton(color: AppColors.red, icon: Icons.call_end, label: _answered ? 'End' : 'Decline', onTap: _hangUp),
                 if (!_answered) _CallButton(color: const Color(0xFF22C55E), icon: Icons.call, label: 'Answer', onTap: _answer),
               ],
             ),

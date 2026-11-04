@@ -41,10 +41,13 @@ class ApiClient {
 
   Future<dynamic> _call(String method, String path, {Object? body, Map<String, String>? query}) async {
     final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
+    // The session this request uses: an answer for an older session (e.g. from before logging out
+    // and in again) must never end the new one.
+    final sentToken = token;
     final headers = <String, String>{
       'Accept': 'application/json',
       if (body != null) 'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      if (sentToken != null) 'Authorization': 'Bearer $sentToken',
     };
     http.Response res;
     try {
@@ -79,7 +82,7 @@ class ApiClient {
                 : (map['message'] as String?) ?? 'Please try again. (error ${res.statusCode})',
           )
         : _noServerReply(res.statusCode);
-    if (err.notLoggedIn && token != null) onSessionEnded?.call();
+    if (err.notLoggedIn && sentToken != null && sentToken == token) onSessionEnded?.call();
     throw err;
   }
 

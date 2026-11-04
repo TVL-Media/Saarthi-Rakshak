@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../api/api_client.dart';
@@ -13,19 +15,19 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color ?? AppColors.card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.line.withValues(alpha: 0.6)),
-      ),
-      child: child,
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: AppColors.line.withValues(alpha: 0.6)),
     );
-    if (onTap == null) return card;
+    // The card colour is the Material itself, so the tap ripple shows on top of it (a tap that
+    // shows nothing makes people tap again).
     return Material(
-      color: Colors.transparent,
-      child: InkWell(borderRadius: BorderRadius.circular(16), onTap: onTap, child: card),
+      color: color ?? AppColors.card,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: onTap == null
+          ? Padding(padding: padding, child: child)
+          : InkWell(onTap: onTap, child: Padding(padding: padding, child: child)),
     );
   }
 }
@@ -197,4 +199,27 @@ class RoundIconButton extends StatelessWidget {
           onPressed: onPressed,
         ),
       );
+}
+
+/// The user's photo: the copy on this phone first, then the one on the server, else initials.
+class ProfileAvatar extends StatelessWidget {
+  const ProfileAvatar({super.key, required this.name, this.photoUrl, this.localPhoto, this.size = 56});
+  final String name;
+  final String? photoUrl;
+  final Uint8List? localPhoto;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    if (localPhoto != null) return CircleAvatar(radius: size / 2, backgroundImage: MemoryImage(localPhoto!));
+    if (photoUrl != null) {
+      return CircleAvatar(
+        radius: size / 2,
+        backgroundColor: AppColors.redSoft,
+        backgroundImage: NetworkImage(photoUrl!),
+        onBackgroundImageError: (_, _) {},
+      );
+    }
+    return Initials(name, size: size);
+  }
 }

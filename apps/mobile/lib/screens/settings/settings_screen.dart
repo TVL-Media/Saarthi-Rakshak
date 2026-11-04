@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' show openAppSettings;
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/api_client.dart';
 import '../../api/maps_service.dart';
@@ -15,6 +14,7 @@ import '../../widgets/format.dart';
 import '../auth/phone_otp.dart';
 import '../auth/profile_screen.dart';
 import '../guardians/guardians_screen.dart';
+import '../legal/legal_screen.dart';
 import '../setup/safety_setup_screen.dart';
 import '../sos/recordings_screen.dart';
 
@@ -42,9 +42,7 @@ class SettingsScreen extends StatelessWidget {
               onTap: () => open(const ProfileScreen(fromSettings: true)),
               padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
               child: Row(children: [
-                me.photoUrl != null
-                    ? CircleAvatar(radius: 28, backgroundImage: NetworkImage(me.photoUrl!))
-                    : Initials(me.name ?? '', size: 56),
+                ProfileAvatar(name: me.name ?? '', photoUrl: me.photoUrl, localPhoto: state.localPhoto, size: 56),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -63,8 +61,8 @@ class SettingsScreen extends StatelessWidget {
           _Item(Icons.headphones_outlined, 'My Recordings', () => open(const RecordingsScreen())),
           _Item(Icons.people_outline, 'Guardians', () => open(const GuardiansScreen())),
           _Item(Icons.location_on_outlined, 'Saved Places', () => open(const SavedPlacesScreen())),
-          _Item(Icons.shield_outlined, 'Privacy Policy', () => launchUrl(Uri.parse(AppConfig.privacyUrl))),
-          _Item(Icons.description_outlined, 'Terms & Conditions', () => launchUrl(Uri.parse(AppConfig.termsUrl))),
+          _Item(Icons.shield_outlined, 'Privacy Policy', () => LegalScreen.open(context, LegalPage.privacy)),
+          _Item(Icons.description_outlined, 'Terms & Conditions', () => LegalScreen.open(context, LegalPage.terms)),
           _Item(Icons.help_outline, 'Help & Support', () => open(const ReportProblemScreen())),
           _Item(Icons.logout, 'Log Out', () async {
             if (await confirm(context, 'Log out?', 'Protection stops on this phone until you log in again.', yes: 'Log out')) {
@@ -136,6 +134,7 @@ class SavedPlacesScreen extends StatefulWidget {
 
 class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
   List<SavedPlace>? _places;
+  String? _loadError;
 
   @override
   void initState() {
@@ -144,11 +143,14 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
   }
 
   Future<void> _load() async {
+    setState(() => _loadError = null);
     try {
       final p = await AppScope.read(context).api.places();
       if (mounted) setState(() => _places = p);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _loadError = e.message);
     } catch (e) {
-      if (mounted) showError(context, e);
+      if (mounted) setState(() => _loadError = 'Could not load your places. Please try again.');
     }
   }
 
@@ -170,7 +172,18 @@ class _SavedPlacesScreenState extends State<SavedPlacesScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Saved places')),
       body: places == null
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: _loadError == null
+                  ? const CircularProgressIndicator()
+                  : Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        Text(_loadError!, textAlign: TextAlign.center, style: const TextStyle(color: AppColors.red)),
+                        const SizedBox(height: 12),
+                        OutlinedButton(key: const Key('places-retry'), onPressed: _load, child: const Text('Try again')),
+                      ]),
+                    ),
+            )
           : ListView(padding: const EdgeInsets.all(20), children: [
               _PlaceRow(icon: Icons.home, title: 'Home', place: home, onEdit: () => _add('home'), onDelete: home == null ? null : () => _delete(home)),
               _PlaceRow(icon: Icons.work, title: 'Work', place: work, onEdit: () => _add('work'), onDelete: work == null ? null : () => _delete(work)),
@@ -235,13 +248,65 @@ class _PlaceFormState extends State<_PlaceForm> {
   List<PlaceResult> _results = const [];
   PlaceResult? _picked;
   String? _error;
+  bool _searching = false;
+  bool _searched = false;
+  bool _locating = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _find() async {
+    final text = _search.text.trim();
+    if (text.length < 2) return setState(() => _error = 'Type at least 2 letters of the place or address.');
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final r = await _maps.search(text);
+      if (mounted) setState(() => _results = r);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Search isn’t working. Check your internet.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _searching = false;
+          _searched = true;
+        });
+      }
+    }
+  }
 
   Future<void> _useHere() async {
+    setState(() {
+      _locating = true;
+      _error = null;
+    });
     try {
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 15)));
-      setState(() => _picked = PlaceResult(_name.text, 'My current location', pos.latitude, pos.longitude));
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        return setState(() => _error = 'Location is turned off on this phone. Turn it on and try again.');
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        return setState(() => _error = 'Location is not allowed. Allow it in Settings → App Permissions.');
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
+      );
+      final address = await _maps.addressAt(pos.latitude, pos.longitude);
+      if (mounted) {
+        setState(() => _picked = PlaceResult(_name.text, address ?? 'My current location', pos.latitude, pos.longitude));
+      }
     } catch (_) {
-      setState(() => _error = 'Could not get your location. Turn location on and try again.');
+      if (mounted) setState(() => _error = 'Could not get your location. Go near a window or outside and try again.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
   }
 
@@ -260,37 +325,54 @@ class _PlaceFormState extends State<_PlaceForm> {
   @override
   Widget build(BuildContext context) => Padding(
         padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.of(context).viewInsets.bottom),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          const Text('Save a place', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 14),
-          TextField(controller: _name, decoration: const InputDecoration(hintText: 'Name, e.g. Gym')),
-          const SizedBox(height: 10),
-          if (_maps.available)
-            TextField(
-              controller: _search,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search the address'),
-              onSubmitted: (t) async {
-                try {
-                  final r = await _maps.search(t);
-                  setState(() => _results = r);
-                } catch (_) {
-                  setState(() => _error = 'Search isn’t working. Check your internet.');
-                }
-              },
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('Save a place', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 14),
+            TextField(controller: _name, decoration: const InputDecoration(hintText: 'Name, e.g. Gym')),
+            const SizedBox(height: 10),
+            if (_maps.canSearch)
+              TextField(
+                key: const Key('place-search'),
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: 'Search area, place or address',
+                  suffixIcon: _searching
+                      ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(key: const Key('place-search-go'), icon: const Icon(Icons.arrow_forward), onPressed: _find),
+                ),
+                onSubmitted: (_) => _find(),
+              ),
+            if (_searched && _results.isEmpty && !_searching)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('No places found. Try the area and city, e.g. “Sector 18, Noida”.',
+                    style: TextStyle(color: AppColors.muted)),
+              ),
+            for (final r in _results.take(5))
+              ListTile(
+                leading: Icon(_picked == r ? Icons.check_circle : Icons.place_outlined,
+                    color: _picked == r ? AppColors.green : AppColors.muted),
+                title: Text(r.name),
+                subtitle: Text(r.address, maxLines: 2, overflow: TextOverflow.ellipsis),
+                selected: _picked == r,
+                onTap: () => setState(() => _picked = r),
+              ),
+            TextButton.icon(
+              onPressed: _locating ? null : _useHere,
+              icon: _locating
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.my_location),
+              label: const Text('Use my current location'),
             ),
-          for (final r in _results.take(4))
-            ListTile(
-              title: Text(r.name),
-              subtitle: Text(r.address, maxLines: 1, overflow: TextOverflow.ellipsis),
-              selected: _picked == r,
-              onTap: () => setState(() => _picked = r),
-            ),
-          TextButton.icon(onPressed: _useHere, icon: const Icon(Icons.my_location), label: const Text('Use my current location')),
-          if (_picked != null) Text('Selected: ${_picked!.address}', style: const TextStyle(color: AppColors.green)),
-          if (_error != null) Text(_error!, style: const TextStyle(color: AppColors.red)),
-          const SizedBox(height: 12),
-          BusyButton(label: 'Save', onPressed: _save),
-        ]),
+            if (_picked != null) Text('Selected: ${_picked!.address}', style: const TextStyle(color: AppColors.green)),
+            if (_error != null) Text(_error!, style: const TextStyle(color: AppColors.red)),
+            const SizedBox(height: 12),
+            BusyButton(label: 'Save', onPressed: _save),
+          ]),
+        ),
       );
 }
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../config.dart';
+import '../engine/engine.dart';
 import 'models.dart';
 
 class PlaceResult {
@@ -20,20 +21,42 @@ class RouteResult {
   final int distanceM;
 }
 
-/// Destination search and the route (Google Places API (New) and Routes API). Needs MAPS_API_KEY;
-/// without it, search returns nothing and journeys start without a route (no off-route check).
+/// Destination search and the route (Google Places API (New) and Routes API) with MAPS_API_KEY.
+/// Without the key, search and place names come from the phone's own geocoder (free, no key) and
+/// journeys start without a route (no off-route check).
 class MapsService {
-  MapsService({http.Client? client, String? apiKey})
+  MapsService({http.Client? client, String? apiKey, SafetyEngine? engine, bool deviceGeocoder = true})
       : _http = client ?? http.Client(),
-        _key = apiKey ?? AppConfig.mapsApiKey;
+        _key = apiKey ?? AppConfig.mapsApiKey,
+        _engine = engine ?? SafetyEngine(),
+        _device = deviceGeocoder;
 
   final http.Client _http;
   final String _key;
+  final SafetyEngine _engine;
+  final bool _device;
 
+  /// Google services (search, routes, names) are set up.
   bool get available => _key.isNotEmpty;
 
+  /// Places can be searched (Google, or the phone's geocoder).
+  bool get canSearch => available || _device;
+
   Future<List<PlaceResult>> search(String text, {double? nearLat, double? nearLng}) async {
-    if (!available || text.trim().length < 2) return const [];
+    if (text.trim().length < 2) return const [];
+    if (!available) {
+      if (!_device) return const [];
+      final found = await _engine.geocodeSearch(text.trim());
+      return [
+        for (final m in found)
+          PlaceResult(
+            (m['name'] as String?) ?? text.trim(),
+            (m['address'] as String?) ?? '',
+            (m['lat'] as num).toDouble(),
+            (m['lng'] as num).toDouble(),
+          ),
+      ];
+    }
     final res = await _http
         .post(
           Uri.parse('https://places.googleapis.com/v1/places:searchText'),
@@ -71,9 +94,30 @@ class MapsService {
     }).toList();
   }
 
-  /// Area name for the Home screen, e.g. "Sector 62, Noida" (Geocoding API). Null when not available.
+  /// The address at a position for showing the user where they are (phone's geocoder). Null when
+  /// not found.
+  Future<String?> addressAt(double lat, double lng) async {
+    try {
+      final m = await _engine.geocodeReverse(lat, lng);
+      final address = (m?['address'] as String?)?.trim();
+      return address == null || address.isEmpty ? null : address;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Area name for the Home screen, e.g. "Sector 62, Noida" (Geocoding API, or the phone's
+  /// geocoder without a key). Null when not available.
   Future<String?> areaName(double lat, double lng) async {
-    if (!available) return null;
+    if (!available) {
+      if (!_device) return null;
+      try {
+        final area = ((await _engine.geocodeReverse(lat, lng))?['area'] as String?)?.trim();
+        return area == null || area.isEmpty ? null : area;
+      } catch (_) {
+        return null;
+      }
+    }
     final res = await _http
         .get(Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
           'latlng': '$lat,$lng',

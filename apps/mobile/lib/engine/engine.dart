@@ -193,6 +193,18 @@ class SafetyEngine {
 
   Future<void> stopRingtone() => _ch.invokeMethod('stopRingtone');
 
+  /// A strong buzz (e.g. each second of the SOS countdown).
+  Future<void> vibrate(int ms) => _ch.invokeMethod('vibrate', {'ms': ms});
+
+  /// Places matching [query] (India) from the phone's own geocoder — no Google key needed.
+  Future<List<Map<dynamic, dynamic>>> geocodeSearch(String query) async =>
+      ((await _ch.invokeMethod<List<dynamic>>('geocodeSearch', {'query': query})) ?? const [])
+          .cast<Map<dynamic, dynamic>>();
+
+  /// The place at a position ({name, address, area}), or null.
+  Future<Map<dynamic, dynamic>?> geocodeReverse(double lat, double lng) =>
+      _ch.invokeMethod<Map<dynamic, dynamic>>('geocodeReverse', {'lat': lat, 'lng': lng});
+
   /// Opens the phone's contact picker (no contacts permission needed). Null when cancelled.
   Future<({String name, String phone})?> pickContact() async {
     final r = await _ch.invokeMethod<Map<dynamic, dynamic>>('pickContact');

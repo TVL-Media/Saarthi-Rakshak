@@ -70,11 +70,12 @@ class _Root extends StatefulWidget {
 class _RootState extends State<_Root> {
   StreamSubscription<RemoteMessage>? _push;
   bool _checkinOpen = false;
+  late final AppState _state = AppScope.read(context);
 
   @override
   void initState() {
     super.initState();
-    final state = AppScope.read(context);
+    final state = _state;
     state.launchAction.addListener(_onLaunch);
     state.checkinAlert.addListener(_onCheckin);
     if (firebaseReady) {
@@ -85,7 +86,7 @@ class _RootState extends State<_Root> {
 
   @override
   void dispose() {
-    final state = AppScope.read(context);
+    final state = _state;
     state.launchAction.removeListener(_onLaunch);
     state.checkinAlert.removeListener(_onCheckin);
     _push?.cancel();

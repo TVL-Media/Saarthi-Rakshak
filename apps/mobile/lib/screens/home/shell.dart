@@ -37,6 +37,17 @@ class _ShellState extends State<Shell> {
       const GuardiansScreen(),
       const SettingsScreen(),
     ];
+    // Back on another tab goes to Home first; only Back on Home leaves the app.
+    return PopScope(
+      canPop: _tab == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _tab != 0) setState(() => _tab = 0);
+      },
+      child: _scaffold(pages),
+    );
+  }
+
+  Widget _scaffold(List<Widget> pages) {
     return Scaffold(
       drawer: _Menu(onOpenTab: (i) => setState(() => _tab = i)),
       drawerEnableOpenDragGesture: false,
@@ -117,9 +128,7 @@ class _Menu extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: Row(children: [
-                  me?.photoUrl != null
-                      ? CircleAvatar(radius: 28, backgroundImage: NetworkImage(me!.photoUrl!))
-                      : Initials(me?.name ?? '', size: 56),
+                  ProfileAvatar(name: me?.name ?? '', photoUrl: me?.photoUrl, localPhoto: state.localPhoto, size: 56),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

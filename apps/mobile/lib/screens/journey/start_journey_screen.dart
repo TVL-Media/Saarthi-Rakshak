@@ -33,6 +33,9 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
   Timer? _debounce;
   Position? _here;
 
+  /// The address at [_here], so the user sees which location was found.
+  String? _hereAddress;
+
   /// Why there is no location yet: null while looking, else a short message.
   String? _hereProblem;
   bool _hereNeedsSettings = false;
@@ -94,6 +97,8 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 25)),
       );
       if (mounted) setState(() => _here = fresh);
+      final address = await _maps.addressAt(fresh.latitude, fresh.longitude);
+      if (mounted) setState(() => _hereAddress = address);
     } catch (_) {
       if (_here == null) _noHere('Could not find your location yet. Go near a window or outside, then tap to try again.');
     }
@@ -116,7 +121,7 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
   void _onSearch(String text) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () async {
-      if (!_maps.available) return;
+      if (!_maps.canSearch) return;
       setState(() {
         _searching = true;
         _searchError = null;
@@ -198,9 +203,12 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Your Current Location', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  if (_here != null && _hereAddress != null)
+                    Text(_hereAddress!, key: const Key('here-address'), maxLines: 2, overflow: TextOverflow.ellipsis),
                   Text(
                     _here != null
-                        ? 'Found (accuracy ${_here!.accuracy.round()} m)'
+                        ? '${_hereAddress == null ? '${_here!.latitude.toStringAsFixed(5)}, ${_here!.longitude.toStringAsFixed(5)} · ' : ''}'
+                            'accurate to ${_here!.accuracy.round()} m'
                         : _hereProblem ?? 'Finding your location…',
                     style: TextStyle(color: _here == null && _hereProblem != null ? AppColors.red : AppColors.muted),
                   ),
@@ -217,8 +225,8 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
             onChanged: _onSearch,
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.location_on, color: AppColors.red),
-              hintText: _maps.available ? 'Destination' : 'Pick a saved place below',
-              enabled: _maps.available,
+              hintText: _maps.canSearch ? 'Search destination (area, place, address)' : 'Pick a saved place below',
+              enabled: _maps.canSearch,
               suffixIcon: _searching ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2)) : null,
             ),
           ),
@@ -237,7 +245,7 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
                   ),
               ]),
             )
-          else if (_search.text.length > 2 && !_searching && _destination == null && _maps.available)
+          else if (_search.text.length > 2 && !_searching && _destination == null && _maps.canSearch)
             const Padding(padding: EdgeInsets.only(top: 8), child: Text('No places found', style: TextStyle(color: AppColors.muted))),
           const SizedBox(height: 16),
           if (_destination != null)
@@ -266,7 +274,7 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
               child: Text('At least one guardian must accept your invite first.', style: TextStyle(color: AppColors.red)),
             ),
           const SizedBox(height: 22),
-          if (_saved.isEmpty && !_maps.available)
+          if (_saved.isEmpty && !_maps.canSearch)
             AppCard(
               color: AppColors.amberSoft,
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
