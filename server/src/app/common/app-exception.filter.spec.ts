@@ -22,6 +22,15 @@ describe('isUnreachable (503 instead of "Something went wrong")', () => {
     ).toBe(true);
   });
 
+  it('finds dropped database / Redis connections', () => {
+    expect(isUnreachable(new Error('Connection terminated unexpectedly'))).toBe(true);
+    expect(isUnreachable(new Error('timeout exceeded when trying to connect'))).toBe(true);
+    expect(isUnreachable(new Error('Connection is closed.'))).toBe(true);
+    expect(
+      isUnreachable(Object.assign(new Error('x'), { name: 'MaxRetriesPerRequestError' })),
+    ).toBe(true);
+  });
+
   it('leaves real bugs as 500', () => {
     expect(isUnreachable(new TypeError('x is undefined'))).toBe(false);
     expect(isUnreachable('text')).toBe(false);

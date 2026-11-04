@@ -180,4 +180,53 @@ void main() {
     expect(find.byKey(const Key('places-retry')), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
+
+  group('Short server blips', () {
+    setUp(() => ApiClient.retryDelay = Duration.zero);
+    tearDown(() => ApiClient.retryDelay = const Duration(seconds: 2));
+
+    test('a read is tried once more and then works (no error on screen)', () async {
+      var calls = 0;
+      final api = ApiClient(
+        baseUrl: 'http://server',
+        client: MockClient((req) async {
+          calls++;
+          return calls == 1 ? http.Response('<html>Bad Gateway</html>', 502) : http.Response('[]', 200);
+        }),
+      )..token = 't';
+      expect(await api.places(), isEmpty);
+      expect(calls, 2);
+    });
+
+    test('a save is never repeated (nothing done twice)', () async {
+      var calls = 0;
+      final api = ApiClient(
+        baseUrl: 'http://server',
+        client: MockClient((req) async {
+          calls++;
+          return http.Response('', 503);
+        }),
+      )..token = 't';
+      await expectLater(api.savePlace('home', 'Home', 28.6, 77.3), throwsA(isA<ApiException>()));
+      expect(calls, 1);
+    });
+
+    test('still failing after the second try: a clear message', () async {
+      var calls = 0;
+      final api = ApiClient(
+        baseUrl: 'http://server',
+        client: MockClient((req) async {
+          calls++;
+          return http.Response('', 503);
+        }),
+      )..token = 't';
+      try {
+        await api.places();
+        fail('no error');
+      } on ApiException catch (e) {
+        expect(e.message, 'The server is starting or busy. Please try again in a minute.');
+      }
+      expect(calls, 2);
+    });
+  });
 }

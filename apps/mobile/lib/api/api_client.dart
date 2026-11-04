@@ -9,10 +9,13 @@ import 'models.dart';
 
 /// A failed call: the server's `{ error, message }`, or `offline` / `server_error` from the app.
 class ApiException implements Exception {
-  ApiException(this.status, this.code, this.message);
+  ApiException(this.status, this.code, this.message, {this.timedOut = false});
   final int status;
   final String code;
   final String message;
+
+  /// No answer within the time limit (not repeated automatically).
+  final bool timedOut;
 
   bool get isOffline => code == 'offline';
   bool get notLoggedIn => code == 'not_logged_in';
@@ -39,7 +42,25 @@ class ApiClient {
   /// Long enough for a test server that was asleep to wake up (about a minute on Render's free plan).
   static const _timeout = Duration(seconds: 70);
 
+  /// How long to wait before reading once more after a short server or network blip.
+  static Duration retryDelay = const Duration(seconds: 2);
+
+  /// Reads (GET) are tried once more after a quick failure (no connection, or the server busy /
+  /// restarting / a service it needs briefly unreachable), so short blips never reach the screen.
+  /// Writes are never repeated here (nothing is done twice). A timeout is not repeated either.
   Future<dynamic> _call(String method, String path, {Object? body, Map<String, String>? query}) async {
+    try {
+      return await _callOnce(method, path, body: body, query: query);
+    } on ApiException catch (e) {
+      final quick = e.code == 'offline' && !e.timedOut;
+      final busy = e.status == 502 || e.status == 503 || e.status == 504;
+      if (method != 'GET' || !(quick || busy)) rethrow;
+      await Future<void>.delayed(retryDelay);
+      return _callOnce(method, path, body: body, query: query);
+    }
+  }
+
+  Future<dynamic> _callOnce(String method, String path, {Object? body, Map<String, String>? query}) async {
     final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
     // The session this request uses: an answer for an older session (e.g. from before logging out
     // and in again) must never end the new one.
@@ -57,7 +78,7 @@ class ApiClient {
     } on SocketException {
       throw ApiException(0, 'offline', 'No internet connection. Please try again.');
     } on TimeoutException {
-      throw ApiException(0, 'offline', 'The server is not answering. Check your internet and try again.');
+      throw ApiException(0, 'offline', 'The server is not answering. Check your internet and try again.', timedOut: true);
     } on http.ClientException {
       throw ApiException(0, 'offline', 'No internet connection. Please try again.');
     }

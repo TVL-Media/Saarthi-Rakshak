@@ -68,13 +68,22 @@ export class AppExceptionFilter extends BaseExceptionFilter {
 }
 
 /** Network errors from a service the server calls (file storage, database, Redis). */
+const LOST_CONNECTION = [
+  'Connection terminated',
+  'timeout exceeded when trying to connect',
+  'Connection is closed',
+];
 const UNREACHABLE = new Set(['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN']);
 
 export function isUnreachable(e: unknown): boolean {
   for (let cur = e, depth = 0; cur && typeof cur === 'object' && depth < 4; depth++) {
     const err = cur as { code?: unknown; name?: unknown; cause?: unknown; errors?: unknown[] };
     if (typeof err.code === 'string' && UNREACHABLE.has(err.code)) return true;
-    if (err.name === 'TimeoutError') return true;
+    if (err.name === 'TimeoutError' || err.name === 'MaxRetriesPerRequestError') return true;
+    // node-postgres and ioredis messages for a connection that dropped or could not be made.
+    const message = (cur as { message?: unknown }).message;
+    if (typeof message === 'string' && LOST_CONNECTION.some((m) => message.includes(m)))
+      return true;
     if (Array.isArray(err.errors) && err.errors.some((x) => isUnreachable(x))) return true;
     cur = err.cause;
   }

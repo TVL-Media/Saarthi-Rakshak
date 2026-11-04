@@ -201,6 +201,8 @@ void main() {
   });
 
   test('Server replies that are not ours get a clear message instead of "Something went wrong"', () async {
+    ApiClient.retryDelay = Duration.zero;
+    addTearDown(() => ApiClient.retryDelay = const Duration(seconds: 2));
     Future<ApiException> fail(int status, String body) async {
       final api = ApiClient(baseUrl: 'http://server', client: MockClient((_) async => http.Response(body, status)));
       try {

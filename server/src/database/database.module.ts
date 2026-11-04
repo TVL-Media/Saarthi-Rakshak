@@ -16,7 +16,14 @@ export class DatabaseService implements OnApplicationShutdown {
   readonly db: Kysely<Database>;
 
   constructor(@Inject(DATABASE_URL) url: string) {
-    this.pool = new Pool({ connectionString: url, connectionTimeoutMillis: 2000 });
+    this.pool = new Pool({
+      connectionString: url,
+      // A database reached over the internet (e.g. a hosted one with TLS) can take a few seconds.
+      connectionTimeoutMillis: 5000,
+      // Keep connections from being cut silently while idle, and close our own idle ones first.
+      keepAlive: true,
+      idleTimeoutMillis: 30_000,
+    });
     // Without this, a dropped idle connection would crash the server.
     this.pool.on('error', (err) => this.logger.error(`PostgreSQL error: ${err.message}`));
     this.db = createKysely(this.pool);
