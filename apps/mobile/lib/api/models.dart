@@ -9,6 +9,11 @@ class Me {
     required this.name,
     required this.phone,
     required this.bloodGroup,
+    this.gender,
+    this.dateOfBirth,
+    this.email,
+    this.homeAddress,
+    this.medicalNotes,
     required this.photoUrl,
     required this.consentGiven,
     required this.guardiansCount,
@@ -20,6 +25,15 @@ class Me {
   final String? name;
   final String phone;
   final String? bloodGroup;
+
+  /// Optional details only the user sees: female / male / other.
+  final String? gender;
+
+  /// "YYYY-MM-DD"
+  final String? dateOfBirth;
+  final String? email;
+  final String? homeAddress;
+  final String? medicalNotes;
   final String? photoUrl;
   final bool consentGiven;
   final int guardiansCount;
@@ -36,6 +50,11 @@ class Me {
         name: _str(j['name']),
         phone: j['phone'] as String,
         bloodGroup: _str(j['bloodGroup']),
+        gender: _str(j['gender']),
+        dateOfBirth: _str(j['dateOfBirth']),
+        email: _str(j['email']),
+        homeAddress: _str(j['homeAddress']),
+        medicalNotes: _str(j['medicalNotes']),
         photoUrl: _str(j['photoUrl']),
         consentGiven: j['consentGiven'] as bool,
         guardiansCount: j['guardiansCount'] as int,

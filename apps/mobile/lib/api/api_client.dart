@@ -141,10 +141,18 @@ class ApiClient {
 
   // ---- A2 profile and phone -------------------------------------------------------------------
 
-  Future<Me> updateProfile({String? name, String? bloodGroup, bool clearBloodGroup = false}) async =>
+  /// [details] are the optional profile fields (gender, dateOfBirth, email, homeAddress,
+  /// medicalNotes); a null value clears that field.
+  Future<Me> updateProfile({
+    String? name,
+    String? bloodGroup,
+    bool clearBloodGroup = false,
+    Map<String, String?> details = const {},
+  }) async =>
       Me.fromJson(_obj(await _call('PATCH', '/v1/me', body: {
         'name': ?name,
         if (bloodGroup != null || clearBloodGroup) 'bloodGroup': bloodGroup,
+        ...details,
       })));
 
   Future<UploadLink> photoUploadLink(int sizeBytes) async =>

@@ -14,6 +14,12 @@ export interface UsersTable {
   name: string | null;
   photo_key: string | null;
   blood_group: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-' | null;
+  gender: 'female' | 'male' | 'other' | null;
+  /** A date only. Written as "YYYY-MM-DD"; read it with to_char (pg turns a date into a local Date). */
+  date_of_birth: string | null;
+  email: string | null;
+  home_address: string | null;
+  medical_notes: string | null;
   status: Generated<'active' | 'blocked'>;
   consent_at: Date | null;
   consent_version: string | null;

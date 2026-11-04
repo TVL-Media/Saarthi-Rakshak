@@ -18,6 +18,7 @@ import * as m0014 from './migrations/0014_journeys';
 import * as m0015 from './migrations/0015_places_support';
 import * as m0016 from './migrations/0016_audio_recorded_at';
 import * as m0017 from './migrations/0017_alerts_timers';
+import * as m0018 from './migrations/0018_profile_details';
 import type { Database } from './types';
 
 /** Every migration, in order. Add new ones here (listed by hand so they also load in tests). */
@@ -39,6 +40,7 @@ export const migrations: Record<string, Migration> = {
   '0015_places_support': m0015,
   '0016_audio_recorded_at': m0016,
   '0017_alerts_timers': m0017,
+  '0018_profile_details': m0018,
 };
 
 export function createKysely(pool: Pool): Kysely<Database> {

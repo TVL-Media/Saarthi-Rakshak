@@ -39,6 +39,11 @@ export class ProfileService {
         'u.name',
         'u.phone',
         'u.blood_group',
+        'u.gender',
+        sql<string | null>`to_char(u.date_of_birth, 'YYYY-MM-DD')`.as('date_of_birth'),
+        'u.email',
+        'u.home_address',
+        'u.medical_notes',
         'u.photo_key',
         'u.consent_at',
         eb
@@ -62,6 +67,11 @@ export class ProfileService {
       name: user.name,
       phone: user.phone,
       bloodGroup: user.blood_group,
+      gender: user.gender,
+      dateOfBirth: user.date_of_birth,
+      email: user.email,
+      homeAddress: user.home_address,
+      medicalNotes: user.medical_notes,
       photoUrl: user.photo_key
         ? await this.storage.downloadUrl(user.photo_key, PHOTO_LINK_SECONDS)
         : null,
@@ -87,6 +97,11 @@ export class ProfileService {
       .set({
         ...(change.name !== undefined && { name: change.name }),
         ...(change.bloodGroup !== undefined && { blood_group: change.bloodGroup }),
+        ...(change.gender !== undefined && { gender: change.gender }),
+        ...(change.dateOfBirth !== undefined && { date_of_birth: change.dateOfBirth }),
+        ...(change.email !== undefined && { email: change.email }),
+        ...(change.homeAddress !== undefined && { home_address: change.homeAddress }),
+        ...(change.medicalNotes !== undefined && { medical_notes: change.medicalNotes }),
       })
       .where('id', '=', userId)
       .execute();

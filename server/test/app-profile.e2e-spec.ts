@@ -59,6 +59,11 @@ describe('Profile', () => {
     expect(res.body).toMatchObject({
       name: null,
       bloodGroup: null,
+      gender: null,
+      dateOfBirth: null,
+      email: null,
+      homeAddress: null,
+      medicalNotes: null,
       photoUrl: null,
       consentGiven: true,
       guardiansCount: 0,
@@ -98,6 +103,54 @@ describe('Profile', () => {
       expect((res.body as Me).name).toBe(name);
     },
   );
+
+  it('saves the other details (only for the user) and clears them with null or empty text', async () => {
+    const res = await api()
+      .patch('/v1/me')
+      .set(bearer(token))
+      .send({
+        gender: 'female',
+        dateOfBirth: '1998-03-21',
+        email: ' Priya.S@Example.com ',
+        homeAddress: '  C-56, Sector 62, Noida ',
+        medicalNotes: 'Allergic to penicillin',
+      })
+      .expect(200);
+    expect(res.body).toMatchObject({
+      gender: 'female',
+      dateOfBirth: '1998-03-21',
+      email: 'priya.s@example.com',
+      homeAddress: 'C-56, Sector 62, Noida',
+      medicalNotes: 'Allergic to penicillin',
+    });
+    const me = await api().get('/v1/me').set(bearer(token)).expect(200);
+    expect(me.body).toMatchObject({ dateOfBirth: '1998-03-21', gender: 'female' });
+
+    const cleared = await api()
+      .patch('/v1/me')
+      .set(bearer(token))
+      .send({ gender: null, dateOfBirth: null, email: '', homeAddress: '  ', medicalNotes: null })
+      .expect(200);
+    expect(cleared.body).toMatchObject({
+      gender: null,
+      dateOfBirth: null,
+      email: null,
+      homeAddress: null,
+      medicalNotes: null,
+    });
+  });
+
+  it.each([
+    [{ gender: 'x' }, 'gender'],
+    [{ dateOfBirth: '21-03-1998' }, 'dateOfBirth'],
+    [{ dateOfBirth: '2999-01-01' }, 'real date of birth'],
+    [{ email: 'not-an-email' }, 'email'],
+    [{ homeAddress: 'x'.repeat(301) }, 'Address'],
+    [{ medicalNotes: 'x'.repeat(501) }, 'Medical notes'],
+  ])('refuses the detail %p', async (body, text) => {
+    const res = await api().patch('/v1/me').set(bearer(token)).send(body).expect(400);
+    expect((res.body as { message: string }).message).toContain(text);
+  });
 
   it.each([
     [{ bloodGroup: 'C+' }, 'bloodGroup'],

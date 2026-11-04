@@ -329,14 +329,16 @@ class _GuardianRow extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         child: Row(children: [
-          Initials(name, size: 36),
+          Initials(name, size: 40),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(name,
-                maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name,
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 4),
+              StatusPill(status, color: responding ? AppColors.green : AppColors.muted),
+            ]),
           ),
-          const SizedBox(width: 8),
-          StatusPill(status, color: responding ? AppColors.green : AppColors.muted),
         ]),
       );
 }

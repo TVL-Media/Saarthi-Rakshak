@@ -266,9 +266,17 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                         IntrinsicHeight(
                           child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                             SizedBox(
-                              width: 62,
-                              child: Text(clock(e.at),
-                                  style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.45)),
+                              width: 70,
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.topLeft,
+                                  child: Text(clock(e.at),
+                                      maxLines: 1,
+                                      style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.45)),
+                                ),
+                              ),
                             ),
                             SizedBox(
                               width: 12,

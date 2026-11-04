@@ -54,8 +54,9 @@ Login is phone + OTP with **Firebase** on the phone; then the app swaps the Fire
 | `GET /v1/me` | Yes | — | `Me` |
 | `POST /v1/me/consent` | Yes | `{ version }` e.g. `"2026-10"` | `Me` |
 
-`Me` = `{ id, name, phone, bloodGroup, photoUrl, consentGiven, guardiansCount, acceptedGuardiansCount, rules }`
-(`name`, `bloodGroup`, `photoUrl` may be `null`). `rules` = the safety settings the app needs, e.g.
+`Me` = `{ id, name, phone, bloodGroup, gender, dateOfBirth, email, homeAddress, medicalNotes, photoUrl, consentGiven, guardiansCount, acceptedGuardiansCount, rules }`
+(`name`, `bloodGroup`, the profile details and `photoUrl` may be `null`; `gender` is `female`, `male` or `other`;
+`dateOfBirth` is `YYYY-MM-DD`). The profile details are shown only to the user, never to guardians or admins. `rules` = the safety settings the app needs, e.g.
 `{ "sos.countdown_seconds": 5, "checkin.stopped_minutes": 3, … }`.
 
 Until consent is given, only these four calls work; everything else returns `consent_required`.
@@ -69,7 +70,7 @@ Until consent is given, only these four calls work; everything else returns `con
 
 | Call | Body | Reply |
 | --- | --- | --- |
-| `PATCH /v1/me` | `{ name?, bloodGroup? }` — at least one; `bloodGroup: null` clears it | `Me` |
+| `PATCH /v1/me` | `{ name?, bloodGroup?, gender?, dateOfBirth?, email?, homeAddress?, medicalNotes? }` — at least one; `null` (or empty text) clears an optional field | `Me` |
 | `POST /v1/me/photo-upload` | `{ sizeBytes }` (JPEG, max 2 MB) | `{ key, uploadUrl, headers, expiresAt }` |
 | `POST /v1/me/photo` | `{ key }` | `Me` |
 | `PUT /v1/me/device` | see below | `204` |

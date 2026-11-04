@@ -87,6 +87,38 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
     await _check();
   }
 
+  bool _allowingAll = false;
+
+  /// Asks for every missing permission one after the other (each is the phone's own dialog), then
+  /// the battery setting. Ones the phone no longer asks for are turned on in App settings.
+  Future<void> _allowAll() async {
+    if (_allowingAll) return;
+    setState(() => _allowingAll = true);
+    final engine = AppScope.read(context).engine;
+    var needsSettings = false;
+    Future<void> ask(Permission p, bool have) async {
+      if (have) return;
+      final status = await p.request();
+      if (status.isPermanentlyDenied) needsSettings = true;
+    }
+
+    try {
+      await ask(Permission.location, _location);
+      // "All the time" can only be asked for after "While using the app" was allowed.
+      if (await Permission.location.isGranted) await ask(Permission.locationAlways, _locationAlways);
+      await ask(Permission.notification, _notifications);
+      await ask(Permission.microphone, _microphone);
+      await ask(Permission.sms, _sms);
+      if (!_battery) await engine.askBatteryOptimisationOff();
+      if (needsSettings) await openAppSettings();
+    } catch (_) {
+      // A dialog that could not open: the rows below still show what is missing.
+    } finally {
+      if (mounted) setState(() => _allowingAll = false);
+      await _check();
+    }
+  }
+
   Future<void> _testSos() async {
     final state = AppScope.read(context);
     if (!await confirm(
@@ -110,6 +142,8 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
     final state = AppScope.of(context);
     final accepted = state.guardians.where((g) => g.status == 'accepted').length;
     final protected = _location && _locationAlways && _notifications && _microphone && _battery && accepted > 0;
+    // Everything the phone can be asked for (the guardian step needs the guardian, not the phone).
+    final missingPermissions = !(_location && _locationAlways && _notifications && _microphone && _sms && _battery);
     final done = [
       _location,
       _locationAlways,
@@ -180,6 +214,25 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
                     color: protected ? AppColors.green : AppColors.amber,
                   ),
                 ),
+                if (missingPermissions) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      key: const Key('allow-all'),
+                      style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                      onPressed: _allowingAll ? null : _allowAll,
+                      icon: _allowingAll
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.done_all),
+                      label: const Text('Allow all'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -303,22 +356,23 @@ class _Check extends StatelessWidget {
               Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
               const SizedBox(height: 2),
               Text(text, style: const TextStyle(color: AppColors.muted, height: 1.35)),
+              // Under the text, so the text keeps the full width on narrow phones / large text.
+              if (!ok && onFix != null) ...[
+                const SizedBox(height: 10),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    shape: const StadiumBorder(),
+                  ),
+                  onPressed: onFix,
+                  child: const Text('Allow'),
+                ),
+              ],
             ],
           ),
         ),
-        if (!ok && onFix != null) ...[
-          const SizedBox(width: 8),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 36),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              shape: const StadiumBorder(),
-            ),
-            onPressed: onFix,
-            child: const Text('Allow'),
-          ),
-        ],
       ],
     ),
   );

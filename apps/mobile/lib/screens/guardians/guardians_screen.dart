@@ -254,9 +254,18 @@ class _GuardianTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 3),
+                if (g.relation != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    g.relation!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xFF4B5563), fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                ],
+                const SizedBox(height: 2),
                 Text(
-                  g.relation != null ? '${g.relation} · $phone' : phone,
+                  phone,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: AppColors.muted, fontSize: 14),

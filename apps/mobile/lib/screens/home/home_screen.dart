@@ -325,7 +325,7 @@ class _StatusCard extends StatelessWidget {
     return GestureDetector(
       onTap: protected ? null : onFix,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
         decoration: BoxDecoration(color: const Color(0xFF16181C), borderRadius: BorderRadius.circular(26)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -350,15 +350,35 @@ class _StatusCard extends StatelessWidget {
           const SizedBox(height: 18),
           const Divider(color: Color(0x22FFFFFF), height: 1),
           const SizedBox(height: 14),
-          IntrinsicHeight(
-            child: Row(children: [
-              _Stat(icon: Icons.people_outline, text: '$guardians Guardian${guardians == 1 ? '' : 's'}', ok: guardians > 0),
-              const VerticalDivider(color: Color(0x22FFFFFF), width: 1),
-              _Stat(icon: Icons.near_me_outlined, text: 'Live location', ok: locationOn, iconColor: _okGreen),
-              const VerticalDivider(color: Color(0x22FFFFFF), width: 1),
-              _Stat(icon: Icons.smartphone_outlined, text: 'Device protected', ok: batteryOk),
-            ]),
-          ),
+          LayoutBuilder(builder: (context, box) {
+            final labels = ['$guardians Guardian${guardians == 1 ? '' : 's'}', 'Live location', 'Device protected'];
+            // Three equal columns, all labels on one line in the same size: if the longest one
+            // does not fit (narrow phone, large text), all three get a little smaller together.
+            final column = ((box.maxWidth - 2) / 3 - 8) * 0.95; // a little room for rounding
+            final scaler = MediaQuery.textScalerOf(context);
+            final measureStyle = DefaultTextStyle.of(context).style.merge(_Stat.style);
+            double widest = 0;
+            for (final l in labels) {
+              final p = TextPainter(
+                text: TextSpan(text: l, style: measureStyle),
+                textDirection: TextDirection.ltr,
+                textScaler: scaler,
+                maxLines: 1,
+              )..layout();
+              if (p.width > widest) widest = p.width;
+              p.dispose();
+            }
+            final fontSize = _Stat.style.fontSize! * (widest > column ? column / widest : 1);
+            return IntrinsicHeight(
+              child: Row(children: [
+                _Stat(icon: Icons.people_outline, text: labels[0], ok: guardians > 0, fontSize: fontSize),
+                const VerticalDivider(color: Color(0x22FFFFFF), width: 1),
+                _Stat(icon: Icons.near_me_outlined, text: labels[1], ok: locationOn, iconColor: _okGreen, fontSize: fontSize),
+                const VerticalDivider(color: Color(0x22FFFFFF), width: 1),
+                _Stat(icon: Icons.smartphone_outlined, text: labels[2], ok: batteryOk, fontSize: fontSize),
+              ]),
+            );
+          }),
         ]),
       ),
     );
@@ -366,7 +386,16 @@ class _StatusCard extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.icon, required this.text, required this.ok, this.iconColor = Colors.white});
+  const _Stat({
+    required this.icon,
+    required this.text,
+    required this.ok,
+    required this.fontSize,
+    this.iconColor = Colors.white,
+  });
+
+  static const style = TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500);
+  final double fontSize;
   final IconData icon;
   final String text;
   final bool ok;
@@ -374,12 +403,18 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Expanded(
-        child: Column(children: [
-          Icon(ok ? icon : Icons.error_outline, color: ok ? iconColor : _warnAmber, size: 22),
-          const SizedBox(height: 6),
-          Text(text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w500)),
-        ]),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Column(children: [
+            Icon(ok ? icon : Icons.error_outline, color: ok ? iconColor : _warnAmber, size: 22),
+            const SizedBox(height: 8),
+            Text(text,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.fade,
+                textAlign: TextAlign.center,
+                style: style.copyWith(fontSize: fontSize)),
+          ]),
+        ),
       );
 }

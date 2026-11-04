@@ -35,6 +35,27 @@ export const ProfileName = z
     error: "Use letters, spaces and . ' - only",
   });
 
+export const Gender = z.enum(['female', 'male', 'other']);
+
+/** Optional free text in the profile: trimmed; an empty text clears it (saved as null). */
+const ProfileText = (max: number, label: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, { error: `${label} can be at most ${max} characters` })
+    .transform((v) => (v === '' ? null : v))
+    .nullable();
+
+/** Date of birth "YYYY-MM-DD": not in the future and not more than 120 years ago. */
+export const DateOfBirth = z.iso.date({ error: 'Must be a date (YYYY-MM-DD)' }).refine(
+  (v) => {
+    const d = new Date(`${v}T00:00:00Z`);
+    const now = new Date();
+    return d <= now && d.getUTCFullYear() >= now.getUTCFullYear() - 120;
+  },
+  { error: 'Enter a real date of birth' },
+);
+
 export const Latitude = z.number().min(-90).max(90);
 export const Longitude = z.number().min(-180).max(180);
 
@@ -87,7 +108,10 @@ export const LoginRequest = z.object({
  */
 export const DevLoginRequest = z.object({
   phone: z.string().trim().min(10).max(20),
-  code: z.string().trim().regex(/^\d{6}$/, { error: 'Enter the 6-digit code' }),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, { error: 'Enter the 6-digit code' }),
 });
 
 /** GET /v1/me, also returned by login, PATCH /v1/me, consent and photo calls. */
@@ -97,6 +121,14 @@ export const Me = z.object({
   /** The user's own number, E.164 (e.g. "+919812344521"). */
   phone: z.string(),
   bloodGroup: BloodGroup.nullable(),
+  /** The details below are optional and only shown to the user herself. */
+  gender: Gender.nullable(),
+  /** "YYYY-MM-DD" */
+  dateOfBirth: z.string().nullable(),
+  email: z.string().nullable(),
+  homeAddress: z.string().nullable(),
+  /** Allergies, conditions, medicines. */
+  medicalNotes: z.string().nullable(),
   /** Short-lived link (1 hour) to show the profile photo, or null. */
   photoUrl: z.string().nullable(),
   consentGiven: z.boolean(),
@@ -124,13 +156,28 @@ export const ConsentRequest = z.object({
 // A2 — Profile and phone details
 // ---------------------------------------------------------------------------------------------
 
-/** PATCH /v1/me — send only what changes; `bloodGroup: null` clears it. */
+/** PATCH /v1/me — send only what changes; `null` (or an empty text) clears an optional field. */
 export const UpdateProfileRequest = z
   .object({
     name: ProfileName.optional(),
     bloodGroup: BloodGroup.nullable().optional(),
+    gender: Gender.nullable().optional(),
+    dateOfBirth: DateOfBirth.nullable().optional(),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .max(120, { error: 'Email can be at most 120 characters' })
+      .refine((v) => v === '' || z.email().safeParse(v).success, {
+        error: 'Enter a valid email address',
+      })
+      .transform((v) => (v === '' ? null : v))
+      .nullable()
+      .optional(),
+    homeAddress: ProfileText(300, 'Address').optional(),
+    medicalNotes: ProfileText(500, 'Medical notes').optional(),
   })
-  .refine((v) => v.name !== undefined || v.bloodGroup !== undefined, {
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
     error: 'Send at least one field',
   });
 

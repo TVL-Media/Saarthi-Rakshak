@@ -60,6 +60,8 @@ const _privacy = <(String, String)>[
     'What we collect',
     '• Your mobile number, to log you in with a one-time code (OTP).\n'
         '• Your name, and if you add them, your photo and blood group.\n'
+        '• If you add them in My Profile: your gender, date of birth, email, home address and medical notes. '
+        'Only you see these in the app; they are not shared with your guardians.\n'
         '• Your guardians: their names, relation and mobile numbers, which you enter or pick from your contacts. '
         'When you pick a contact, the app reads only that one contact.\n'
         '• Your location, only while an SOS or a journey you started is running.\n'
