@@ -5,6 +5,7 @@ import '../../api/api_client.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/format.dart';
 
 const bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
@@ -138,15 +139,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ]),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           const Center(child: Text('Photo (optional)', style: TextStyle(color: AppColors.muted))),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
+          const SectionLabel('Full name'),
           TextField(
             controller: _name,
             textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(prefixIcon: Icon(Icons.person_outline), hintText: 'Full name'),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
+          const SectionLabel('Blood group'),
           DropdownButtonFormField<String?>(
             initialValue: _blood,
             decoration: const InputDecoration(prefixIcon: Icon(Icons.bloodtype_outlined), hintText: 'Blood group (optional)'),
@@ -156,13 +159,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
             onChanged: (v) => setState(() => _blood = v),
           ),
-          const SizedBox(height: 14),
-          AppCard(
-            child: Row(children: [
-              const Icon(Icons.phone_android_outlined, color: AppColors.muted),
-              const SizedBox(width: 12),
-              Text(me.phone, style: const TextStyle(fontSize: 16)),
-            ]),
+          const SizedBox(height: 18),
+          const SectionLabel('Mobile number'),
+          // Read-only: the number is the login, it cannot be changed here.
+          InputDecorator(
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.phone_android_outlined),
+              suffixIcon: Icon(Icons.lock_outline, size: 18, color: AppColors.muted),
+              fillColor: Color(0xFFF3F0EC),
+            ),
+            child: Text(prettyPhone(me.phone), style: const TextStyle(fontSize: 16, color: AppColors.ink)),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),

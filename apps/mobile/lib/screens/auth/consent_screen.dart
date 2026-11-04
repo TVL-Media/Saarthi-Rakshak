@@ -26,17 +26,19 @@ class _ConsentScreenState extends State<ConsentScreen> {
           children: [
             const SizedBox(height: 20),
             const ScreenTitle('Before you start', subtitle: 'How Sarthi Rakshak uses your information'),
-            const SizedBox(height: 20),
-            const _Point(Icons.location_on_outlined, 'Your location is shared with your guardians only during an SOS or a journey you start.'),
-            const _Point(Icons.mic_none, 'During an SOS the app records audio. It is locked with a key that stays on this phone; nobody else can listen.'),
-            const _Point(Icons.sms_outlined, 'Without internet, the app sends your SOS by SMS from your own SIM to your guardians.'),
-            const _Point(Icons.delete_outline, 'You can delete your account and your data at any time in Settings.'),
-            const SizedBox(height: 8),
-            AppCard(
-              color: AppColors.amberSoft,
-              child: const Text(AppConfig.notMonitoring, style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 22),
+            const AppCard(
+              padding: EdgeInsets.fromLTRB(16, 18, 16, 4),
+              child: Column(children: [
+                _Point(Icons.location_on_outlined, 'Your location is shared with your guardians only during an SOS or a journey you start.'),
+                _Point(Icons.mic_none, 'During an SOS the app records audio. It is locked with a key that stays on this phone; nobody else can listen.'),
+                _Point(Icons.sms_outlined, 'Without internet, the app sends your SOS by SMS from your own SIM to your guardians.'),
+                _Point(Icons.delete_outline, 'You can delete your account and your data at any time in Settings.'),
+              ]),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            const NoticeBox(text: AppConfig.notMonitoring),
+            const SizedBox(height: 14),
             Row(children: [
               Checkbox(value: _agreed, activeColor: AppColors.red, onChanged: (v) => setState(() => _agreed = v ?? false)),
               Expanded(
@@ -75,11 +77,11 @@ class _Point extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.only(bottom: 16),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          CircleAvatar(radius: 20, backgroundColor: AppColors.redSoft, child: Icon(icon, color: AppColors.red, size: 22)),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 15.5, height: 1.4))),
+          IconTile(icon),
+          const SizedBox(width: 14),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 15, height: 1.45))),
         ]),
       );
 }

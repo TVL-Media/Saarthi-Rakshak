@@ -11,6 +11,7 @@ import 'package:sarthi_rakshak/api/models.dart';
 import 'package:sarthi_rakshak/screens/fakecall/fake_call_screen.dart';
 import 'package:sarthi_rakshak/screens/home/shell.dart';
 import 'package:sarthi_rakshak/screens/legal/legal_screen.dart';
+import 'package:sarthi_rakshak/screens/notifications/notifications_screen.dart';
 import 'package:sarthi_rakshak/screens/settings/settings_screen.dart';
 import 'package:sarthi_rakshak/screens/sos/sos_countdown_screen.dart';
 import 'package:sarthi_rakshak/state/app_state.dart';
@@ -138,7 +139,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(find.text('Log Out'), findsOneWidget);
+    expect(find.text('Safety Setup'), findsOneWidget);
 
     final handled = await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
@@ -228,5 +229,38 @@ void main() {
       }
       expect(calls, 2);
     });
+  });
+
+  testWidgets('The bell opens Notifications (not History) and clears the unread dot', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 860));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final state = makeState();
+    await state.addNotice('Reena Sharma is coming to help', 'She opened your live location.', type: 'guardian_status');
+    await tester.pumpWidget(host(state, const Shell()));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('unread-dot')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Notifications'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NotificationsScreen), findsOneWidget);
+    expect(find.text('Reena Sharma is coming to help'), findsOneWidget);
+    expect(find.text('No SOS or journeys yet'), findsNothing); // not the History tab
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('unread-dot')), findsNothing);
+    expect(find.text('Where are you going?'), findsOneWidget); // still on Home
+  });
+
+  test('Notifications are kept on the phone and removed at logout', () async {
+    final state = makeState();
+    await state.addNotice('Check-in missed', 'Your guardians were told.', type: 'checkin_no_reply');
+    await state.addNotice('Check-in missed', 'Your guardians were told.', type: 'checkin_no_reply'); // duplicate
+    expect(state.notices.length, 1);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('notices_${state.me!.id}'), contains('Check-in missed'));
+    await state.logout();
+    expect(state.notices, isEmpty);
+    expect(prefs.getString('notices_${fixtures.me['id']}'), isNull);
   });
 }

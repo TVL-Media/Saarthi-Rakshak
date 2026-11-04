@@ -197,20 +197,26 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
         children: [
           AppCard(
             onTap: _hereProblem == null ? null : (_hereNeedsSettings ? openAppSettings : _findHere),
-            child: Row(children: [
-              const CircleAvatar(backgroundColor: Color(0xFFE6F0FF), child: Icon(Icons.location_on, color: Color(0xFF1D6FE8))),
-              const SizedBox(width: 12),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const IconTile(Icons.my_location, color: Color(0xFF1D6FE8), background: Color(0xFFE6F0FF)),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Your Current Location', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  const SizedBox(height: 2),
                   if (_here != null && _hereAddress != null)
-                    Text(_hereAddress!, key: const Key('here-address'), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    Text(_hereAddress!,
+                        key: const Key('here-address'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(height: 1.35)),
                   Text(
                     _here != null
                         ? '${_hereAddress == null ? '${_here!.latitude.toStringAsFixed(5)}, ${_here!.longitude.toStringAsFixed(5)} · ' : ''}'
                             'accurate to ${_here!.accuracy.round()} m'
                         : _hereProblem ?? 'Finding your location…',
-                    style: TextStyle(color: _here == null && _hereProblem != null ? AppColors.red : AppColors.muted),
+                    style: TextStyle(
+                        fontSize: 13.5, color: _here == null && _hereProblem != null ? AppColors.red : AppColors.muted),
                   ),
                   if (_here == null && _hereProblem != null)
                     Text(_hereNeedsSettings ? 'Tap to open App permissions' : 'Tap to try again',
@@ -219,7 +225,8 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
               ),
             ]),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
+          const SectionLabel('Where to?'),
           TextField(
             controller: _search,
             onChanged: _onSearch,
@@ -232,7 +239,8 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
           ),
           if (_searchError != null)
             Padding(padding: const EdgeInsets.only(top: 8), child: Text(_searchError!, style: const TextStyle(color: AppColors.red))),
-          if (_results.isNotEmpty)
+          if (_results.isNotEmpty) ...[
+            const SizedBox(height: 8),
             AppCard(
               padding: EdgeInsets.zero,
               child: Column(children: [
@@ -244,16 +252,16 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
                     onTap: () => _choose(Place(lat: r.lat, lng: r.lng, label: r.name)),
                   ),
               ]),
-            )
-          else if (_search.text.length > 2 && !_searching && _destination == null && _maps.canSearch)
+            ),
+          ] else if (_search.text.length > 2 && !_searching && _destination == null && _maps.canSearch)
             const Padding(padding: EdgeInsets.only(top: 8), child: Text('No places found', style: TextStyle(color: AppColors.muted))),
           const SizedBox(height: 16),
           if (_destination != null)
             AppCard(
               onTap: _pickTime,
               child: Row(children: [
-                const Icon(Icons.schedule, color: AppColors.muted),
-                const SizedBox(width: 12),
+                const IconTile(Icons.schedule),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('Reach by', style: TextStyle(color: AppColors.muted)),
@@ -273,7 +281,7 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
               padding: EdgeInsets.only(top: 8),
               child: Text('At least one guardian must accept your invite first.', style: TextStyle(color: AppColors.red)),
             ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
           if (_saved.isEmpty && !_maps.canSearch)
             AppCard(
               color: AppColors.amberSoft,
@@ -296,20 +304,22 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
               ]),
             ),
           if (_saved.isNotEmpty) ...[
-            const Text('Saved places', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            for (final p in _saved)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
-                  backgroundColor: AppColors.redSoft,
-                  child: Icon(p.label == 'home' ? Icons.home : p.label == 'work' ? Icons.work : Icons.place, color: AppColors.red),
-                ),
-                title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: p.address == null ? null : Text(p.address!, maxLines: 1, overflow: TextOverflow.ellipsis),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _choose(Place(lat: p.lat, lng: p.lng, label: p.name)),
-              ),
+            const SectionLabel('Saved places'),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(children: [
+                for (final (n, p) in _saved.indexed) ...[
+                  if (n > 0) const Divider(height: 1, thickness: 1, indent: 68, color: Color(0xFFF0ECE7)),
+                  MenuRow(
+                    icon: p.label == 'home' ? Icons.home : p.label == 'work' ? Icons.work : Icons.place,
+                    title: p.name,
+                    subtitle: p.address,
+                    accent: true,
+                    onTap: () => _choose(Place(lat: p.lat, lng: p.lng, label: p.name)),
+                  ),
+                ],
+              ]),
+            ),
           ],
         ],
       ),

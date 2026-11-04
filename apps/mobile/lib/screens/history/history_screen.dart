@@ -24,6 +24,26 @@ String historyStatus(HistoryItem i) => switch (i.status) {
       _ => i.status,
     };
 
+/// Colour of a history item's status (red = SOS still active or contact lost, green = safe).
+Color historyColor(HistoryItem i) => switch (i.status) {
+      'active' || 'lost_contact' => AppColors.red,
+      'ended' when i.type == 'sos' && !i.isTest => AppColors.green,
+      'arrived' => AppColors.green,
+      _ => AppColors.muted,
+    };
+
+/// The SOS (red) or journey (green) icon of a history item.
+class HistoryIcon extends StatelessWidget {
+  const HistoryIcon(this.item, {super.key, this.size = 44});
+  final HistoryItem item;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => item.type == 'sos'
+      ? IconTile(Icons.sos, color: AppColors.red, background: AppColors.redSoft, size: size)
+      : IconTile(Icons.route, color: AppColors.green, background: AppColors.greenSoft, size: size);
+}
+
 /// History tab: own SOS events and journeys, newest first, 20 at a time.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -82,13 +102,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return false;
           },
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
             children: [
-              const SizedBox(
-                height: 44,
-                child: Center(child: Text('History', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700))),
-              ),
-              const SizedBox(height: 14),
+              const TabHeader('History'),
               Wrap(spacing: 8, children: [
                 for (final (label, type) in [('All', null), ('SOS', 'sos'), ('Journeys', 'journey')])
                   ChoiceChip(
@@ -107,44 +123,37 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     },
                   ),
               ]),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               for (final i in _items)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: Material(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    shadowColor: Colors.black.withValues(alpha: 0.2),
-                    elevation: 0.6,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(item: i))),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
-                        child: Row(children: [
-                          CircleAvatar(
-                            radius: 22,
-                            backgroundColor: i.type == 'sos' ? AppColors.redSoft : AppColors.greenSoft,
-                            child: Icon(i.type == 'sos' ? Icons.sos : Icons.route, color: i.type == 'sos' ? AppColors.red : AppColors.green),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text(historyTitle(i), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                              const SizedBox(height: 2),
-                              Text('${dateTime(i.startedAt)} · ${historyStatus(i)}', style: const TextStyle(color: AppColors.muted, fontSize: 14)),
-                            ]),
-                          ),
-                          const Icon(Icons.chevron_right, color: Color(0xFF4B5563)),
+                  child: AppCard(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => HistoryDetailScreen(item: i))),
+                    padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+                    child: Row(children: [
+                      HistoryIcon(i),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(historyTitle(i),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                          const SizedBox(height: 3),
+                          Text(dateTime(i.startedAt), style: const TextStyle(color: AppColors.muted, fontSize: 13.5)),
+                          const SizedBox(height: 6),
+                          StatusPill(historyStatus(i), color: historyColor(i)),
                         ]),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
+                    ]),
                   ),
                 ),
               if (_loading && _items.isEmpty)
                 for (var k = 0; k < 4; k++)
                   Container(
-                    height: 70,
+                    height: 72,
                     margin: const EdgeInsets.only(bottom: 10),
                     decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(16)),
                   ),
@@ -233,27 +242,64 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
       body: d == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               children: [
-                Text('${dateTime(d.item.startedAt)} · ${historyStatus(d.item)}', style: const TextStyle(color: AppColors.muted)),
-                const SizedBox(height: 16),
-                for (final (n, e) in d.timeline.indexed)
-                  IntrinsicHeight(
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      SizedBox(
-                        width: 56,
-                        child: Text(clock(e.at), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-                      ),
-                      Column(children: [
-                        Container(width: 10, height: 10, margin: const EdgeInsets.only(top: 4), decoration: const BoxDecoration(color: AppColors.red, shape: BoxShape.circle)),
-                        if (n < d.timeline.length - 1) Expanded(child: Container(width: 2, color: AppColors.line)),
+                AppCard(
+                  child: Row(children: [
+                    HistoryIcon(d.item, size: 48),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(dateTime(d.item.startedAt), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        StatusPill(historyStatus(d.item), color: historyColor(d.item)),
                       ]),
-                      const SizedBox(width: 12),
-                      Expanded(child: Padding(padding: const EdgeInsets.only(bottom: 18), child: Text(e.text, style: const TextStyle(fontSize: 15.5)))),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 20),
+                if (d.timeline.isNotEmpty)
+                  AppCard(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 2),
+                    child: Column(children: [
+                      for (final (n, e) in d.timeline.indexed)
+                        IntrinsicHeight(
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                            SizedBox(
+                              width: 62,
+                              child: Text(clock(e.at),
+                                  style: const TextStyle(color: AppColors.muted, fontSize: 13, height: 1.45)),
+                            ),
+                            SizedBox(
+                              width: 12,
+                              child: Column(children: [
+                                Container(
+                                  width: 12,
+                                  height: 12,
+                                  margin: const EdgeInsets.only(top: 3),
+                                  decoration: BoxDecoration(
+                                    color: n == 0 || n == d.timeline.length - 1 ? AppColors.red : Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.red, width: 2.5),
+                                  ),
+                                ),
+                                if (n < d.timeline.length - 1)
+                                  Expanded(child: Container(width: 2, color: AppColors.redSoft)),
+                              ]),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 18),
+                                child: Text(e.text, style: const TextStyle(fontSize: 15, height: 1.35)),
+                              ),
+                            ),
+                          ]),
+                        ),
                     ]),
                   ),
                 if (d.item.type == 'sos' && !d.item.isTest) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 16),
                   OutlinedButton.icon(
                     key: const Key('phone-recordings'),
                     onPressed: () => Navigator.push(
@@ -263,33 +309,39 @@ class _HistoryDetailScreenState extends State<HistoryDetailScreen> {
                     icon: const Icon(Icons.headphones, color: AppColors.red),
                     label: const Text('Recordings on this phone'),
                   ),
-                  const SizedBox(height: 12),
                 ],
                 if (d.clips.isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 20),
                   const SectionLabel('Audio recordings'),
                   for (final c in d.clips)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: AppCard(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.fromLTRB(6, 6, 8, 6),
                         child: Row(children: [
                           IconButton(
-                            icon: Icon(_playing == c.id ? Icons.stop_circle : Icons.play_circle, color: AppColors.red, size: 34),
+                            icon: Icon(_playing == c.id ? Icons.stop_circle : Icons.play_circle, color: AppColors.red, size: 40),
                             onPressed: () => _play(c),
                           ),
+                          const SizedBox(width: 4),
                           Expanded(
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text('${clock(c.recordedAt)} · ${c.durationS ?? 30} s', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              Text('${clock(c.recordedAt)} · ${c.durationS ?? 30} s', style: const TextStyle(fontWeight: FontWeight.w700)),
+                              const SizedBox(height: 2),
                               Text(c.keep ? 'Kept' : 'Deleted on ${dateTime(c.deleteAfter)}', style: const TextStyle(color: AppColors.muted)),
                             ]),
                           ),
-                          TextButton(onPressed: () => _keep(c), child: Text(c.keep ? 'Don’t keep' : 'Keep')),
+                          TextButton(
+                            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+                            onPressed: () => _keep(c),
+                            child: Text(c.keep ? 'Don’t keep' : 'Keep'),
+                          ),
                         ]),
                       ),
                     ),
+                  const SizedBox(height: 4),
                   const Text('Recordings play only on the phone that recorded them. Nobody else can listen.',
-                      style: TextStyle(color: AppColors.muted)),
+                      style: TextStyle(color: AppColors.muted, fontSize: 13.5, height: 1.4)),
                 ],
               ],
             ),

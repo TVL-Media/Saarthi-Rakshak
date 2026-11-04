@@ -80,7 +80,7 @@ void main() {
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
-    expect(find.text('Log Out'), findsOneWidget);
+    expect(find.text('Safety Setup'), findsOneWidget);
 
     await tester.tap(find.text('Guardians').last);
     await tester.pumpAndSettle();

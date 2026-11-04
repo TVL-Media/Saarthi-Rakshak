@@ -92,7 +92,7 @@ class _JourneyOnScreenState extends State<JourneyOnScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(14),
                   child: Container(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.fromLTRB(4, 10, 14, 10),
                     decoration: BoxDecoration(color: AppColors.night.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(16)),
                     child: Row(children: [
                       IconButton(
@@ -100,7 +100,7 @@ class _JourneyOnScreenState extends State<JourneyOnScreen> {
                         icon: const Icon(Icons.chevron_left, color: Colors.white),
                       ),
                       Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Text('Journey in Progress', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
                           Text('To ${j.destination.label} · reach by ${clock(j.expectedArrivalAt)}',
                               style: const TextStyle(color: Colors.white70)),
@@ -123,11 +123,18 @@ class _JourneyOnScreenState extends State<JourneyOnScreen> {
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
                       Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(2))),
                       const SizedBox(height: 14),
-                      Row(children: [
-                        _Fact(title: 'Status', value: statusText, color: statusColor),
-                        _Fact(title: 'Guardians', value: '${accepted.length} following'),
-                        _Fact(title: 'Time left', value: _left(j.expectedArrivalAt)),
-                      ]),
+                      AppCard(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: IntrinsicHeight(
+                          child: Row(children: [
+                            _Fact(title: 'Status', value: statusText, color: statusColor),
+                            const VerticalDivider(width: 1, color: Color(0xFFF0ECE7)),
+                            _Fact(title: 'Guardians', value: '${accepted.length} following'),
+                            const VerticalDivider(width: 1, color: Color(0xFFF0ECE7)),
+                            _Fact(title: 'Time left', value: _left(j.expectedArrivalAt)),
+                          ]),
+                        ),
+                      ),
                       if (!engine.online)
                         const Padding(
                           padding: EdgeInsets.only(top: 10),

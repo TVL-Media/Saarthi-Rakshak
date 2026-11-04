@@ -69,6 +69,7 @@ class _Root extends StatefulWidget {
 
 class _RootState extends State<_Root> {
   StreamSubscription<RemoteMessage>? _push;
+  StreamSubscription<RemoteMessage>? _opened;
   bool _checkinOpen = false;
   late final AppState _state = AppScope.read(context);
 
@@ -81,6 +82,8 @@ class _RootState extends State<_Root> {
     if (firebaseReady) {
       FirebaseMessaging.instance.requestPermission().ignore();
       _push = FirebaseMessaging.onMessage.listen(_onPush);
+      // A notification tapped while the app was in the background: keep it in the bell's list.
+      _opened = FirebaseMessaging.onMessageOpenedApp.listen(_keepNotice);
     }
   }
 
@@ -90,6 +93,7 @@ class _RootState extends State<_Root> {
     state.launchAction.removeListener(_onLaunch);
     state.checkinAlert.removeListener(_onCheckin);
     _push?.cancel();
+    _opened?.cancel();
     super.dispose();
   }
 
@@ -127,11 +131,18 @@ class _RootState extends State<_Root> {
 
   /// Push while the app is open: show it as a message (closed apps get the system notification).
   void _onPush(RemoteMessage m) {
+    _keepNotice(m);
     final ctx = navigatorKey.currentContext;
     final title = m.notification?.title;
     if (ctx == null || title == null) return;
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(title)));
     if (m.data['type'] == 'guardian_status') AppScope.read(context).refreshGuardians(quiet: true);
+  }
+
+  void _keepNotice(RemoteMessage m) {
+    final title = m.notification?.title;
+    if (title == null) return;
+    _state.addNotice(title, m.notification?.body, type: m.data['type'] as String?, at: m.sentTime);
   }
 
   @override

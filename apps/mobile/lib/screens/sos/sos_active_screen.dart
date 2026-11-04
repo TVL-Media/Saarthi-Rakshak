@@ -94,20 +94,28 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(color: ended ? AppColors.green : AppColors.red, borderRadius: BorderRadius.circular(20)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(ended ? 'SOS ended' : 'Help is on the way',
-                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 4),
-              Text(
-                ended
-                    ? 'Your guardians were told you are safe.'
-                    : 'Started at ${clock(startedAt)}. Your guardians can see where you are.',
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              IconTile(ended ? Icons.verified_user_outlined : Icons.sos,
+                  color: Colors.white, background: Colors.white.withValues(alpha: 0.18), size: 48),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(ended ? 'SOS ended' : 'Help is on the way',
+                      style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(
+                    ended
+                        ? 'Your guardians were told you are safe.'
+                        : 'Started at ${clock(startedAt)}. Your guardians can see where you are.',
+                    style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.35),
+                  ),
+                ]),
               ),
             ]),
           ),
           const SizedBox(height: 14),
-          if (!ended) ...[
+          if (!ended)
+            _Group(children: [
             _Status(
               icon: engine.locationOff ? Icons.location_off : Icons.radio_button_checked,
               ok: !engine.locationOff,
@@ -128,7 +136,7 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
                     ? 'No internet — SOS sent by SMS from your phone. Retrying the server…'
                     : 'Connecting… If there is no internet, your SOS goes out by SMS.',
               ),
-          ],
+          ]),
           if (!ended)
             Align(
               alignment: Alignment.centerLeft,
@@ -160,10 +168,14 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
             ),
           const SizedBox(height: 18),
           const SectionLabel('Guardians'),
-          if (sos != null)
-            for (final g in sos.guardians) _GuardianRow(name: g.name, status: g.statusText, responding: g.respondingAt != null)
-          else
-            for (final g in guardians) _GuardianRow(name: g.name, status: engine.simSmsSentTo.contains(g.id) ? 'Sent by SMS' : 'Sending…', responding: false),
+          if (sos != null && sos.guardians.isNotEmpty || sos == null && guardians.isNotEmpty)
+            _Group(children: [
+              if (sos != null)
+                for (final g in sos.guardians) _GuardianRow(name: g.name, status: g.statusText, responding: g.respondingAt != null)
+              else
+                for (final g in guardians)
+                  _GuardianRow(name: g.name, status: engine.simSmsSentTo.contains(g.id) ? 'Sent by SMS' : 'Sending…', responding: false),
+            ]),
           const SizedBox(height: 24),
           if (!ended) FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.green), onPressed: _safe, child: const Text('I’m safe'))
           else FilledButton(onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst), child: const Text('Back to Home')),
@@ -171,6 +183,26 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
       ),
     );
   }
+}
+
+/// One white card with rows separated by thin lines.
+class _Group extends StatelessWidget {
+  const _Group({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const Divider(height: 1, thickness: 1, indent: 64, color: Color(0xFFF0ECE7)),
+              children[i],
+            ],
+          ]),
+        ),
+      );
 }
 
 class _Status extends StatelessWidget {
@@ -181,15 +213,12 @@ class _Status extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(children: [
-            Icon(icon, color: ok ? AppColors.red : AppColors.amber),
-            const SizedBox(width: 12),
-            Expanded(child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500))),
-          ]),
-        ),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        child: Row(children: [
+          IconTile(icon, color: ok ? AppColors.red : AppColors.amber, size: 36),
+          const SizedBox(width: 14),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, height: 1.3))),
+        ]),
       );
 }
 
@@ -222,34 +251,35 @@ class _AudioStatus extends StatelessWidget {
       detail = null;
     }
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: AppCard(
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            engine.recording
-                ? const _RecordingDot()
-                : Icon(engine.audioOff || engine.audioError != null ? Icons.mic_off : Icons.mic, color: AppColors.amber),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, key: const Key('audio-title'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                if (detail != null) Text(detail, style: const TextStyle(color: AppColors.muted)),
-              ]),
-            ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      child: Row(children: [
+        engine.recording
+            ? Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: AppColors.redSoft, borderRadius: BorderRadius.circular(11)),
+                child: const _RecordingDot(),
+              )
+            : IconTile(engine.audioOff || engine.audioError != null ? Icons.mic_off : Icons.mic, color: AppColors.amber, size: 36),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, key: const Key('audio-title'), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            if (detail != null) ...[
+              const SizedBox(height: 2),
+              Text(detail, style: const TextStyle(color: AppColors.muted, fontSize: 13.5)),
+            ],
           ]),
-          if (engine.audioClips > 0)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                key: const Key('listen'),
-                onPressed: onListen,
-                icon: const Icon(Icons.headphones, color: AppColors.red),
-                label: const Text('Listen', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w700)),
-              ),
-            ),
-        ]),
-      ),
+        ),
+        if (engine.audioClips > 0)
+          TextButton.icon(
+            key: const Key('listen'),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10)),
+            onPressed: onListen,
+            icon: const Icon(Icons.headphones, color: AppColors.red, size: 20),
+            label: const Text('Listen', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w700)),
+          ),
+      ]),
     );
   }
 }
@@ -297,16 +327,16 @@ class _GuardianRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: AppCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(children: [
-            Initials(name, size: 44),
-            const SizedBox(width: 12),
-            Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16))),
-            Text(status,
-                style: TextStyle(color: responding ? AppColors.green : AppColors.muted, fontWeight: responding ? FontWeight.w700 : FontWeight.w500)),
-          ]),
-        ),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Row(children: [
+          Initials(name, size: 36),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(name,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          ),
+          const SizedBox(width: 8),
+          StatusPill(status, color: responding ? AppColors.green : AppColors.muted),
+        ]),
       );
 }

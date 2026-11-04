@@ -17,13 +17,15 @@ class AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final shape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(16),
-      side: BorderSide(color: AppColors.line.withValues(alpha: 0.6)),
+      side: BorderSide(color: AppColors.line.withValues(alpha: 0.55)),
     );
     // The card colour is the Material itself, so the tap ripple shows on top of it (a tap that
-    // shows nothing makes people tap again).
+    // shows nothing makes people tap again). A very soft shadow lifts it off the cream page.
     return Material(
       color: color ?? AppColors.card,
       shape: shape,
+      elevation: 0.6,
+      shadowColor: Colors.black.withValues(alpha: 0.18),
       clipBehavior: Clip.antiAlias,
       child: onTap == null
           ? Padding(padding: padding, child: child)
@@ -42,8 +44,177 @@ class SectionLabel extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(
           text.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 12, letterSpacing: 1.1, color: AppColors.muted, fontWeight: FontWeight.w600),
         ),
+      );
+}
+
+/// Title row of a bottom-bar tab (History, Guardians, Settings): the same height and left edge
+/// on every tab, with an optional button on the right.
+class TabHeader extends StatelessWidget {
+  const TabHeader(this.title, {super.key, this.subtitle, this.trailing});
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+            height: 48,
+            child: Row(children: [
+              Expanded(
+                child: Text(title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, height: 1.1)),
+              ),
+              ?trailing,
+            ]),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(subtitle!, style: const TextStyle(fontSize: 15, color: AppColors.muted, height: 1.4)),
+          ],
+        ]),
+      );
+}
+
+/// A rounded square with a tinted background and an icon (list rows, notices).
+class IconTile extends StatelessWidget {
+  const IconTile(this.icon, {super.key, this.color = AppColors.red, this.background, this.size = 40});
+  final IconData icon;
+  final Color color;
+  final Color? background;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: background ?? color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(size * 0.3),
+        ),
+        child: Icon(icon, color: color, size: size * 0.52),
+      );
+}
+
+/// A white card holding rows separated by thin lines (Settings, details).
+class MenuGroup extends StatelessWidget {
+  const MenuGroup({super.key, required this.children, this.label});
+  final List<Widget> children;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (label != null) Padding(padding: const EdgeInsets.only(left: 4), child: SectionLabel(label!)),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: Column(children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0) const Divider(height: 1, thickness: 1, indent: 68, color: Color(0xFFF0ECE7)),
+                children[i],
+              ],
+            ]),
+          ),
+        ]),
+      );
+}
+
+/// One tappable row of a [MenuGroup]: icon tile, title (and subtitle), chevron.
+class MenuRow extends StatelessWidget {
+  const MenuRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+    this.danger = false,
+    this.accent = false,
+    this.trailing,
+  });
+
+  /// Red icon on a light red tile (places, features) instead of the neutral grey one.
+  final bool accent;
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final bool danger;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+            child: Row(children: [
+              IconTile(icon,
+                  color: danger || accent ? AppColors.red : AppColors.ink,
+                  size: 40,
+                  background: danger || accent ? AppColors.redSoft : const Color(0xFFF3F0EC)),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                  Text(title,
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600, color: danger ? AppColors.red : AppColors.ink)),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13.5, color: AppColors.muted, height: 1.3)),
+                  ],
+                ]),
+              ),
+              const SizedBox(width: 8),
+              trailing ?? const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
+            ]),
+          ),
+        ),
+      );
+}
+
+/// A small rounded status label ("Arrived safely", "Accepted").
+class StatusPill extends StatelessWidget {
+  const StatusPill(this.text, {super.key, this.color = AppColors.muted});
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+        child: Text(text, style: TextStyle(color: color, fontSize: 12.5, fontWeight: FontWeight.w700)),
+      );
+}
+
+/// A coloured notice box with an icon (warnings, the "not 24/7" line, tips).
+class NoticeBox extends StatelessWidget {
+  const NoticeBox({super.key, required this.text, this.icon = Icons.info_outline, this.color = AppColors.amber, this.background = AppColors.amberSoft});
+  final String text;
+  final IconData icon;
+  final Color color;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(14)),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600, height: 1.4))),
+        ]),
       );
 }
 

@@ -64,6 +64,53 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Notifications this phone received (newest first, at most 50), for the bell on Home.
+  List<AppNotice> notices = const [];
+
+  /// When the user last opened the notifications list (the bell shows a dot for newer ones).
+  DateTime? noticesSeenAt;
+
+  bool get hasUnreadNotices => notices.isNotEmpty && (noticesSeenAt == null || notices.first.at.isAfter(noticesSeenAt!));
+
+  String get _noticesKey => 'notices_${me?.id ?? ''}';
+  String get _noticesSeenKey => 'notices_seen_${me?.id ?? ''}';
+
+  Future<void> _loadNotices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_noticesKey);
+      notices = raw == null
+          ? const []
+          : (jsonDecode(raw) as List).map((j) => AppNotice.fromJson(j as Map<String, dynamic>)).toList();
+      final seen = prefs.getInt(_noticesSeenKey);
+      noticesSeenAt = seen == null ? null : DateTime.fromMillisecondsSinceEpoch(seen);
+    } catch (_) {
+      notices = const [];
+    }
+  }
+
+  /// Keeps a notification (a push received while the app is open, or one the user tapped).
+  Future<void> addNotice(String title, String? body, {String? type, DateTime? at}) async {
+    if (me == null || title.trim().isEmpty) return;
+    final n = AppNotice(title: title, body: body, type: type, at: at ?? DateTime.now());
+    // The same push can arrive twice (open + tapped): keep one.
+    if (notices.any((o) => o.title == n.title && o.body == n.body && o.at.difference(n.at).inSeconds.abs() < 60)) return;
+    notices = [n, ...notices].take(50).toList();
+    notifyListeners();
+    try {
+      await (await SharedPreferences.getInstance())
+          .setString(_noticesKey, jsonEncode(notices.map((e) => e.toJson()).toList()));
+    } catch (_) {}
+  }
+
+  Future<void> markNoticesSeen() async {
+    noticesSeenAt = DateTime.now();
+    notifyListeners();
+    try {
+      await (await SharedPreferences.getInstance()).setInt(_noticesSeenKey, noticesSeenAt!.millisecondsSinceEpoch);
+    } catch (_) {}
+  }
+
   static const _tokenKey = 'session_token';
   static const _seenWelcomeKey = 'seen_welcome';
   static const _setupDoneKey = 'setup_done';
@@ -129,6 +176,7 @@ class AppState extends ChangeNotifier {
   Future<void> _afterLogin(String token) async {
     final m = me!;
     await _loadLocalPhoto();
+    await _loadNotices();
     await engine.setSession(api.baseUrl, token, m.firstName.isEmpty ? 'Someone' : m.firstName);
     await refreshGuardians(quiet: true);
     if (m.consentGiven) await _saveSignUpName();
@@ -256,8 +304,15 @@ class AppState extends ChangeNotifier {
   Future<void> _endLocally({bool toWelcome = false}) async {
     await _storage.delete(key: _tokenKey);
     // The photo is private: the next person to log in on this phone must not see it.
-    if (me != null) (await SharedPreferences.getInstance()).remove(_photoKey).ignore();
+    if (me != null) {
+      final prefs = await SharedPreferences.getInstance();
+      prefs.remove(_photoKey).ignore();
+      prefs.remove(_noticesKey).ignore();
+      prefs.remove(_noticesSeenKey).ignore();
+    }
     localPhoto = null;
+    notices = const [];
+    noticesSeenAt = null;
     api.token = null;
     me = null;
     guardians = const [];
@@ -314,3 +369,23 @@ class AppScope extends InheritedNotifier<AppState> {
 }
 
 bool get firebaseReady => AppConfig.firebaseConfigured && Firebase.apps.isNotEmpty;
+
+/// One notification shown in the Notifications list.
+class AppNotice {
+  AppNotice({required this.title, this.body, this.type, required this.at});
+  final String title;
+  final String? body;
+
+  /// The push type from the server (guardian_status, show_call_112, checkin_no_reply).
+  final String? type;
+  final DateTime at;
+
+  factory AppNotice.fromJson(Map<String, dynamic> j) => AppNotice(
+        title: j['title'] as String,
+        body: j['body'] as String?,
+        type: j['type'] as String?,
+        at: DateTime.fromMillisecondsSinceEpoch(j['at'] as int),
+      );
+
+  Map<String, dynamic> toJson() => {'title': title, 'body': body, 'type': type, 'at': at.millisecondsSinceEpoch};
+}

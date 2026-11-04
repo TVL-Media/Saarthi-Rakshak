@@ -11,6 +11,7 @@ import '../../widgets/format.dart';
 import '../fakecall/fake_call_screen.dart';
 import '../journey/journey_on_screen.dart';
 import '../journey/start_journey_screen.dart';
+import '../notifications/notifications_screen.dart';
 import '../setup/safety_setup_screen.dart';
 import '../sos/sos_active_screen.dart';
 
@@ -98,11 +99,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () => Scaffold.of(context).openDrawer(),
               ),
               const Spacer(),
-              RoundIconButton(
-                icon: Icons.notifications_none_rounded,
-                tooltip: 'Alerts and journeys',
-                onPressed: () => widget.onOpenTab(1),
-              ),
+              // The bell opens the notifications only (SOS and journeys are in the History tab).
+              Stack(clipBehavior: Clip.none, children: [
+                RoundIconButton(
+                  icon: Icons.notifications_none_rounded,
+                  tooltip: 'Notifications',
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+                ),
+                if (state.hasUnreadNotices)
+                  Positioned(
+                    right: 10,
+                    top: 9,
+                    child: IgnorePointer(
+                      child: Container(
+                        key: const Key('unread-dot'),
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: AppColors.red,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                      ),
+                    ),
+                  ),
+              ]),
             ]),
             const SizedBox(height: 18),
             Text('${greeting()},', style: const TextStyle(color: AppColors.muted, fontSize: 16)),
@@ -173,8 +194,13 @@ class _HomeScreenState extends State<HomeScreen> {
               Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final p in _places)
                   ActionChip(
-                    label: Text(p.name, style: const TextStyle(fontSize: 15.5, color: AppColors.ink)),
-                    backgroundColor: AppColors.cream,
+                    avatar: Icon(
+                      switch (p.label) { 'home' => Icons.home_outlined, 'work' => Icons.work_outline, _ => Icons.place_outlined },
+                      size: 18,
+                      color: AppColors.red,
+                    ),
+                    label: Text(p.name, style: const TextStyle(fontSize: 15, color: AppColors.ink, fontWeight: FontWeight.w500)),
+                    backgroundColor: Colors.white,
                     side: const BorderSide(color: AppColors.line),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     shape: const StadiumBorder(),
@@ -214,25 +240,28 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             AppCard(
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FakeCallScreen())),
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
               child: const Row(children: [
-                CircleAvatar(backgroundColor: AppColors.redSoft, child: Icon(Icons.phone_in_talk_outlined, color: AppColors.red)),
-                SizedBox(width: 12),
+                IconTile(Icons.phone_in_talk_outlined, size: 44),
+                SizedBox(width: 14),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text('Fake call', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                    Text('Get out of an uncomfortable situation', style: TextStyle(color: AppColors.muted)),
+                    SizedBox(height: 2),
+                    Text('Get out of an uncomfortable situation', style: TextStyle(color: AppColors.muted, fontSize: 14)),
                   ]),
                 ),
-                Icon(Icons.chevron_right, color: AppColors.muted),
+                Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
               ]),
             ),
             if (accepted == 0) ...[
               const SizedBox(height: 12),
-              AppCard(
-                color: AppColors.amberSoft,
+              GestureDetector(
                 onTap: () => widget.onOpenTab(3),
-                child: const Text('No guardian has accepted yet. Journeys need at least one. SOS still alerts guardians who haven’t answered.',
-                    style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.w600)),
+                child: const NoticeBox(
+                  icon: Icons.info_outline,
+                  text: 'No guardian has accepted yet. Journeys need at least one. SOS still alerts guardians who haven’t answered.',
+                ),
               ),
             ],
           ],

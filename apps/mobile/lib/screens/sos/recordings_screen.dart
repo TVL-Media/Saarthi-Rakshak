@@ -84,14 +84,16 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
       body: clips == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               children: [
-                const Text(
-                  'Recorded during your SOS, 30 seconds each. They are locked on this phone: only this phone can '
-                  'play them, and they are deleted after 30 days or when you log out.',
-                  style: TextStyle(color: AppColors.muted),
+                const NoticeBox(
+                  icon: Icons.lock_outline,
+                  color: Color(0xFF4B5563),
+                  background: Color(0xFFEFEBE6),
+                  text: 'Recorded during your SOS, 30 seconds each. They are locked on this phone: only this phone can '
+                      'play them, and they are deleted after 30 days or when you log out.',
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -105,7 +107,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                 else
                   for (final c in clips)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.only(bottom: 10),
                       child: AppCard(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         child: Row(
@@ -125,6 +127,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(dateTime(c.recordedAt), style: const TextStyle(fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 2),
                                   Text(
                                     '${c.seconds} s · ${c.uploaded ? 'Saved to your account' : 'On this phone only'}',
                                     style: const TextStyle(color: AppColors.muted),

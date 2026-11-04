@@ -11,7 +11,8 @@ const batteryGuides = <String, String>{
   'redmi': 'Settings → Apps → Manage apps → Sarthi Rakshak → Battery saver → No restrictions. Also turn on Autostart.',
   'poco': 'Settings → Apps → Manage apps → Sarthi Rakshak → Battery saver → No restrictions. Also turn on Autostart.',
   'samsung': 'Settings → Battery → Background usage limits → Never sleeping apps → add Sarthi Rakshak.',
-  'oppo': 'Settings → Battery → More settings → Optimise battery use → Sarthi Rakshak → Don’t optimise. Allow Auto launch.',
+  'oppo':
+      'Settings → Battery → More settings → Optimise battery use → Sarthi Rakshak → Don’t optimise. Allow Auto launch.',
   'realme': 'Settings → Battery → App battery management → Sarthi Rakshak → Allow background activity and Auto launch.',
   'vivo': 'Settings → Battery → Background power consumption → Sarthi Rakshak → Allow. Turn on Autostart in i Manager.',
   'oneplus': 'Settings → Battery → Battery optimisation → Sarthi Rakshak → Don’t optimise.',
@@ -88,8 +89,12 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
 
   Future<void> _testSos() async {
     final state = AppScope.read(context);
-    if (!await confirm(context, 'Send a test SOS?',
-        'Your guardians who accepted get an SMS marked TEST. No action needed from them. (5 a day)', yes: 'Send test')) {
+    if (!await confirm(
+      context,
+      'Send a test SOS?',
+      'Your guardians who accepted get an SMS marked TEST. No action needed from them. (5 a day)',
+      yes: 'Send test',
+    )) {
       return;
     }
     try {
@@ -105,7 +110,17 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
     final state = AppScope.of(context);
     final accepted = state.guardians.where((g) => g.status == 'accepted').length;
     final protected = _location && _locationAlways && _notifications && _microphone && _battery && accepted > 0;
-    final guide = batteryGuides.entries.where((e) => _brand.contains(e.key)).map((e) => e.value).firstOrNull ??
+    final done = [
+      _location,
+      _locationAlways,
+      _notifications,
+      _microphone,
+      _sms,
+      _battery,
+      accepted > 0,
+    ].where((b) => b).length;
+    final guide =
+        batteryGuides.entries.where((e) => _brand.contains(e.key)).map((e) => e.value).firstOrNull ??
         'Settings → Apps → Sarthi Rakshak → Battery → Unrestricted (or “Don’t optimise”).';
 
     return Scaffold(
@@ -113,76 +128,127 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
         children: [
-          const ScreenTitle('Keep protection on.', subtitle: 'These let SOS work even with the screen off or no internet.'),
+          const ScreenTitle(
+            'Keep protection on.',
+            subtitle: 'These let SOS work even with the screen off or no internet.',
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: protected ? AppColors.greenSoft : AppColors.amberSoft,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    IconTile(
+                      protected ? Icons.verified_user : Icons.warning_amber_rounded,
+                      color: protected ? AppColors.green : AppColors.amber,
+                      background: Colors.white,
+                      size: 44,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        protected ? 'You are protected' : 'A few steps left',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: protected ? AppColors.green : AppColors.amber,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '$done/7',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: protected ? AppColors.green : AppColors.amber,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: done / 7,
+                    minHeight: 6,
+                    backgroundColor: Colors.white,
+                    color: protected ? AppColors.green : AppColors.amber,
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 16),
           AppCard(
-            color: protected ? AppColors.greenSoft : AppColors.amberSoft,
-            child: Row(children: [
-              Icon(protected ? Icons.verified_user : Icons.warning_amber_rounded,
-                  color: protected ? AppColors.green : AppColors.amber, size: 30),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(protected ? 'You are protected' : 'A few steps left',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: protected ? AppColors.green : AppColors.amber)),
-              ),
-            ]),
+            padding: EdgeInsets.zero,
+            child: Column(
+              children: [
+                _Check(
+                  icon: Icons.location_on_outlined,
+                  title: 'Location',
+                  text: 'So guardians can find you during an SOS or journey.',
+                  ok: _location,
+                  onFix: () => _ask(Permission.location),
+                ),
+                _Check(
+                  icon: Icons.my_location,
+                  title: 'Location all the time',
+                  text: _location
+                      ? 'Keeps sharing when the screen is off. Choose “Allow all the time”.'
+                      : 'Allow “Location” above first. Then choose “Allow all the time” here.',
+                  ok: _locationAlways,
+                  onFix: _location ? () => _ask(Permission.locationAlways) : null,
+                ),
+                _Check(
+                  icon: Icons.notifications_none,
+                  title: 'Notifications',
+                  text: 'For check-ins and when a guardian responds.',
+                  ok: _notifications,
+                  onFix: () => _ask(Permission.notification),
+                ),
+                _Check(
+                  icon: Icons.mic_none,
+                  title: 'Microphone',
+                  text: 'Records audio during an SOS. Only you can listen.',
+                  ok: _microphone,
+                  onFix: () => _ask(Permission.microphone),
+                ),
+                _Check(
+                  icon: Icons.sms_outlined,
+                  title: 'SMS (recommended)',
+                  text: 'Sends your SOS from your own SIM when there is no internet. Without it, your SMS app opens ready to send.',
+                  ok: _sms,
+                  onFix: () => _ask(Permission.sms),
+                ),
+                _Check(
+                  icon: Icons.battery_saver_outlined,
+                  title: 'Battery saving off for this app',
+                  text: guide,
+                  ok: _battery,
+                  onFix: () async {
+                    await state.engine.askBatteryOptimisationOff();
+                    await _check();
+                  },
+                ),
+                _Check(
+                  icon: Icons.group_outlined,
+                  title: 'At least one guardian accepted',
+                  text: accepted > 0
+                      ? '$accepted accepted'
+                      : 'Ask your guardians to open the invite SMS and tap Accept.',
+                  ok: accepted > 0,
+                  onFix: null,
+                  last: true,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          _Check(
-            icon: Icons.location_on_outlined,
-            title: 'Location',
-            text: 'So guardians can find you during an SOS or journey.',
-            ok: _location,
-            onFix: () => _ask(Permission.location),
-          ),
-          _Check(
-            icon: Icons.my_location,
-            title: 'Location all the time',
-            text: _location
-                ? 'Keeps sharing when the screen is off. Choose “Allow all the time”.'
-                : 'Allow “Location” above first. Then choose “Allow all the time” here.',
-            ok: _locationAlways,
-            onFix: _location ? () => _ask(Permission.locationAlways) : null,
-          ),
-          _Check(
-            icon: Icons.notifications_none,
-            title: 'Notifications',
-            text: 'For check-ins and when a guardian responds.',
-            ok: _notifications,
-            onFix: () => _ask(Permission.notification),
-          ),
-          _Check(
-            icon: Icons.mic_none,
-            title: 'Microphone',
-            text: 'Records audio during an SOS. Only you can listen.',
-            ok: _microphone,
-            onFix: () => _ask(Permission.microphone),
-          ),
-          _Check(
-            icon: Icons.sms_outlined,
-            title: 'SMS (recommended)',
-            text: 'Sends your SOS from your own SIM when there is no internet. Without it, your SMS app opens ready to send.',
-            ok: _sms,
-            onFix: () => _ask(Permission.sms),
-          ),
-          _Check(
-            icon: Icons.battery_saver_outlined,
-            title: 'Battery saving off for this app',
-            text: guide,
-            ok: _battery,
-            onFix: () async {
-              await state.engine.askBatteryOptimisationOff();
-              await _check();
-            },
-          ),
-          _Check(
-            icon: Icons.group_outlined,
-            title: 'At least one guardian accepted',
-            text: accepted > 0 ? '$accepted accepted' : 'Ask your guardians to open the invite SMS and tap Accept.',
-            ok: accepted > 0,
-            onFix: null,
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: accepted == 0 ? null : _testSos,
             icon: const Icon(Icons.campaign_outlined),
@@ -198,7 +264,15 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
 }
 
 class _Check extends StatelessWidget {
-  const _Check({required this.icon, required this.title, required this.text, required this.ok, required this.onFix});
+  const _Check({
+    required this.icon,
+    required this.title,
+    required this.text,
+    required this.ok,
+    required this.onFix,
+    this.last = false,
+  });
+  final bool last;
   final IconData icon;
   final String title;
   final String text;
@@ -206,30 +280,46 @@ class _Check extends StatelessWidget {
   final VoidCallback? onFix;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: AppCard(
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: ok ? AppColors.greenSoft : AppColors.redSoft,
-              child: Icon(ok ? Icons.check : icon, color: ok ? AppColors.green : AppColors.red, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                const SizedBox(height: 2),
-                Text(text, style: const TextStyle(color: AppColors.muted, height: 1.35)),
-              ]),
-            ),
-            if (!ok && onFix != null)
-              TextButton(
-                style: TextButton.styleFrom(foregroundColor: AppColors.red),
-                onPressed: onFix,
-                child: const Text('Allow'),
-              ),
-          ]),
+  Widget build(BuildContext context) => Container(
+    decoration: last
+        ? null
+        : const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFFF0ECE7))),
+          ),
+    padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IconTile(
+          ok ? Icons.check : icon,
+          color: ok ? AppColors.green : AppColors.red,
+          background: ok ? AppColors.greenSoft : AppColors.redSoft,
         ),
-      );
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 2),
+              Text(text, style: const TextStyle(color: AppColors.muted, height: 1.35)),
+            ],
+          ),
+        ),
+        if (!ok && onFix != null) ...[
+          const SizedBox(width: 8),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(0, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              shape: const StadiumBorder(),
+            ),
+            onPressed: onFix,
+            child: const Text('Allow'),
+          ),
+        ],
+      ],
+    ),
+  );
 }

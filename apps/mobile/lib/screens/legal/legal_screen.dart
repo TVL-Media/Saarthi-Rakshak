@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../config.dart';
 import '../../theme.dart';
+import '../../widgets/common.dart';
 
 /// Privacy Policy and Terms & Conditions, inside the app (no web page needed).
 enum LegalPage { privacy, terms }
@@ -20,21 +21,27 @@ class LegalScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(privacy ? 'Privacy Policy' : 'Terms & Conditions')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
           const Text('Last updated: 4 November 2026', style: TextStyle(color: AppColors.muted)),
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: AppColors.amberSoft, borderRadius: BorderRadius.circular(14)),
-            child: const Text(AppConfig.notMonitoring,
-                style: TextStyle(color: AppColors.amber, fontWeight: FontWeight.w600)),
-          ),
-          for (final (title, body) in sections) ...[
-            const SizedBox(height: 20),
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
-            Text(body, style: const TextStyle(fontSize: 15.5, height: 1.5)),
+          const NoticeBox(text: AppConfig.notMonitoring),
+          for (final (n, (title, body)) in sections.indexed) ...[
+            const SizedBox(height: 24),
+            Row(children: [
+              Container(
+                width: 26,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.redSoft, borderRadius: BorderRadius.circular(8)),
+                child: Text('${n + 1}',
+                    style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: const TextStyle(fontSize: 17.5, fontWeight: FontWeight.w800))),
+            ]),
+            const SizedBox(height: 8),
+            Text(body, style: const TextStyle(fontSize: 15, height: 1.55, color: Color(0xFF374151))),
           ],
         ],
       ),
