@@ -11,6 +11,7 @@ import 'screens/auth/profile_screen.dart';
 import 'screens/guardians/guardians_screen.dart';
 import 'screens/home/shell.dart';
 import 'screens/journey/checkin_screen.dart';
+import 'screens/notifications/notifications_screen.dart';
 import 'screens/onboarding/welcome_screen.dart';
 import 'screens/setup/safety_setup_screen.dart';
 import 'screens/vault/share_import_screen.dart';
@@ -84,7 +85,10 @@ class _RootState extends State<_Root> {
       FirebaseMessaging.instance.requestPermission().ignore();
       _push = FirebaseMessaging.onMessage.listen(_onPush);
       // A notification tapped while the app was in the background: keep it in the bell's list.
-      _opened = FirebaseMessaging.onMessageOpenedApp.listen(_keepNotice);
+      _opened = FirebaseMessaging.onMessageOpenedApp.listen((m) {
+        _keepNotice(m);
+        _openNoticePage(m.data['type'] as String?);
+      });
     }
   }
 
@@ -153,6 +157,14 @@ class _RootState extends State<_Root> {
     if (ctx == null || title == null) return;
     ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(title)));
     if (m.data['type'] == 'guardian_status') AppScope.read(context).refreshGuardians(quiet: true);
+  }
+
+  /// A tapped Phase 2 notification (community report, Rakshak, plan) opens its page.
+  void _openNoticePage(String? type) {
+    final page = noticePage(type);
+    final nav = navigatorKey.currentState;
+    if (page == null || nav == null || _state.stage != Stage.home) return;
+    nav.push(MaterialPageRoute(builder: (_) => page));
   }
 
   void _keepNotice(RemoteMessage m) {

@@ -7,7 +7,6 @@ import 'package:bip39/bip39.dart' as bip39;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -136,19 +135,12 @@ class VaultSession extends ChangeNotifier {
   /// Fingerprint, face or phone PIN. False if the user cancelled.
   Future<bool> _authenticate(String reason) async {
     if (testAuth != null) return testAuth!(reason);
-    final auth = LocalAuthentication();
+    // Native prompt: fingerprint or the phone's PIN / pattern / password. These unlock the vault key
+    // in the Keystore; a "weak" face unlock would pass a plain prompt but not open the key.
     try {
-      if (!await auth.isDeviceSupported()) {
-        throw VaultProblem('Set a screen lock (PIN, pattern, fingerprint or face) on this phone first. The vault needs it.');
-      }
-      return await auth.authenticate(localizedReason: reason, biometricOnly: false, persistAcrossBackgrounding: true);
+      return await _app.engine.vaultAuth(reason);
     } on PlatformException catch (e) {
-      if (e.code == 'NotAvailable' || e.code == 'PasscodeNotSet' || e.code == 'noCredentialsSet') {
-        throw VaultProblem('Set a screen lock (PIN, pattern, fingerprint or face) on this phone first. The vault needs it.');
-      }
-      return false;
-    } on LocalAuthException catch (e) {
-      if (e.code == LocalAuthExceptionCode.noCredentialsSet || e.code == LocalAuthExceptionCode.noBiometricHardware) {
+      if (e.code == 'no_lock') {
         throw VaultProblem('Set a screen lock (PIN, pattern, fingerprint or face) on this phone first. The vault needs it.');
       }
       return false;
@@ -182,7 +174,19 @@ class VaultSession extends ChangeNotifier {
       unawaited(retryUploads());
       return true;
     } on PlatformException catch (e) {
-      if (e.code == 'auth_needed') return false;
+      if (e.code == 'auth_needed') throw VaultProblem(_authAgain);
+      rethrow;
+    }
+  }
+
+  static const _authAgain = 'Please unlock with your fingerprint or phone PIN / pattern and try again.';
+
+  /// Keeps the vault key on this phone (needs the unlock just done).
+  Future<void> _storeKey(String key) async {
+    try {
+      await _app.engine.vaultStore(key);
+    } on PlatformException catch (e) {
+      if (e.code == 'auth_needed') throw VaultProblem(_authAgain);
       rethrow;
     }
   }
@@ -216,7 +220,7 @@ class VaultSession extends ChangeNotifier {
     final locked = await _app.engine.vaultEncrypt(base64Encode(kek), base64Decode(key));
     final kdf = {'name': 'argon2id', 'salt': base64Encode(salt), ..._kdf};
     await _app.api.vaultSetup(locked, kdf, await _check(kek));
-    await _app.engine.vaultStore(key);
+    await _storeKey(key);
     _key = key;
     _lastUsed = DateTime.now();
     notifyListeners();
@@ -230,7 +234,7 @@ class VaultSession extends ChangeNotifier {
     if (await _check(kek) != rec.checkValue) throw VaultProblem("Those words don't match. Check what you wrote down.");
     final key = base64Encode(await _app.engine.vaultDecrypt(base64Encode(kek), rec.lockedKey));
     if (!await _authenticate('Restore Mere Saboot')) throw VaultProblem('Unlock was cancelled.');
-    await _app.engine.vaultStore(key);
+    await _storeKey(key);
     _key = key;
     _lastUsed = DateTime.now();
     notifyListeners();
@@ -275,7 +279,7 @@ class VaultSession extends ChangeNotifier {
   Future<Directory> _pendingDir() async {
     // One folder per account: another account logged in on this phone never uploads these.
     final dir = Directory('${(await getApplicationSupportDirectory()).path}/vault_pending/${_app.me?.id ?? 'none'}');
-    if (!await dir.exists()) await dir.create(recursive: true);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     return dir;
   }
 
@@ -386,7 +390,7 @@ class VaultSession extends ChangeNotifier {
     final key = _need();
     final d = await details(item);
     final dir = Directory('${(await getTemporaryDirectory()).path}/vault');
-    if (!await dir.exists()) await dir.create(recursive: true);
+    if (!dir.existsSync()) dir.createSync(recursive: true);
     final ext = (d.fileName ?? '').contains('.') ? d.fileName!.split('.').last : _ext(item.kind, d.mime);
     final out = File('${dir.path}/${item.id}.$ext');
     if (await out.exists()) return out.path;

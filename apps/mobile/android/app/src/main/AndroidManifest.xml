@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- SOS by SMS from the user's own SIM when there is no internet -->
     <uses-permission android:name="android.permission.SEND_SMS" />
@@ -80,7 +81,13 @@
         <service
             android:name=".engine.SafetyService"
             android:exported="false"
-            android:foregroundServiceType="location|microphone" />
+            android:foregroundServiceType="location|microphone|specialUse">
+            <!-- Shake to SOS "always on" and fall detection: the motion sensors are read while no
+                 SOS, journey or full-day location is running (Play Console: special use). -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Personal safety: detects a deliberate shake or a fall with the motion sensors and starts an SOS countdown that alerts the user's emergency contacts" />
+        </service>
 
         <!-- Home-screen SOS widget -->
         <receiver

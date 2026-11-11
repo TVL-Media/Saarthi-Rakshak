@@ -4,6 +4,17 @@ import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/format.dart';
+import '../community/community_screen.dart';
+import '../community/rakshak_screen.dart';
+import '../settings/plans_screen.dart';
+
+/// The page a Phase 2 notification belongs to (null: nothing to open).
+Widget? noticePage(String? type) => switch (type) {
+      'community_status' => const MyReportsScreen(),
+      'rakshak_status' => const RakshakScreen(),
+      'plan_status' => const PlansScreen(),
+      _ => null,
+    };
 
 /// The bell on Home: notifications this phone received, and where each guardian invite stands.
 /// (SOS and journeys are in the History tab, not here.)
@@ -103,9 +114,15 @@ class _NoticeRow extends StatelessWidget {
       'guardian_status' => (Icons.people_outline, AppColors.green),
       'show_call_112' => (Icons.call_outlined, AppColors.red),
       'checkin_no_reply' => (Icons.warning_amber_rounded, AppColors.amber),
+      'community_status' => (Icons.groups_outlined, AppColors.red),
+      'rakshak_status' => (Icons.volunteer_activism_outlined, AppColors.red),
+      'plan_status' => (Icons.workspace_premium_outlined, AppColors.red),
       _ => (Icons.notifications_none_rounded, AppColors.red),
     };
-    return _Row(icon: icon, color: color, title: n.title, body: n.body, time: ago(n.at));
+    final page = noticePage(n.type);
+    final row = _Row(icon: icon, color: color, title: n.title, body: n.body, time: ago(n.at));
+    if (page == null) return row;
+    return InkWell(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => page)), child: row);
   }
 }
 

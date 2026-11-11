@@ -736,17 +736,35 @@ class SafetyService : Service() {
         val journeyButton = store.journey != null && store.sos == null && store.triggers.optBoolean("journeySosButton", true)
         val n = Alerts.service(this, notificationText(), journeySosButton = journeyButton)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            val locationAllowed = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            // Location only while something needs it (SOS, journey, full-day); shake "always on" and
+            // fall detection alone run as a special-use service (Android 14+).
+            val locationWork = store.sos != null || store.journey != null || store.dailyOn || outbox.countOrdered() > 0
+            var type = if (locationWork && locationAllowed) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
             val micWanted = store.sos != null || withMic || VoiceSos.listening
             if (micWanted && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             }
+            if (type == 0) {
+                type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                else ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            }
             try {
                 startForeground(Alerts.ID_SERVICE, n, type)
             } catch (e: Exception) {
-                // e.g. started in the background without location permission: keep a plain notification.
-                Log.e(TAG, "startForeground with type failed", e)
-                startForeground(Alerts.ID_SERVICE, n)
+                // e.g. started in the background while Android does not allow that type: try the
+                // special-use type, and never let the safety service crash.
+                Log.e(TAG, "startForeground with type $type failed", e)
+                try {
+                    if (Build.VERSION.SDK_INT >= 34) {
+                        startForeground(Alerts.ID_SERVICE, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+                    } else {
+                        startForeground(Alerts.ID_SERVICE, n)
+                    }
+                } catch (e2: Exception) {
+                    Log.e(TAG, "startForeground failed", e2)
+                }
             }
         } else {
             startForeground(Alerts.ID_SERVICE, n)

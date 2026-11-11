@@ -53,6 +53,11 @@ const TRIGGER: Record<string, string> = {
   tile: 'Quick-settings tile',
   checkin: 'Check-in',
   journey: 'Journey',
+  shake: 'Phone shake',
+  voice: 'Voice phrase',
+  crash: 'Crash detection (Drive mode)',
+  fall: 'Fall detection',
+  discreet: 'Discreet button',
 };
 
 function minutesSince(iso: string): number {

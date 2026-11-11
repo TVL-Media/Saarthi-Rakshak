@@ -88,6 +88,8 @@ dependencies {
     implementation("com.alphacephei:vosk-android:0.3.47")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("androidx.core:core-ktx:1.13.1")
+    // Mere Saboot: fingerprint / phone PIN prompt that also unlocks the Keystore vault key.
+    implementation("androidx.biometric:biometric:1.1.0")
 
     // Unit tests of the engine's journey checks (run on the computer, no phone needed).
     testImplementation("junit:junit:4.13.2")

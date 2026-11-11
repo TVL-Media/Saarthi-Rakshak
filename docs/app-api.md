@@ -303,10 +303,10 @@ Every Phase 2 feature has a switch in Settings (`feature.shake`, `feature.voice`
 | --- | --- | --- |
 | `GET /v1/me/daily-tracking` | — | `{ enabled, pausedUntil, retentionDays: 7/30/90, consentVersion }` |
 | `PUT /v1/me/daily-tracking` | any of `{ enabled, pausedUntil (null = resume), retentionDays, consentVersion }` | same |
-| `POST /v1/daily-locations` | `{ points: [{ id, lat, lng, accuracyM?, batteryPct?, activity?, recordedAt }] }` (≤ 500) | `{ saved }` |
+| `POST /v1/daily-locations` | `{ points: [{ clientPointId, lat, lng, accuracyM?, batteryPct?, activity?, recordedAt }] }` (≤ 500) | `{ saved }` |
 | `DELETE /v1/daily-locations?date=YYYY-MM-DD` or `?all=true` | — | 204 |
 | `GET /v1/timeline?date=YYYY-MM-DD` | — | `{ date, stops, routes, pointsCount }` |
-| `GET /v1/timeline/summary` | — | `{ date, distanceM, stopsCount, movingMinutes }[]` |
+| `GET /v1/timeline/summary?date=YYYY-MM-DD` | — | `{ date, distanceM, stopsCount, movingMinutes }` |
 
 - Turning it on the first time needs `consentVersion` = `2026-11` (the phone shows the consent screen). Points are
   refused with `conflict` (409) while it is off or paused; the phone then stops sending.

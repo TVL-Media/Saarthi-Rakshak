@@ -47,6 +47,11 @@ const TRIGGER: Record<string, string> = {
   tile: 'Quick tile',
   checkin: 'Check-in',
   journey: 'Journey',
+  shake: 'Shake',
+  voice: 'Voice phrase',
+  crash: 'Crash detection',
+  fall: 'Fall detection',
+  discreet: 'Discreet button',
 };
 
 /** Router state to open a timeline on arrival. */

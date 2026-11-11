@@ -708,8 +708,10 @@ class _IncidentScreenState extends State<IncidentScreen> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 StatusPill(incidentKinds[_incident.kind] ?? '', color: AppColors.red),
-                const Spacer(),
-                Text(dateTime(_details.date), style: const TextStyle(color: AppColors.muted)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(dateTime(_details.date), textAlign: TextAlign.end, style: const TextStyle(color: AppColors.muted)),
+                ),
               ]),
               if (_details.description.isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -828,7 +830,9 @@ class _AccessHistoryScreenState extends State<AccessHistoryScreen> {
                   Text(snap.error is ApiException ? (snap.error as ApiException).message : 'Could not load the history.'),
                   const SizedBox(height: 12),
                   OutlinedButton(
-                    onPressed: () => setState(() => _future = AppScope.read(context).api.accessLog()),
+                    onPressed: () => setState(() {
+                      _future = AppScope.read(context).api.accessLog();
+                    }),
                     child: const Text('Try again'),
                   ),
                 ]),

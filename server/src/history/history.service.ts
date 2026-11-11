@@ -98,6 +98,11 @@ const TRIGGER: Record<string, string> = {
   tile: 'quick-settings tile',
   checkin: 'check-in',
   journey: 'journey',
+  shake: 'phone shake',
+  voice: 'voice phrase',
+  crash: 'crash detection',
+  fall: 'fall detection',
+  discreet: 'discreet button',
 };
 const CHECKIN_REASON: Record<string, string> = {
   off_route: 'off route',

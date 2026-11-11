@@ -17,7 +17,7 @@ import '../../widgets/format.dart';
 /// SOS photos are kept on this phone (private app storage) until they are saved into Mere Saboot.
 Future<Directory> sosMediaDir(AppState state, String sosId) async {
   final dir = Directory('${(await getApplicationSupportDirectory()).path}/sos_media/${state.me?.id ?? 'none'}/$sosId');
-  if (!await dir.exists()) await dir.create(recursive: true);
+  if (!dir.existsSync()) dir.createSync(recursive: true);
   return dir;
 }
 

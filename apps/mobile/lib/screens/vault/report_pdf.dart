@@ -64,7 +64,7 @@ Future<String> buildReportPdf({
     ),
   );
   final dir = Directory('${(await getTemporaryDirectory()).path}/vault');
-  if (!await dir.exists()) await dir.create(recursive: true);
+  if (!dir.existsSync()) dir.createSync(recursive: true);
   final file = File('${dir.path}/$fileName');
   await file.writeAsBytes(await doc.save());
   return file.path;

@@ -33,7 +33,9 @@ class _RakshakScreenState extends State<RakshakScreen> {
   late final AppState _state = AppScope.read(context);
   late Future<RakshakApplication?> _future = _state.api.rakshakApplication();
 
-  void _reload() => setState(() => _future = _state.api.rakshakApplication());
+  void _reload() => setState(() {
+        _future = _state.api.rakshakApplication();
+      });
 
   Future<void> _withdraw() async {
     if (!await confirm(context, 'Withdraw your application?', 'Your documents will be deleted.', yes: 'Withdraw', danger: true)) return;

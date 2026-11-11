@@ -311,8 +311,11 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 const Text('Storage', style: TextStyle(fontWeight: FontWeight.w700)),
-                const Spacer(),
-                Text('${sizeText(usage.usedBytes)} of ${sizeText(usage.limitBytes)}', style: const TextStyle(color: AppColors.muted)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('${sizeText(usage.usedBytes)} of ${sizeText(usage.limitBytes)}',
+                      textAlign: TextAlign.end, style: const TextStyle(color: AppColors.muted)),
+                ),
               ]),
               const SizedBox(height: 10),
               ClipRRect(

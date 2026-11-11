@@ -43,6 +43,10 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.provider.MediaStore
 import android.util.Base64
+import android.util.Log
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -418,6 +422,7 @@ class MainActivity : FlutterFragmentActivity() {
                     handler.postDelayed({ finish(false) }, (call.argument<Int>("seconds") ?: 10) * 1000L)
                 }
             }
+            "vaultAuth" -> vaultAuth(call.argument<String>("reason") ?: "Mere Saboot", result)
             "vaultExists" -> result.success(Vault.exists(this))
             "vaultNewKey" -> result.success(Vault.newKey())
             "vaultStore" -> {
@@ -550,6 +555,43 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     /** Clips are decrypted only here, with the key that never leaves this phone. */
+    /**
+     * Fingerprint (strong biometric) or phone PIN / pattern / password. Only these unlock the
+     * vault key in the Keystore; a "weak" face unlock does not, so it is not offered here.
+     * Answers true, false (cancelled) or the error `no_lock` (no screen lock on the phone).
+     */
+    private fun vaultAuth(reason: String, result: MethodChannel.Result) {
+        val keyguard = getSystemService(android.app.KeyguardManager::class.java)
+        if (!keyguard.isDeviceSecure) {
+            result.error("no_lock", "Set a screen lock (PIN, pattern, fingerprint or face) on this phone first. The vault needs it.", null)
+            return
+        }
+        var answered = false
+        fun answer(ok: Boolean) {
+            if (!answered) {
+                answered = true
+                result.success(ok)
+            }
+        }
+        val prompt = BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationSucceeded(r: BiometricPrompt.AuthenticationResult) = answer(true)
+            override fun onAuthenticationError(code: Int, message: CharSequence) = answer(false)
+        })
+        val info = BiometricPrompt.PromptInfo.Builder().setTitle(reason).setSubtitle("Fingerprint or phone screen lock")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            info.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+        } else {
+            @Suppress("DEPRECATION")
+            info.setDeviceCredentialAllowed(true)
+        }
+        try {
+            prompt.authenticate(info.build())
+        } catch (e: Exception) {
+            Log.w("SafetyEngine", "Vault prompt failed", e)
+            answer(false)
+        }
+    }
+
     private fun playEncrypted(bytes: ByteArray) {
         stopPlayback()
         val file = File(cacheDir, "play.m4a")

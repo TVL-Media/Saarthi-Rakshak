@@ -194,6 +194,9 @@ class SafetyEngine {
   Future<bool> voiceTest(String lang, String phrase, {int seconds = 10}) async =>
       (await _ch.invokeMethod<bool>('voiceTest', {'lang': lang, 'phrase': phrase, 'seconds': seconds})) ?? false;
 
+  /// Fingerprint or phone screen lock for Mere Saboot (also unlocks the Keystore vault key).
+  /// False if cancelled; PlatformException `no_lock` if the phone has no screen lock.
+  Future<bool> vaultAuth(String reason) async => (await _ch.invokeMethod<bool>('vaultAuth', {'reason': reason})) ?? false;
   Future<bool> vaultExists() async => (await _ch.invokeMethod<bool>('vaultExists')) ?? false;
   Future<String> vaultNewKey() async => (await _ch.invokeMethod<String>('vaultNewKey'))!;
 
