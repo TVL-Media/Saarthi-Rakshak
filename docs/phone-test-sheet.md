@@ -14,6 +14,9 @@ Fill one copy of the results table per phone. Tests that need the phone far from
 4. Build a **debug** APK (release builds allow HTTPS only, so they cannot reach the laptop):
    `cd apps/mobile` → `flutter build apk --debug --dart-define-from-file=dart-defines.json`
    → install `build/app/outputs/flutter-apk/app-debug.apk` (`adb install -r <file>`).
+   With the team key on the laptop (`apps/mobile/README.md`, "Signing") this installs over a
+   tester's release build without uninstalling. APKs for testers away from the laptop: release
+   builds only (`docs/render-test-deploy.md`, step 4).
 5. Guardians: use a second phone (or a teammate's) as guardian. In development no real SMS is
    sent: the SMS text with the link is printed in the `pnpm dev` window. Open that link on the
    guardian's phone (same USB/Wi-Fi setup) or on the laptop.

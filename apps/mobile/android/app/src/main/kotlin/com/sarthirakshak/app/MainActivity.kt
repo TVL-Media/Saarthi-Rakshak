@@ -19,6 +19,7 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.ContactsContract
 import android.provider.Settings
+import android.view.WindowManager
 import com.sarthirakshak.app.engine.Alerts
 import com.sarthirakshak.app.engine.Crypto
 import com.sarthirakshak.app.engine.EngineBus
@@ -61,8 +62,48 @@ class MainActivity : FlutterActivity() {
         handleIntent(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        updateLockScreen()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // The user left the app or the screen went off: from now on it shows over the lock screen
+        // only while an SOS or check-in is running (or for a new SOS / check-in launch). Decided
+        // here, because a locked phone never starts the app again until it may show.
+        openedForAlert = false
+        updateLockScreen()
+    }
+
+    /** Opened from the SOS button, widget, tile or an "Are you safe?" alert. */
+    private var openedForAlert = false
+
+    /**
+     * The app shows over the lock screen (and turns the screen on) only for an SOS or an
+     * "Are you safe?" check-in, never otherwise, so Profile, medical notes and History
+     * stay behind the phone's lock.
+     */
+    private fun updateLockScreen() {
+        val store = Store(this)
+        val checkinWaiting = store.journey?.optString("pendingCheckinId").orEmpty().isNotEmpty()
+        val show = openedForAlert || store.sos != null || checkinWaiting
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(show)
+            setTurnScreenOn(show)
+        } else {
+            @Suppress("DEPRECATION")
+            val flags = WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            if (show) window.addFlags(flags) else window.clearFlags(flags)
+        }
+    }
+
     private fun handleIntent(intent: Intent?) {
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
+        if (action == "sos" || action == "checkin") {
+            openedForAlert = true
+            updateLockScreen()
+        }
         val data = HashMap<String, Any?>()
         data["action"] = action
         intent.getStringExtra(EXTRA_TRIGGER)?.let { data["trigger"] = it }

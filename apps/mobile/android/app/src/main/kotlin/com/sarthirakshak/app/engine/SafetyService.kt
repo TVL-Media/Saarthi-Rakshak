@@ -564,17 +564,26 @@ class SafetyService : Service() {
     private fun goForeground() {
         val n = Alerts.service(this, notificationText())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            val location = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
             val sosOn = store.sos != null
-            if (sosOn && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            val mic = sosOn && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            // Try location + microphone, then location only: Android refuses the microphone part
+            // when the app is not on screen (e.g. resumed after a restart). A start without a type
+            // would ask for every type in the manifest and fail the same way, so it is the last try.
+            val tries = if (mic) listOf(location or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE, location) else listOf(location)
+            for (type in tries) {
+                try {
+                    startForeground(Alerts.ID_SERVICE, n, type)
+                    return
+                } catch (e: Exception) {
+                    Log.e(TAG, "startForeground with type $type failed", e)
+                }
             }
             try {
-                startForeground(Alerts.ID_SERVICE, n, type)
-            } catch (e: Exception) {
-                // e.g. started in the background without location permission: keep a plain notification.
-                Log.e(TAG, "startForeground with type failed", e)
                 startForeground(Alerts.ID_SERVICE, n)
+            } catch (e: Exception) {
+                // e.g. no location permission at all: the service keeps going as long as Android allows.
+                Log.e(TAG, "startForeground failed", e)
             }
         } else {
             startForeground(Alerts.ID_SERVICE, n)

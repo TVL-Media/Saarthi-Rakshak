@@ -5,7 +5,9 @@ val localProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
-// Release signing key: android/key.properties (storeFile, storePassword, keyAlias, keyPassword).
+// The team's one signing key: android/key.properties (storeFile, storePassword, keyAlias, keyPassword),
+// never in git. Every APK we hand out must be signed with this same key: Android only installs an
+// update over the app when the key matches, and Play Protect distrusts the "Android Debug" key.
 val releaseSigning: Properties? = rootProject.file("key.properties").takeIf { it.exists() }?.let { f ->
     Properties().apply { f.inputStream().use { load(it) } }
 }
@@ -53,6 +55,9 @@ android {
                 storePassword = releaseSigning.getProperty("storePassword")
                 keyAlias = releaseSigning.getProperty("keyAlias")
                 keyPassword = releaseSigning.getProperty("keyPassword")
+                // v2 for every phone we support; v3 so the key can be rotated later without a reinstall.
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
@@ -60,12 +65,30 @@ android {
     buildTypes {
         debug {
             manifestPlaceholders["usesCleartext"] = "true"
+            // With the team key present, debug builds use it too, so a laptop build installs over
+            // a tester's release build (and back) without uninstalling. Without it: the local debug key.
+            if (releaseSigning != null) signingConfig = signingConfigs.getByName("release")
         }
         release {
-            // Our own release (upload) key from android/key.properties (never in git); without it,
-            // the debug key so the build still works on any computer.
-            signingConfig = if (releaseSigning != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // Only ever the team key (checked below): never a quiet fallback to a debug key.
+            if (releaseSigning != null) signingConfig = signingConfigs.getByName("release")
         }
+    }
+}
+
+// A release APK without the team key would be signed with nobody's key (or a laptop's debug key):
+// it could not update testers' installs and Play Protect blocks it. Stop with a clear message.
+gradle.taskGraph.whenReady {
+    val buildsRelease = allTasks.any { it.project == project && it.name.contains("Release") }
+    if (!buildsRelease) return@whenReady
+    val store = releaseSigning?.getProperty("storeFile")?.let { file(it) }
+    if (releaseSigning == null || store == null || !store.exists()) {
+        throw GradleException(
+            "Release builds must be signed with the team key. Put android/key.properties " +
+                "(storeFile, storePassword, keyAlias, keyPassword) and the keystore file on this computer " +
+                "(see apps/mobile/README.md, \"Signing\"). Missing: " +
+                (if (releaseSigning == null) "android/key.properties" else "keystore ${store?.path ?: "(storeFile not set)"}"),
+        )
     }
 }
 

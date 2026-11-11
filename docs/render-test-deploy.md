@@ -69,17 +69,22 @@ It prints a temporary password once. Open `https://<your address>/` → log in �
 
 ## 4. The APK for testers
 
-The test login works only in **debug** builds, so testers get a debug APK:
+Testers get a **release** APK signed with the **team key** (a debug APK is blocked by Play Protect and
+cannot be updated by a build from another laptop). The test login still works in release builds.
 
-1. In `apps/mobile/dart-defines.json` set `"API_URL": "https://<your address>"` (keep the Firebase
+1. Put the team key on your computer: `apps/mobile/android/key.properties` + the keystore file
+   (see `apps/mobile/README.md`, "Signing"). Without it the release build stops with a message.
+2. In `apps/mobile/dart-defines.json` set `"API_URL": "https://<your address>"` (keep the Firebase
    values; `"DEV_LOGIN": "true"` only if you set `DEV_LOGIN_CODE` on Render).
-2. Build: `cd apps/mobile` → `flutter build apk --debug --dart-define-from-file=dart-defines.json`
-3. Send `apps/mobile/build/app/outputs/flutter-apk/app-debug.apk`. Testers allow "Install unknown
-   apps" for the app they open it with.
-4. Real Firebase OTP (instead of the test code): in Firebase → Project settings → Android app, add
-   the **SHA-1 and SHA-256** of the key the APK is signed with (`cd apps/mobile/android` →
-   `.\gradlew signingReport`, "debug" variant). Real SMS OTP may need the Firebase Blaze plan;
-   Firebase **test phone numbers** work without it.
+3. Raise the build number in `apps/mobile/pubspec.yaml` (e.g. `1.0.6+8` → `1.0.6+9`).
+4. Build: `cd apps/mobile` → `flutter build apk --release --dart-define-from-file=dart-defines.json`
+5. Send `apps/mobile/build/app/outputs/flutter-apk/app-release.apk`. Testers allow "Install unknown
+   apps" for the app they open it with; a new APK installs over the old one (no uninstall).
+6. Play Protect warning or block: see `apps/mobile/README.md`, "APK for testers (and Play Protect)".
+7. Real Firebase OTP (instead of the test code): in Firebase → Project settings → Android app, add
+   the **SHA-1 and SHA-256** of the team key (`cd apps/mobile/android` → `.\gradlew signingReport`,
+   "release" variant). Real SMS OTP may need the Firebase Blaze plan; Firebase **test phone numbers**
+   work without it.
 
 Change `API_URL` back to `http://10.0.2.2:3000` for the emulator on your laptop.
 
