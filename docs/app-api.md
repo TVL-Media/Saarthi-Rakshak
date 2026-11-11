@@ -271,6 +271,104 @@ encrypted bytes and can never play them; admins have no play or download option.
 - Play: download `url` (the encrypted file) and decrypt it on the phone. Another phone, or the same phone after a
   reset or reinstall, cannot decrypt it.
 
+## Phase 2 — Smarter protection (`packages/shared/src/phase2-api.ts`)
+
+Every Phase 2 feature has a switch in Settings (`feature.shake`, `feature.voice`, `feature.photos`, `feature.crash`,
+`feature.fall`, `feature.daily_location`, `feature.vault`, `feature.community`, `feature.rakshak`, `feature.plans`;
+1 = on). The phone reads them from `GET /v1/me` → `rules` and hides what is off.
+
+### P2-A — SOS triggers, photos, false alarms
+
+| Call | Body | Reply |
+| --- | --- | --- |
+| `GET /v1/me/sos-triggers` | — | `SosTriggerSettings` |
+| `PUT /v1/me/sos-triggers` | any part of `SosTriggerSettings` | `SosTriggerSettings` |
+| `POST /v1/sos/false-alarms` | `{ id, trigger }` | 204 |
+| `POST /v1/sos/:id/photo-upload` | `{ photoId, sizeBytes }` (≤ 1 MB) | `{ key, uploadUrl, headers, expiresAt }` |
+| `POST /v1/sos/:id/photos` | `{ photoId, camera: front/back, takenAt }` | `SosPhoto` |
+| `GET /v1/sos/:id/photos` | — | `SosPhoto[]` |
+
+- `SosTriggerSettings` = `{ shakeMode: off/journey/always, voiceOn, driveMode, fallOn, quietCountdown, journeySosButton }`.
+  The voice phrase and language are **never sent**; they stay on the phone.
+- `POST /v1/sos` accepts the triggers `shake`, `voice`, `crash`, `fall`, `discreet`. The guardian SMS and live page
+  say how the SOS started (e.g. "Possible crash detected"). A countdown cancelled with "I'm OK" is reported to
+  `/v1/sos/false-alarms` (counts only, to tune the thresholds `detection.*` in Settings).
+- At most `sos.photo_pairs_max` pairs (default 3) per SOS. Photos are shown on the guardian live page (`photos` in
+  the live view, links valid 15 minutes) and deleted with the SOS audio (`audio.auto_delete_days`).
+- Journeys: `POST /v1/journeys` takes an optional `mode` (`walk`, `cab`, `auto`, `bus`, `own_vehicle`).
+
+### P2-B — Full-day location and timeline
+
+| Call | Body | Reply |
+| --- | --- | --- |
+| `GET /v1/me/daily-tracking` | — | `{ enabled, pausedUntil, retentionDays: 7/30/90, consentVersion }` |
+| `PUT /v1/me/daily-tracking` | any of `{ enabled, pausedUntil (null = resume), retentionDays, consentVersion }` | same |
+| `POST /v1/daily-locations` | `{ points: [{ id, lat, lng, accuracyM?, batteryPct?, activity?, recordedAt }] }` (≤ 500) | `{ saved }` |
+| `DELETE /v1/daily-locations?date=YYYY-MM-DD` or `?all=true` | — | 204 |
+| `GET /v1/timeline?date=YYYY-MM-DD` | — | `{ date, stops, routes, pointsCount }` |
+| `GET /v1/timeline/summary` | — | `{ date, distanceM, stopsCount, movingMinutes }[]` |
+
+- Turning it on the first time needs `consentVersion` = `2026-11` (the phone shows the consent screen). Points are
+  refused with `conflict` (409) while it is off or paused; the phone then stops sending.
+- A stop = within 100 m for at least 5 minutes. Days are India time. Points older than `retentionDays` are deleted
+  every night. Admins see counts only.
+
+### P2-C — Mere Saboot (evidence vault)
+
+End-to-end encrypted: the phone makes a random vault key, keeps it in the Android Keystore (fingerprint / face /
+PIN), and sends the server only a copy locked with the 12-word recovery phrase (Argon2id). Every file has its own
+key and is encrypted in 1 MB chunks (AES-256-GCM) before upload. The server cannot open anything.
+
+| Call | Body | Reply |
+| --- | --- | --- |
+| `POST /v1/vault/setup` | `{ lockedKey, kdf: { name: argon2id, salt, memoryKiB, iterations, parallelism }, checkValue }` | 204 |
+| `GET /v1/vault/recovery` | — | `{ lockedKey, kdf, checkValue }` (404 = no vault yet) |
+| `GET /v1/vault/usage` | — | `{ usedBytes, limitBytes, items }` |
+| `POST /v1/vault/items/upload` | `{ itemId, sizeBytes }` (≤ 200 MB) | upload link |
+| `POST /v1/vault/items` | `{ id, kind, incidentId?, sosId?, lockedFileKey, lockedDetails, sha256, capturedAt, sizeBytes }` | `EvidenceItem` |
+| `GET /v1/vault/items` | — | `EvidenceItem[]` |
+| `GET /v1/vault/items/:id/download` | — | `{ url, expiresAt }` |
+| `PATCH /v1/vault/items/:id` | any of `{ incidentId, lockedDetails, hidden }` | `EvidenceItem` |
+| `DELETE /v1/vault/items/:id` | — | 204, or `conflict` while `deleteLockedUntil` is in the future |
+| `POST /v1/vault/incidents` · `PATCH /v1/vault/incidents/:id` | `{ id, kind, lockedDetails }` | `Incident` |
+| `GET /v1/vault/incidents` | — | `Incident[]` |
+| `POST /v1/vault/access-log` · `GET /v1/vault/access-log` | `{ entries: [{ action, itemId?, incidentId?, at }], device? }` | 204 · `AccessLogEntry[]` |
+
+- `kind`: `audio`, `video`, `photo`, `file`, `detail` (typed number / email / link, no file), `report`.
+- `sha256` (of the original) and `receivedAt` can never change (database trigger). Items cannot be deleted for
+  `evidence.delete_lock_days` (90) after capture; deleting the account still deletes everything.
+- Saving with `sosId` puts the item in that SOS's incident (the first save also sends the new incident's id).
+- Storage limit = the user's plan (the biggest plan while everything is free).
+
+### P2-D — Community and Rakshak
+
+| Call | Body | Reply |
+| --- | --- | --- |
+| `GET /v1/community/areas` | — | `{ areas }` (Noida sectors) |
+| `GET /v1/community/posts?area=` | — | published posts (area + "All Noida") |
+| `POST /v1/community/photo-upload` | `{ sizeBytes }` (≤ 1 MB) | upload link |
+| `POST /v1/community/reports` | `{ id, category, area, body (20–500, no phone numbers or emails), photoKey? }` | `MyCommunityReport` (`pending`) |
+| `GET /v1/community/my-reports` | — | `MyCommunityReport[]` |
+| `POST /v1/community/posts/:id/flag` | `{ reason }` | 204 (3 flags send the post back to review) |
+| `POST /v1/rakshak/document-upload` | `{ document: idFront/idBack/selfie, sizeBytes }` | upload link |
+| `POST /v1/rakshak/application` | `{ fullName, dateOfBirth (18+), address, area, idType, idLast4, motivation, documents, agreeToChecks: true }` | `RakshakApplication` |
+| `GET /v1/rakshak/application` · `DELETE` (withdraw) | — | `{ application }` · 204 |
+
+- Only the last 4 characters of the ID are kept; personal details are encrypted on the server. Documents are deleted
+  on withdrawal and 90 days after a rejection.
+
+### P2-E — Plans
+
+| Call | Body | Reply |
+| --- | --- | --- |
+| `GET /v1/plans` | — | `{ plans, current, everythingFree, renewsAt }` |
+| `POST /v1/subscriptions/verify` | `{ productId, purchaseToken }` | same as `GET /v1/plans` |
+| `POST /webhooks/google-play?token=` | Google Play RTDN through Pub/Sub | 204 |
+
+- While `everythingFree` is true the app shows the plans as "Coming soon". A plan can be put on sale (admin, Super
+  Admin only) only with a price and a Google Play product id. Purchases are checked with Google
+  (`GOOGLE_PLAY_CREDENTIALS`); refunds and cancellations arrive by the webhook.
+
 ## Push notifications to the phone (Part B)
 
 The server sends these to the newest phone of the user with a push token (`PUT /v1/me/device`), as
@@ -282,6 +380,9 @@ Firebase Cloud Messaging messages with a notification (Android channel `safety_a
 | `guardian_status` | A guardian opened the live link or tapped "I'm responding" | `sosId` or `journeyId`, `guardianId`, `status` (`opened` / `responding`) | Refresh `GET /v1/sos/:id` (or the journey) |
 | `show_call_112` | No guardian responded within 5 minutes of the SOS (Settings) | `sosId` | Show the big **Call 112** button on the SOS screen |
 | `checkin_no_reply` | A check-in was not answered within 2 minutes; guardians got the live link | `journeyId`, `checkinId` | Show "Your guardians were told" |
+| `community_status` | An admin published, rejected or removed the user's community report | `postId`, `status` | Refresh My reports |
+| `rakshak_status` | The Rakshak application was approved or rejected | `applicationId`, `status` | Refresh the Rakshak screen |
+| `plan_status` | A paid plan ended (cancelled, expired or refunded) | — | Refresh `GET /v1/plans` |
 
 A token Firebase reports as no longer valid is removed; the app sends a new one with `PUT /v1/me/device`.
 

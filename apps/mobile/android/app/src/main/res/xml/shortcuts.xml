@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Discreet mode: long-press the app icon → "Quick help" opens the SOS countdown. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="quick_help_static"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/quick_help">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.sarthirakshak.app"
+            android:targetClass="com.sarthirakshak.app.MainActivity">
+            <extra android:name="sarthi_action" android:value="sos" />
+            <extra android:name="sarthi_trigger" android:value="discreet" />
+        </intent>
+    </shortcut>
+</shortcuts>

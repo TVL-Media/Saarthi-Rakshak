@@ -5,7 +5,13 @@ import type { Env } from '../../config/env.schema';
 import { firebaseApp } from '../auth/firebase-app';
 
 /** Kinds of push notification the app handles (see docs/app-api.md). */
-export type PushType = 'guardian_status' | 'show_call_112' | 'checkin_no_reply';
+export type PushType =
+  | 'guardian_status'
+  | 'show_call_112'
+  | 'checkin_no_reply'
+  | 'community_status'
+  | 'rakshak_status'
+  | 'plan_status';
 
 export interface PushMessage {
   type: PushType;

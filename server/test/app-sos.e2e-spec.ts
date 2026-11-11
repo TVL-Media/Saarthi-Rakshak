@@ -183,7 +183,7 @@ describe('POST /v1/sos', () => {
   });
 
   it('refuses an unknown trigger', async () => {
-    await startSos({ trigger: 'shake' }).expect(400);
+    await startSos({ trigger: 'telepathy' }).expect(400);
   });
 });
 

@@ -118,6 +118,28 @@ class ApiClient {
 
   Map<String, dynamic> _obj(dynamic v) => v as Map<String, dynamic>;
 
+  /// For the Phase 2 calls (lib/api/phase2_api.dart): same errors, retries and session rules.
+  Future<dynamic> send(String method, String path, {Object? body, Map<String, String>? query}) =>
+      _call(method, path, body: body, query: query);
+
+  /// Uploads a file from disk (large evidence files are never read into memory at once).
+  Future<void> uploadFile(UploadLink link, String path) async {
+    final file = File(path);
+    final req = http.StreamedRequest('PUT', Uri.parse(link.uploadUrl))..headers.addAll(link.headers);
+    req.contentLength = await file.length();
+    final sending = _http.send(req);
+    await file.openRead().pipe(req.sink);
+    final res = await sending.timeout(const Duration(minutes: 15));
+    if (res.statusCode >= 300) throw ApiException(res.statusCode, 'upload_failed', 'Upload failed. Please try again.');
+  }
+
+  /// Downloads a file to disk.
+  Future<void> downloadFile(String url, String path) async {
+    final res = await _http.send(http.Request('GET', Uri.parse(url))).timeout(const Duration(minutes: 15));
+    if (res.statusCode != 200) throw ApiException(res.statusCode, 'download_failed', 'Could not download the file.');
+    await res.stream.pipe(File(path).openWrite());
+  }
+
   // ---- A1 login -------------------------------------------------------------------------------
 
   /// Returns (token, me, isNewUser).
@@ -220,12 +242,13 @@ class ApiClient {
 
   // ---- A6 journeys ----------------------------------------------------------------------------
 
-  Future<Journey> startJourney(String id, Place destination, DateTime arriveBy, String? route) async =>
+  Future<Journey> startJourney(String id, Place destination, DateTime arriveBy, String? route, {String? mode}) async =>
       Journey.fromJson(_obj(await _call('POST', '/v1/journeys', body: {
         'id': id,
         'destination': {'lat': destination.lat, 'lng': destination.lng, 'label': destination.label},
         'expectedArrivalAt': arriveBy.toUtc().toIso8601String(),
         'route': ?route,
+        'mode': ?mode,
       })));
 
   Future<Journey?> activeJourney() async {

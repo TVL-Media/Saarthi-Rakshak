@@ -25,7 +25,30 @@ export async function deleteUserData(
     .where('user_id', '=', userId)
     .execute();
 
+  // Phase 2 files: SOS photos, encrypted evidence and Rakshak documents. The rows go with the
+  // user (ON DELETE CASCADE); the files are deleted by the caller after the commit.
+  const photos = await trx
+    .selectFrom('sos_photos')
+    .select('storage_key')
+    .where('user_id', '=', userId)
+    .execute();
+  const evidence = await trx
+    .selectFrom('evidence_items')
+    .select('storage_key')
+    .where('user_id', '=', userId)
+    .where('storage_key', 'is not', null)
+    .execute();
+  const rakshak = await trx
+    .selectFrom('rakshak_applications')
+    .select('documents')
+    .where('user_id', '=', userId)
+    .execute();
+  const rakshakKeys = rakshak.flatMap((r) =>
+    Object.values((r.documents ?? {}) as Record<string, string>),
+  );
+
   // 1. Personal event data.
+  await trx.deleteFrom('sos_photos').where('user_id', '=', userId).execute();
   await trx.deleteFrom('location_points').where('user_id', '=', userId).execute();
   await trx.deleteFrom('checkins').where('journey_id', 'in', journeyIds).execute();
   await trx.deleteFrom('guardian_links').where('guardian_id', 'in', guardianIds).execute();
@@ -57,6 +80,11 @@ export async function deleteUserData(
 
   return {
     deleted: result.numDeletedRows > 0n,
-    mediaStorageKeys: clips.map((c) => c.storage_key),
+    mediaStorageKeys: [
+      ...clips.map((c) => c.storage_key),
+      ...photos.map((p) => p.storage_key),
+      ...evidence.map((e) => e.storage_key!),
+      ...rakshakKeys,
+    ],
   };
 }

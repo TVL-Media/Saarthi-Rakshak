@@ -49,6 +49,8 @@ const sosView = (extra: Partial<LiveView> = {}): LiveView => ({
     { firstName: 'Sita', status: 'responding', isYou: false },
   ],
   youAreResponding: false,
+  trigger: 'button',
+  photos: [],
   ...extra,
 });
 
@@ -101,6 +103,28 @@ test.describe('Invite page', () => {
 });
 
 test.describe('Live page', () => {
+  test('SOS by crash detection: says so and shows the photos', async ({ page }) => {
+    const photo = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+    await json(
+      page,
+      'GET',
+      `/g/l/${CODE}`,
+      200,
+      sosView({
+        trigger: 'crash',
+        photos: [
+          { camera: 'back', url: photo, takenAt: minutesAgo(4) },
+          { camera: 'front', url: `${photo}#f`, takenAt: minutesAgo(4) },
+        ],
+      }),
+    );
+    await page.goto(`/l/${CODE}`);
+    await expect(page.getByText('This SOS was started by crash detection.')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Photos from Priya’s phone' })).toBeVisible();
+    await expect(page.getByAltText('Back camera photo')).toBeVisible();
+    await expect(page.getByAltText('Front camera photo')).toBeVisible();
+  });
+
   test('SOS: details, calls and "I\'m responding"', async ({ page }) => {
     await json(page, 'GET', `/g/l/${CODE}`, 200, sosView());
     await json(page, 'POST', `/g/l/${CODE}/responding`, 200, sosView({ youAreResponding: true }));

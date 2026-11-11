@@ -11,7 +11,7 @@ describe('API contract (@sarthi/shared)', () => {
   it('accepts a valid SOS start and refuses an unknown trigger', () => {
     const sos = { id, trigger: 'button', isTest: false, startedAt: '2026-10-27T18:30:00+05:30' };
     expect(StartSosRequest.safeParse(sos).success).toBe(true);
-    expect(StartSosRequest.safeParse({ ...sos, trigger: 'shake' }).success).toBe(false);
+    expect(StartSosRequest.safeParse({ ...sos, trigger: 'telepathy' }).success).toBe(false);
   });
 
   it('needs sosId or journeyId on every location point', () => {

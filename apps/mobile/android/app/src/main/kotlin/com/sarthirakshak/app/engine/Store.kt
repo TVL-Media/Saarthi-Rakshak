@@ -49,8 +49,34 @@ class Store(context: Context) {
         get() = prefs.getString("journey", null)?.let { JSONObject(it) }
         set(v) = prefs.edit().putString("journey", v?.toString()).apply()
 
+    // ---- Phase 2 ----
+
+    /** still / walking / vehicle / unknown (activity recognition). */
+    var activity: String
+        get() = prefs.getString("activity", "unknown") ?: "unknown"
+        set(v) = prefs.edit().putString("activity", v).apply()
+
+    /**
+     * Full-day location (feature 8): {enabled, pausedUntil, batteryPausePct}. Kept here so it
+     * restarts by itself after the phone restarts (feature 9).
+     */
+    var daily: JSONObject
+        get() = JSONObject(prefs.getString("daily", "{}") ?: "{}")
+        set(v) = prefs.edit().putString("daily", v.toString()).apply()
+
+    val dailyOn: Boolean get() = daily.optBoolean("enabled", false)
+
+    /**
+     * SOS triggers (features 1, 2, 4, 5, 6) and thresholds:
+     * {shakeMode, voiceOn, voicePhrase, voiceLang, driveMode, fallOn, quietCountdown,
+     *  journeySosButton, shakeG, crashG, fallG, countdownSeconds}
+     */
+    var triggers: JSONObject
+        get() = JSONObject(prefs.getString("triggers", "{}") ?: "{}")
+        set(v) = prefs.edit().putString("triggers", v.toString()).apply()
+
     fun clearSession() {
-        prefs.edit().remove("tokenEnc").remove("guardians").remove("userName").apply()
+        prefs.edit().remove("tokenEnc").remove("guardians").remove("userName").remove("daily").remove("triggers").apply()
     }
 }
 
@@ -97,7 +123,22 @@ class Outbox(context: Context) : SQLiteOpenHelper(context, "sarthi_outbox.db", n
 
     /** Items sent strictly in order (everything except audio clips). */
     @Synchronized
-    fun peekOrdered(limit: Int = 200): List<Item> = query("SELECT id, kind, body FROM outbox WHERE kind != 'clip' ORDER BY id LIMIT $limit")
+    fun peekOrdered(limit: Int = 200): List<Item> = query("SELECT id, kind, body FROM outbox WHERE kind NOT IN ('clip', 'daily') ORDER BY id LIMIT $limit")
+
+    /** Full-day points: sent in batches, never ahead of (or blocking) an SOS or journey. */
+    fun peekDaily(limit: Int = 500): List<Item> = query("SELECT id, kind, body FROM outbox WHERE kind = 'daily' ORDER BY id LIMIT $limit")
+
+    fun countDaily(): Int =
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE kind = 'daily'", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+    /** Full-day points older than 7 days are not kept on the phone. */
+    fun pruneDaily(olderThanMs: Long) {
+        writableDatabase.delete("outbox", "kind = 'daily' AND created < ?", arrayOf(olderThanMs.toString()))
+    }
+
+    fun clearDaily() {
+        writableDatabase.delete("outbox", "kind = 'daily'", null)
+    }
 
     /** Audio clips: sent on their own, so a failed upload never holds up locations or "I'm safe". */
     @Synchronized
@@ -117,7 +158,7 @@ class Outbox(context: Context) : SQLiteOpenHelper(context, "sarthi_outbox.db", n
     /** Waiting items that are not audio clips (clips retry slowly and never keep the engine awake). */
     @Synchronized
     fun countOrdered(): Int =
-        readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE kind != 'clip'", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+        readableDatabase.rawQuery("SELECT COUNT(*) FROM outbox WHERE kind NOT IN ('clip', 'daily')", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
 
     @Synchronized
     fun clear() {

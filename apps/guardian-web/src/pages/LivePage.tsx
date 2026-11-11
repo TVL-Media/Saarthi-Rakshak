@@ -117,6 +117,11 @@ export function LivePage({ code }: { code: string }) {
           No internet connection. Showing the last update we received.
         </p>
       )}
+      {isSos && view.trigger && TRIGGER_NOTE[view.trigger] && !ended && (
+        <p className="warning" role="status">
+          {TRIGGER_NOTE[view.trigger]} {name} may not have pressed SOS herself. Try to call her.
+        </p>
+      )}
       {view.lostContact && !ended && (
         <p className="warning" role="alert">
           We lost contact with {name}’s phone. The map shows the last location we received.
@@ -152,6 +157,27 @@ export function LivePage({ code }: { code: string }) {
         {isSos && <Fact label="Blood group">{view.person.bloodGroup ?? 'Not given'}</Fact>}
         {view.journey && <Fact label="Expected by">{clock(view.journey.expectedArrivalAt)}</Fact>}
       </section>
+
+      {isSos && view.photos.length > 0 && (
+        <section className="card photos-card">
+          <h2>Photos from {name}’s phone</h2>
+          <div className="photos">
+            {view.photos.map((p) => (
+              <figure key={p.url}>
+                <a href={p.url} target="_blank" rel="noreferrer">
+                  <img
+                    src={p.url}
+                    alt={`${p.camera === 'front' ? 'Front' : 'Back'} camera photo`}
+                  />
+                </a>
+                <figcaption>
+                  {p.camera === 'front' ? 'Front camera' : 'Back camera'} · {clock(p.takenAt)}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </section>
+      )}
 
       {isSos && !ended && (
         <section className="card actions-card">
@@ -207,6 +233,14 @@ export function LivePage({ code }: { code: string }) {
     </main>
   );
 }
+
+/** For SOS that were not raised by hand. */
+const TRIGGER_NOTE: Partial<Record<string, string>> = {
+  crash: 'This SOS was started by crash detection.',
+  fall: 'This SOS was started by fall detection.',
+  shake: 'This SOS was started by shaking the phone.',
+  voice: 'This SOS was started by voice.',
+};
 
 const STATUS = { alerted: 'Alerted', opened: 'Seen', responding: 'Responding' } as const;
 

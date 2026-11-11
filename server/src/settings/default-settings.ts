@@ -1,5 +1,5 @@
 /**
- * Phase 1 safety rules that a Super Admin can change in Settings, with their defaults (see
+ * Safety rules (Phase 1 and 2) that a Super Admin can change in Settings, with their defaults (see
  * CLAUDE.md) and allowed ranges. Whole numbers only. The setup command inserts any that are
  * missing; it never overwrites a value changed in Settings.
  */
@@ -77,6 +77,116 @@ export const DEFAULT_SETTINGS = {
     description: 'Maximum guardians per user',
     min: 1,
     max: 5,
+  },
+  // ---- Phase 2 ----
+  'sos.photo_pairs_max': {
+    value: 3,
+    description: 'Front + back photo pairs the phone may take during one SOS',
+    min: 1,
+    max: 5,
+  },
+  'detection.shake_g_x10': {
+    value: 25,
+    description: 'Shake SOS: strength of each of the 3 shakes (tenths of g, 25 = 2.5 g)',
+    min: 15,
+    max: 40,
+  },
+  'detection.crash_g_x10': {
+    value: 40,
+    description: 'Crash detection: impact strength (tenths of g, 40 = 4 g)',
+    min: 25,
+    max: 80,
+  },
+  'detection.fall_g_x10': {
+    value: 30,
+    description: 'Fall detection: impact strength after a free fall (tenths of g, 30 = 3 g)',
+    min: 20,
+    max: 60,
+  },
+  'detection.countdown_seconds': {
+    value: 10,
+    description: 'Crash and fall: loud countdown before the SOS (seconds)',
+    min: 5,
+    max: 30,
+  },
+  'daily.battery_pause_pct': {
+    value: 20,
+    description: 'Full-day location pauses below this battery level until charging (%)',
+    min: 10,
+    max: 50,
+  },
+  'evidence.delete_lock_days': {
+    value: 90,
+    description:
+      'Evidence cannot be deleted for this many days after capture (account deletion still works)',
+    min: 0,
+    max: 365,
+  },
+  'community.reports_per_day': {
+    value: 5,
+    description: 'Community reports one user may send per day',
+    min: 1,
+    max: 20,
+  },
+  'feature.shake': {
+    value: 1,
+    description: 'Shake SOS: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.voice': {
+    value: 1,
+    description: 'Voice SOS: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.photos': {
+    value: 1,
+    description: 'Photos at SOS start: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.crash': {
+    value: 1,
+    description: 'Crash detection (beta): 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.fall': {
+    value: 1,
+    description: 'Fall detection (beta): 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.daily_location': {
+    value: 1,
+    description: 'Full-day location: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.vault': {
+    value: 1,
+    description: 'Evidence vault: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.community': {
+    value: 1,
+    description: 'Community feed: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.rakshak': {
+    value: 1,
+    description: 'Rakshak sign-up: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.plans': {
+    value: 1,
+    description: 'Plans and payments: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
   },
 } as const satisfies Record<string, SettingDefinition>;
 

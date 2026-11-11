@@ -349,3 +349,30 @@ p {
   text-align: center;
   padding: 4px 8px;
 }
+
+/* Phase 2: photos taken at SOS start */
+.photos-card h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+.photos {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.photos figure {
+  margin: 0;
+}
+.photos img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--line);
+  display: block;
+}
+.photos figcaption {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}

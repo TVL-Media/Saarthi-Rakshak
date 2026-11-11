@@ -316,6 +316,30 @@ Future<bool> confirm(BuildContext context, String title, String message, {String
   return ok ?? false;
 }
 
+/// A choice pill in the History filter style (red when chosen), for picking one of a few options.
+class PillChoice extends StatelessWidget {
+  const PillChoice({super.key, required this.label, required this.selected, required this.onSelected, this.icon});
+  final String label;
+  final bool selected;
+  final ValueChanged<bool> onSelected;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) => ChoiceChip(
+        avatar: icon == null ? null : Icon(icon, size: 18, color: selected ? Colors.white : AppColors.red),
+        label: Text(label),
+        selected: selected,
+        selectedColor: AppColors.red,
+        backgroundColor: AppColors.cream,
+        side: BorderSide(color: selected ? AppColors.red : AppColors.line),
+        shape: const StadiumBorder(),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        labelStyle: TextStyle(color: selected ? Colors.white : AppColors.ink, fontWeight: FontWeight.w600, fontSize: 15),
+        showCheckmark: false,
+        onSelected: onSelected,
+      );
+}
+
 /// Empty state with an icon.
 class EmptyState extends StatelessWidget {
   const EmptyState({super.key, required this.icon, required this.text});

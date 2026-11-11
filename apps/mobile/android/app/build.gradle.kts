@@ -65,6 +65,8 @@ android {
             // Our own release (upload) key from android/key.properties (never in git); without it,
             // the debug key so the build still works on any computer.
             signingConfig = if (releaseSigning != null) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // Keeps what Voice SOS (Vosk + JNA) needs when the release build is shrunk.
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
@@ -82,6 +84,10 @@ flutter {
 dependencies {
     // Fused location for the safety engine (SOS and journey tracking).
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // Phase 2: Voice SOS on the phone (offline phrase recognition, nothing leaves the phone).
+    implementation("com.alphacephei:vosk-android:0.3.47")
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+    implementation("androidx.core:core-ktx:1.13.1")
 
     // Unit tests of the engine's journey checks (run on the computer, no phone needed).
     testImplementation("junit:junit:4.13.2")

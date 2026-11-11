@@ -200,11 +200,15 @@ class Journey {
     required this.openCheckin,
     required this.checkinsPausedUntil,
     required this.route,
+    this.mode,
   });
 
   final String id;
   final String status;
   final Place destination;
+
+  /// walk, cab, auto, bus or own_vehicle (Phase 2); null for older journeys.
+  final String? mode;
   final DateTime expectedArrivalAt;
   final DateTime startedAt;
   final DateTime? endedAt;
@@ -228,6 +232,7 @@ class Journey {
       openCheckin: j['openCheckin'] == null ? null : Checkin.fromJson(j['openCheckin'] as Map<String, dynamic>),
       checkinsPausedUntil: _date(j['checkinsPausedUntil']),
       route: _str(j['route']),
+      mode: _str(j['mode']),
     );
   }
 }

@@ -70,6 +70,16 @@ const envSchema = z
     // Path to the Firebase service-account key file; read by Firebase itself. Keep it outside the
     // project folder and never commit it.
     GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
+    // Phase 2 payments: the app's package on Google Play, and the service-account key file that
+    // may read its subscriptions (Play Console → API access). Without them, purchases can't be
+    // checked (plans stay "Coming soon"; everything is free).
+    GOOGLE_PLAY_PACKAGE_NAME: z
+      .string()
+      .regex(/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/, { error: 'Must be an Android package name' })
+      .optional(),
+    GOOGLE_PLAY_CREDENTIALS: z.string().min(1).optional(),
+    // Secret added to the Pub/Sub push address (?token=...) so only Google's messages are taken.
+    GOOGLE_PLAY_WEBHOOK_TOKEN: z.string().min(20).optional(),
     // 32 random bytes in base64: key for hashing phone numbers that declined a guardian invite.
     PHONE_HASH_KEY: z
       .string()

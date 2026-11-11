@@ -13,6 +13,8 @@ import 'package:uuid/uuid.dart';
 import '../api/api_client.dart';
 import '../api/models.dart';
 import '../config.dart';
+import '../api/phase2_api.dart';
+import 'vault_session.dart';
 import '../engine/engine.dart';
 
 const _uuid = Uuid();
@@ -182,6 +184,100 @@ class AppState extends ChangeNotifier {
     if (m.consentGiven) await _saveSignUpName();
     stage = await _stageFor(me!);
     unawaited(registerDevice());
+    unawaited(syncPhase2());
+  }
+
+  // ---- Phase 2 --------------------------------------------------------------------------------
+
+  /// The evidence vault while it is open (the key is only in memory, for 2 minutes after the
+  /// app was last used).
+  late final VaultSession vault = VaultSession(this);
+
+  /// SOS triggers (shake, voice, drive, fall, discreet) as saved on the server.
+  SosTriggerSettings triggers = SosTriggerSettings();
+
+  /// Full-day location as saved on the server.
+  DailyTracking daily = DailyTracking.off;
+
+  /// Voice SOS phrase and language: kept on this phone only (never sent anywhere).
+  String voicePhrase = '';
+  String voiceLang = 'en';
+
+  /// Goes up when a voice-model download makes progress (0–100).
+  final ValueNotifier<int> voiceDownload = ValueNotifier(0);
+
+  /// A Phase 2 feature switched on by the admins (staged release); on when the server is older.
+  bool feature(String name) => (me?.rules['feature.$name'] ?? 1) >= 1;
+
+  String get _voiceKey => 'voice_${me?.id ?? ''}';
+
+  /// Loads the Phase 2 settings and hands them to the safety engine (it keeps them across restarts).
+  Future<void> syncPhase2() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getStringList(_voiceKey);
+      if (v != null && v.length == 2) {
+        voicePhrase = v[0];
+        voiceLang = v[1];
+      }
+      triggers = await api.sosTriggers();
+      daily = await api.dailyTracking();
+    } catch (_) {
+      // Offline or an older server: the engine keeps what it had.
+    }
+    await _configureEngine();
+    notifyListeners();
+  }
+
+  Future<void> _configureEngine() async {
+    final rules = me?.rules ?? const {};
+    num rule(String k, num d) => rules[k] ?? d;
+    try {
+      await engine.configure(
+        triggers: {
+          ...triggers.toJson(),
+          'voiceOn': triggers.voiceOn && voicePhrase.isNotEmpty,
+          'voicePhrase': voicePhrase,
+          'voiceLang': voiceLang,
+          'shakeG': rule('detection.shake_g_x10', 25) / 10,
+          'crashG': rule('detection.crash_g_x10', 40) / 10,
+          'fallG': rule('detection.fall_g_x10', 30) / 10,
+          'countdownSeconds': rule('detection.countdown_seconds', 10),
+          'featureShake': feature('shake'),
+          'featureVoice': feature('voice'),
+          'featureCrash': feature('crash'),
+          'featureFall': feature('fall'),
+        },
+        daily: {
+          'enabled': daily.enabled && feature('daily_location'),
+          'pausedUntil': daily.pausedUntil?.millisecondsSinceEpoch ?? 0,
+          'batteryPausePct': rule('daily.battery_pause_pct', 20),
+        },
+      );
+    } catch (_) {
+      // The engine is not available (e.g. tests).
+    }
+  }
+
+  Future<void> saveTriggers(Map<String, Object?> change) async {
+    triggers = await api.saveSosTriggers(change);
+    await _configureEngine();
+    notifyListeners();
+  }
+
+  Future<void> saveVoicePhrase(String phrase, String lang) async {
+    voicePhrase = phrase.trim();
+    voiceLang = lang;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_voiceKey, [voicePhrase, voiceLang]);
+    await _configureEngine();
+    notifyListeners();
+  }
+
+  Future<void> saveDaily(Map<String, Object?> change) async {
+    daily = await api.saveDailyTracking(change);
+    await _configureEngine();
+    notifyListeners();
   }
 
   /// Saves the Sign up name if the account has no name yet (needs the terms accepted first).
@@ -313,6 +409,10 @@ class AppState extends ChangeNotifier {
     localPhoto = null;
     notices = const [];
     noticesSeenAt = null;
+    triggers = SosTriggerSettings();
+    daily = DailyTracking.off;
+    voicePhrase = '';
+    vault.lock();
     api.token = null;
     me = null;
     guardians = const [];
@@ -334,6 +434,8 @@ class AppState extends ChangeNotifier {
         launchAction.value = e.data;
       case 'playback':
         playbackDone.value++;
+      case 'voiceDownload':
+        voiceDownload.value = (e.data['progress'] as int?) ?? 0;
     }
   }
 

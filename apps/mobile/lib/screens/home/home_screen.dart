@@ -7,6 +7,9 @@ import '../../api/models.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../community/community_screen.dart';
+import '../daily/daily_location_screen.dart';
+import '../vault/vault_screen.dart';
 import '../../widgets/format.dart';
 import '../fakecall/fake_call_screen.dart';
 import '../journey/journey_on_screen.dart';
@@ -76,6 +79,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     Navigator.push(context, MaterialPageRoute(builder: (_) => StartJourneyScreen(preset: place)));
   }
+
+  void _open(Widget w) => Navigator.push(context, MaterialPageRoute(builder: (_) => w));
 
   @override
   Widget build(BuildContext context) {
@@ -254,6 +259,45 @@ class _HomeScreenState extends State<HomeScreen> {
                 Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
               ]),
             ),
+            if (state.feature('vault')) ...[
+              const SizedBox(height: 12),
+              _FeatureCard(
+                key: const Key('home-vault'),
+                icon: Icons.lock_outline,
+                title: 'Mere Saboot',
+                text: 'Your evidence, safe and private',
+                onTap: () => _open(const VaultScreen()),
+              ),
+            ],
+            if (state.feature('daily_location') || state.feature('community')) ...[
+              const SizedBox(height: 12),
+              IntrinsicHeight(
+                child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  if (state.feature('daily_location'))
+                    Expanded(
+                      child: _SmallCard(
+                        key: const Key('home-daily'),
+                        icon: Icons.timeline,
+                        title: 'My day',
+                        text: state.daily.enabled ? (state.daily.paused ? 'Paused' : 'Full-day location on') : 'Full-day location off',
+                        on: state.daily.enabled && !state.daily.paused,
+                        onTap: () => _open(state.daily.enabled ? const TimelineScreen() : const DailyLocationScreen()),
+                      ),
+                    ),
+                  if (state.feature('daily_location') && state.feature('community')) const SizedBox(width: 12),
+                  if (state.feature('community'))
+                    Expanded(
+                      child: _SmallCard(
+                        key: const Key('home-community'),
+                        icon: Icons.groups_outlined,
+                        title: 'Community',
+                        text: 'Safety reports near you',
+                        onTap: () => _open(const CommunityScreen()),
+                      ),
+                    ),
+                ]),
+              ),
+            ],
             if (accepted == 0) ...[
               const SizedBox(height: 12),
               GestureDetector(
@@ -269,6 +313,60 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+}
+
+/// A Home row card like "Fake call" (icon tile, title, one line, chevron).
+class _FeatureCard extends StatelessWidget {
+  const _FeatureCard({super.key, required this.icon, required this.title, required this.text, required this.onTap});
+  final IconData icon;
+  final String title;
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        onTap: onTap,
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        child: Row(children: [
+          IconTile(icon, size: 44),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              const SizedBox(height: 2),
+              Text(text, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
+            ]),
+          ),
+          const Icon(Icons.chevron_right, color: Color(0xFF9CA3AF)),
+        ]),
+      );
+}
+
+/// Half-width Home card (My day, Community).
+class _SmallCard extends StatelessWidget {
+  const _SmallCard({super.key, required this.icon, required this.title, required this.text, required this.onTap, this.on = false});
+  final IconData icon;
+  final String title;
+  final String text;
+  final VoidCallback onTap;
+  final bool on;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        onTap: onTap,
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            IconTile(icon, size: 40),
+            const Spacer(),
+            if (on) Container(width: 9, height: 9, decoration: const BoxDecoration(color: AppColors.green, shape: BoxShape.circle)),
+          ]),
+          const SizedBox(height: 10),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 2),
+          Text(text, style: const TextStyle(color: AppColors.muted, fontSize: 13.5, height: 1.3)),
+        ]),
+      );
 }
 
 class _Banner extends StatelessWidget {

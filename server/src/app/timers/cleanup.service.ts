@@ -67,6 +67,37 @@ export class CleanupService implements OnModuleInit {
       )
       .executeTakeFirst();
 
+    // Phase 2: SOS photos past their delete date (unless kept) …
+    const photos = await db
+      .selectFrom('sos_photos')
+      .select(['id', 'storage_key'])
+      .where('keep', '=', false)
+      .where('delete_after', '<', sql<Date>`now()`)
+      .limit(BATCH)
+      .execute();
+    for (const photo of photos) {
+      try {
+        await this.storage.delete(photo.storage_key);
+        await db.deleteFrom('sos_photos').where('id', '=', photo.id).execute();
+      } catch (err) {
+        this.logger.error(`Photo ${photo.id} not deleted: ${(err as Error).message}`);
+      }
+    }
+    // … and Rakshak applications rejected more than 90 days ago (with their documents).
+    const oldApps = await db
+      .selectFrom('rakshak_applications')
+      .select(['id', 'documents'])
+      .where('status', '=', 'rejected')
+      .where('decided_at', '<', sql<Date>`now() - interval '90 days'`)
+      .limit(BATCH)
+      .execute();
+    for (const app of oldApps) {
+      for (const key of Object.values((app.documents ?? {}) as Record<string, string>)) {
+        await this.storage.delete(key).catch(() => undefined);
+      }
+      await db.deleteFrom('rakshak_applications').where('id', '=', app.id).execute();
+    }
+
     const sessions = await db
       .deleteFrom('user_sessions')
       .where((eb) =>

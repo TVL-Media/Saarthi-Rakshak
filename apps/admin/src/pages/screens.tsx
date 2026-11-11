@@ -6,6 +6,7 @@ import { AuditBody } from './AuditPage';
 import { DashboardBody } from './DashboardPage';
 import { HistoryBody } from './HistoryPage';
 import { LiveBody } from './LivePage';
+import { CommunityBody, Phase2Stats, PlansBody, RakshakBody } from './Phase2Pages';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
@@ -48,13 +49,16 @@ function Reports() {
     ['Phones with problems', 'Phone models where the app was stopped or lost contact.'],
   ];
   return (
-    <div className="sr-chart-grid">
-      {charts.map(([title, text]) => (
-        <SectionCard key={title} title={title}>
-          <EmptyState icon="chart" title="No data yet" text={text} />
-        </SectionCard>
-      ))}
-    </div>
+    <>
+      <div className="sr-chart-grid">
+        {charts.map(([title, text]) => (
+          <SectionCard key={title} title={title}>
+            <EmptyState icon="chart" title="No data yet" text={text} />
+          </SectionCard>
+        ))}
+      </div>
+      <Phase2Stats />
+    </>
   );
 }
 
@@ -101,6 +105,13 @@ export const MAIN_SCREENS: Screen[] = [
     sub: 'Problems reported by users from the app',
     body: Support,
   },
+  {
+    path: '/community',
+    menu: 'Community',
+    title: 'Community moderation',
+    sub: 'Approve, edit or reject safety reports before anyone sees them',
+    body: CommunityBody,
+  },
   { path: '/reports', menu: 'Reports', title: 'Reports', sub: 'Pilot numbers', body: Reports },
 ];
 
@@ -121,6 +132,22 @@ export const SUPER_ADMIN_SCREENS: Screen[] = [
     sub: 'Super Admin only',
     superOnly: true,
     body: TeamBody,
+  },
+  {
+    path: '/rakshak',
+    menu: 'Rakshak Applications',
+    title: 'Rakshak Applications',
+    sub: 'Super Admin only · every view is recorded in the audit log',
+    superOnly: true,
+    body: RakshakBody,
+  },
+  {
+    path: '/plans',
+    menu: 'Plans & Subscriptions',
+    title: 'Plans & Subscriptions',
+    sub: 'Super Admin only · payments go through Google Play',
+    superOnly: true,
+    body: PlansBody,
   },
   {
     path: '/audit',

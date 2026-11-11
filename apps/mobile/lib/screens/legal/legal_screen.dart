@@ -23,7 +23,7 @@ class LegalScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
-          const Text('Last updated: 4 November 2026', style: TextStyle(color: AppColors.muted)),
+          const Text('Last updated: 11 November 2026', style: TextStyle(color: AppColors.muted)),
           const SizedBox(height: 12),
           const NoticeBox(text: AppConfig.notMonitoring),
           for (final (n, (title, body)) in sections.indexed) ...[
@@ -64,7 +64,14 @@ const _privacy = <(String, String)>[
         'Only you see these in the app; they are not shared with your guardians.\n'
         '• Your guardians: their names, relation and mobile numbers, which you enter or pick from your contacts. '
         'When you pick a contact, the app reads only that one contact.\n'
-        '• Your location, only while an SOS or a journey you started is running.\n'
+        '• Your location while an SOS or a journey you started is running, and all day only if you turn on '
+        'Full-day location.\n'
+        '• Photos the phone takes during an SOS, if you allow the camera.\n'
+        '• What you save in Mere Saboot (your evidence vault). It is encrypted on your phone; we cannot open it.\n'
+        '• Community reports you send, and if you apply to be a Rakshak: your name, date of birth, address, area, '
+        'the type and last 4 characters of your ID, photos of your ID and a selfie.\n'
+        '• Whether your phone is still, walking or in a vehicle (activity recognition), to save battery and for '
+        'Drive mode. This stays on your phone.\n'
         '• Audio recorded during an SOS (see "Audio recordings").\n'
         '• Phone details that keep protection working: model, Android version, app version, battery level, network '
         'type, which permissions are on, and a notification token.\n'
@@ -72,9 +79,13 @@ const _privacy = <(String, String)>[
   ),
   (
     'When your location is used',
-    'The app reads your location to show you where you are on screen. It sends your location to our server only '
+    'The app reads your location to show you where you are on screen. It sends your location to our server '
         'during an SOS or a journey you start. Your guardians can see it on a private link during the SOS or '
-        'journey and for 15 minutes after it ends. We never track you at other times.'
+        'journey and for 15 minutes after it ends.\n'
+        'Full-day location is off unless you turn it on. When it is on, your phone records your location every few '
+        'minutes, also when the app is closed, so you can see your own timeline. Only you can see it; guardians '
+        'do not get it and our team sees only counts. It is deleted after 7, 30 or 90 days (you choose), and you '
+        'can pause it, delete a day or delete everything at any time.'
   ),
   (
     'Audio recordings',
@@ -84,14 +95,41 @@ const _privacy = <(String, String)>[
         'log out.'
   ),
   (
+    'SOS triggers and the microphone',
+    'If you turn them on, the app can start an SOS countdown when you shake the phone, when it feels a crash or '
+        'a fall, or when you say your own phrase during a journey. Voice SOS works offline on your phone: what you '
+        'say is not recorded or sent anywhere, and your phrase stays on your phone.'
+  ),
+  (
+    'SOS photos',
+    'While the SOS screen is open, the phone can take photos with the back and front camera. They are shared with '
+        'your guardians on the live page and deleted from our server after 30 days. You can save copies in Mere '
+        'Saboot first.'
+  ),
+  (
+    'Mere Saboot (evidence vault)',
+    'Files, recordings and details you save in Mere Saboot are encrypted on your phone before upload, with a key '
+        'only you hold (opened by your fingerprint, face or phone PIN, or your 12-word recovery phrase). We cannot '
+        'open them, and if you lose your recovery phrase and your phone, nobody can. A record of when items were '
+        'received and opened is kept so you can show they were not changed.'
+  ),
+  (
+    'Community and Rakshak',
+    'Community reports are checked by our team before they are shown, without your name. Our team may edit them, '
+        'blur or remove a photo, or not publish them. Rakshak applications are seen only by our verification team; '
+        'we never keep a full Aadhaar number, and documents are deleted if you withdraw or 90 days after a '
+        'rejection.'
+  ),
+  (
     'Who sees your information',
     '• Your guardians: your first name and your live location during an SOS or journey; during an SOS also your '
         'phone number and blood group, so they can help.\n'
         '• Our support team: only what is needed to keep the service working. They see your live location only '
         'during an active SOS, phone numbers are partly hidden, they can never play your audio, and every look is '
         'recorded.\n'
-        '• Service providers who work for us: Google Firebase (login codes and notifications), SMS providers (alert '
-        'messages to your guardians) and our hosting provider. They may use your information only to provide '
+        '• Service providers who work for us: Google Firebase (login codes and notifications), Google Play '
+        '(payments, if paid plans start), SMS providers (alert messages to your guardians) and our hosting '
+        'provider. They may use your information only to provide '
         'these services.\n'
         '• The police or a court, only when the law requires it.\n'
         'We never sell your information and never use it for advertising.'
@@ -113,15 +151,19 @@ const _privacy = <(String, String)>[
   ),
   (
     'How long we keep it',
-    'We keep your account, guardians, journeys and SOS history until you delete your account. Audio clips are '
-        'deleted after 30 days unless you keep them.'
+    'We keep your account, guardians, journeys and SOS history until you delete your account. Audio clips (unless '
+        'you keep them) and SOS photos are deleted after 30 days. Full-day location is deleted after the time you '
+        'choose. Mere Saboot items stay until you delete them (each item is protected from deletion for '
+        'a set time after it is saved, 90 days at present, so someone who takes your phone cannot erase it). '
+        'Deleting your account still deletes everything.'
   ),
   (
     'Your choices',
     '• Turn permissions on or off at any time in Settings → App Permissions (some protection stops without them).\n'
         '• Remove guardians at any time (except during an SOS).\n'
         '• Delete your account in Settings → Delete My Account. This deletes your profile, photo, guardians, saved '
-        'places, journeys, location history and audio. Past SOS alerts are kept without your name or number, for '
+        'places, journeys, location history, audio, SOS photos, Mere Saboot, community reports and any Rakshak '
+        'application. Past SOS alerts are kept without your name or number, for '
         'safety reports.'
   ),
   (
@@ -175,8 +217,32 @@ const _terms = <(String, String)>[
         'press made by mistake. Fake Call is only a way to leave an uncomfortable situation.'
   ),
   (
+    'Automatic SOS (beta)',
+    'Shake, voice, Drive mode and fall detection may not notice every emergency and can sometimes start by '
+        'mistake. Each starts a countdown you can cancel. Do not rely on them alone; keep the SOS button and 112 '
+        'at hand.'
+  ),
+  (
+    'Mere Saboot and your recovery phrase',
+    'You are responsible for keeping your 12-word recovery phrase safe. Without it and your phone, saved evidence '
+        'cannot be recovered by anyone, including us. Save only material you have the right to keep, and follow '
+        'the law when you share it.'
+  ),
+  (
+    'Community reports',
+    'Report only what you have seen, without names, phone numbers, faces or number plates. Do not post false, '
+        'hateful or private information. We may edit, refuse or remove any report. To complain about a post, '
+        'report it in the app or contact our grievance officer through Help & Support.'
+  ),
+  (
+    'Plans and payments',
+    'All features are free for now. If paid plans start, prices are shown before you pay, payment and renewals '
+        'go through Google Play, and refunds follow Google Play\'s policy. You can cancel in Google Play at any time.'
+  ),
+  (
     'Audio and location',
-    'During an SOS the app records audio and shares your location as described in the Privacy Policy. Please '
+    'During an SOS the app records audio, can take photos and shares your location as described in the Privacy '
+        'Policy. Please '
         'follow the law where you use these features.'
   ),
   (

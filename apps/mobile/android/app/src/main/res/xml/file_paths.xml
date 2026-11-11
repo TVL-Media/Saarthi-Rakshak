@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Decrypted evidence is opened from the private cache only, and deleted when the vault locks. -->
+<paths>
+    <cache-path name="vault" path="vault/" />
+    <cache-path name="reports" path="reports/" />
+</paths>

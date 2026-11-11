@@ -1,0 +1,15 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="6dp">
+    <TextView
+        android:id="@+id/discreet_button"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/widget_discreet_bg"
+        android:gravity="center"
+        android:text="Quick help"
+        android:textColor="#FF374151"
+        android:textSize="14sp"
+        android:contentDescription="Sarthi Rakshak quick help" />
+</FrameLayout>

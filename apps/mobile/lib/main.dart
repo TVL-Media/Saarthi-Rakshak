@@ -13,6 +13,7 @@ import 'screens/home/shell.dart';
 import 'screens/journey/checkin_screen.dart';
 import 'screens/onboarding/welcome_screen.dart';
 import 'screens/setup/safety_setup_screen.dart';
+import 'screens/vault/share_import_screen.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 
@@ -106,7 +107,22 @@ class _RootState extends State<_Root> {
     if (ctx == null) return;
     switch (action['action']) {
       case 'sos':
-        openSos(ctx, trigger: (action['trigger'] as String?) ?? 'widget');
+        openSos(
+          ctx,
+          trigger: (action['trigger'] as String?) ?? 'widget',
+          quiet: action['quiet'] == null ? null : action['quiet'] == 'true',
+          seconds: int.tryParse('${action['seconds'] ?? ''}'),
+          heightM: action['heightM'] as String?,
+        );
+      case 'share':
+        // Android Share → Sarthi Rakshak: save the files to the vault.
+        Navigator.of(ctx).push(MaterialPageRoute(
+          builder: (_) => ShareImportScreen(
+            files: ((action['files'] as List?) ?? const [])
+                .map((f) => SharedFile.fromMap(f as Map))
+                .toList(),
+          ),
+        ));
       case 'checkin':
         state.checkinAlert.value = action;
     }

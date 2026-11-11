@@ -17,6 +17,10 @@ import '../guardians/guardians_screen.dart';
 import '../legal/legal_screen.dart';
 import '../setup/safety_setup_screen.dart';
 import '../sos/recordings_screen.dart';
+import '../daily/daily_location_screen.dart';
+import '../vault/vault_screen.dart';
+import 'plans_screen.dart';
+import 'sos_triggers_screen.dart';
 
 /// Settings tab (design frame 42 / "My Profile", Phase 1 items only).
 class SettingsScreen extends StatelessWidget {
@@ -62,6 +66,14 @@ class SettingsScreen extends StatelessWidget {
             MenuRow(icon: Icons.headphones_outlined, title: 'My Recordings', onTap: () => open(const RecordingsScreen())),
             MenuRow(icon: Icons.people_outline, title: 'Guardians', onTap: () => open(const GuardiansScreen())),
             MenuRow(icon: Icons.location_on_outlined, title: 'Saved Places', onTap: () => open(const SavedPlacesScreen())),
+
+          ]),
+          MenuGroup(label: 'More protection', children: [
+            MenuRow(icon: Icons.touch_app_outlined, title: 'SOS Triggers', onTap: () => open(const SosTriggersScreen())),
+            if (state.feature('daily_location'))
+              MenuRow(icon: Icons.my_location, title: 'Full-day Location', onTap: () => open(const DailyLocationScreen())),
+            if (state.feature('vault')) MenuRow(icon: Icons.lock_outline, title: 'Mere Saboot', onTap: () => open(const VaultScreen())),
+            if (state.feature('plans')) MenuRow(icon: Icons.workspace_premium_outlined, title: 'Plans', onTap: () => open(const PlansScreen())),
           ]),
           MenuGroup(label: 'About', children: [
             MenuRow(icon: Icons.shield_outlined, title: 'Privacy Policy', onTap: () => LegalScreen.open(context, LegalPage.privacy)),

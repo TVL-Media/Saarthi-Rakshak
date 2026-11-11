@@ -164,11 +164,16 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(host(makeState(), const SettingsScreen()));
     await tester.pumpAndSettle();
+    // Settings is longer since Phase 2: scroll down to the About rows.
+    await tester.ensureVisible(find.text('Privacy Policy'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Privacy Policy'));
     await tester.pumpAndSettle();
     expect(find.byType(LegalScreen), findsOneWidget);
     expect(find.text('Who we are'), findsOneWidget);
     Navigator.of(tester.element(find.byType(LegalScreen))).pop();
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Terms & Conditions'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Terms & Conditions'));
     await tester.pumpAndSettle();

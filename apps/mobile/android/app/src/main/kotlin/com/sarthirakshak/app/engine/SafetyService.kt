@@ -49,6 +49,10 @@ class SafetyService : Service() {
     private lateinit var audio: AudioClips
     private var wakeLock: PowerManager.WakeLock? = null
 
+    private lateinit var detectors: Detectors
+    private var lastDailyFlush = 0L
+    private var voicePaused = false
+
     private var watch: JourneyWatch? = null
     private var lastFix: Location? = null
     private var online = true
@@ -68,6 +72,7 @@ class SafetyService : Service() {
         handler = Handler(thread.looper)
         fused = LocationServices.getFusedLocationProviderClient(this)
         LocalClips.cleanup(this)
+        detectors = Detectors(this, handler) { trigger, extras -> onDetected(trigger, extras) }
         audio = AudioClips(this) { clipId, file, recordedAt, seconds ->
             val sosId = store.sos?.optString("sosId") ?: return@AudioClips
             // Kept on the phone so the user can listen to it in the app (also if the upload fails).
@@ -95,6 +100,7 @@ class SafetyService : Service() {
                     ACTION_START_JOURNEY -> startJourney(extras?.getString("args") ?: "{}")
                     ACTION_STOP_JOURNEY -> stopJourney()
                     ACTION_CHECKIN_ANSWER -> checkinAnswered(extras?.getString("args") ?: "{}")
+                    ACTION_CONFIG, ACTION_ACTIVITY -> applyConfig()
                     else -> resume()
                 }
             } catch (e: Exception) {
@@ -108,6 +114,8 @@ class SafetyService : Service() {
         handler.removeCallbacksAndMessages(null)
         fused.removeLocationUpdates(locationCallback)
         audio.stop()
+        detectors.stop()
+        VoiceSos.stop()
         Alerts.stopAlarm()
         wakeLock?.let { if (it.isHeld) it.release() }
         thread.quitSafely()
@@ -133,6 +141,10 @@ class SafetyService : Service() {
             put("simDone", false)
         }
         store.sos = sos
+        Alerts.clearDetection(this)
+        // The microphone goes to the SOS recorder; no new detections during an SOS.
+        VoiceSos.stop()
+        detectors.stop()
         outbox.add("sos_start", JSONObject().put("sosId", sosId))
         acquireWakeLock()
         goForeground()
@@ -163,8 +175,8 @@ class SafetyService : Service() {
         outbox.add("sos_end", JSONObject().put("sosId", sos.getString("sosId")))
         store.sos = null
         releaseWakeLock()
-        if (store.journey == null) stopTracking() else startTracking()
-        updateNotification()
+        if (needsTracking()) startTracking() else stopTracking()
+        applyConfig()
         flush()
         emitState()
         stopIfIdle()
@@ -205,7 +217,7 @@ class SafetyService : Service() {
         watch = JourneyWatch(cfg)
         startTracking()
         scheduleTicks()
-        updateNotification()
+        applyConfig()
         emitState()
     }
 
@@ -213,8 +225,8 @@ class SafetyService : Service() {
         store.journey = null
         watch = null
         Alerts.clearCheckin(this)
-        if (store.sos == null) stopTracking()
-        updateNotification()
+        if (needsTracking()) startTracking() else stopTracking()
+        applyConfig()
         emitState()
         stopIfIdle()
     }
@@ -281,9 +293,13 @@ class SafetyService : Service() {
 
     private fun onFix(fix: Location) {
         lastFix = fix
+        detectors.onSpeed(fix.time, if (fix.hasSpeed()) fix.speed else null)
         val sos = store.sos
         val journey = store.journey
-        if (sos == null && journey == null) return
+        if (sos == null && journey == null) {
+            if (dailyActive()) addDailyPoint(fix) else if (store.dailyOn) startOrStopDaily()
+            return
+        }
         outbox.add("point", JSONObject().apply {
             put("clientPointId", UUID.randomUUID().toString())
             sos?.let { put("sosId", it.getString("sosId")) }
@@ -303,6 +319,144 @@ class SafetyService : Service() {
         emitState()
     }
 
+    // ---- Phase 2: full-day location, detection, voice ---------------------------------------------
+
+    /** Full-day location is on, not paused, and the battery is fine (or charging). */
+    private fun dailyActive(): Boolean {
+        val d = store.daily
+        if (!d.optBoolean("enabled", false)) return false
+        if (d.optLong("pausedUntil", 0L) > System.currentTimeMillis()) return false
+        if (checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED) return false
+        val pausePct = d.optInt("batteryPausePct", 20)
+        return batteryPct() >= pausePct || charging()
+    }
+
+    private fun charging(): Boolean {
+        val bm = getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        return bm.isCharging
+    }
+
+    private fun needsTracking() = store.sos != null || store.journey != null || dailyActive()
+
+    private fun startOrStopDaily() {
+        if (needsTracking()) {
+            if (trackingIntervalMs != intervalMs()) startTracking()
+            if (dailyActive()) scheduleDailyTick()
+        } else {
+            stopTracking()
+        }
+    }
+
+    private fun addDailyPoint(fix: Location) {
+        outbox.add("daily", JSONObject().apply {
+            put("clientPointId", UUID.randomUUID().toString())
+            put("lat", fix.latitude)
+            put("lng", fix.longitude)
+            if (fix.hasAccuracy()) put("accuracyM", fix.accuracy.toDouble().coerceIn(0.0, 100_000.0))
+            put("batteryPct", batteryPct())
+            put("recordedAt", iso(fix.time))
+            put("activity", store.activity)
+        })
+        // The interval follows the activity (still / walking / vehicle) and the battery.
+        if (intervalMs() != trackingIntervalMs) startTracking()
+    }
+
+    private fun scheduleDailyTick() {
+        handler.removeCallbacks(dailyTick)
+        handler.postDelayed(dailyTick, DAILY_FLUSH_MS)
+    }
+
+    private val dailyTick = object : Runnable {
+        override fun run() {
+            flushDaily(force = true)
+            startOrStopDaily()
+            if (store.dailyOn) handler.postDelayed(this, DAILY_FLUSH_MS)
+            else stopIfIdle()
+        }
+    }
+
+    /** Sends full-day points in batches (every few minutes; at once during an SOS or journey). */
+    private fun flushDaily(force: Boolean = false) {
+        val now = System.currentTimeMillis()
+        if (!force && store.sos == null && store.journey == null && now - lastDailyFlush < DAILY_FLUSH_MS) return
+        outbox.pruneDaily(now - 7 * 24 * 3600_000L)
+        lastDailyFlush = now
+        try {
+            while (true) {
+                val items = outbox.peekDaily(500)
+                if (items.isEmpty()) break
+                val arr = JSONArray()
+                items.forEach { arr.put(it.body) }
+                val reply = api.call("POST", "/v1/daily-locations", JSONObject().put("points", arr))
+                if (reply.code == 409) {
+                    // Turned off on the server (e.g. from another phone): stop here too.
+                    outbox.clearDaily()
+                    store.daily = store.daily.put("enabled", false)
+                    applyConfig()
+                    break
+                }
+                if (!reply.ok && !reply.permanent) break
+                outbox.remove(items.map { it.id })
+                if (items.size < 500) break
+            }
+        } catch (e: IOException) {
+            online = false
+        } catch (e: Exception) {
+            Log.e(TAG, "Daily flush failed", e)
+        }
+    }
+
+    /** Applies the saved trigger and full-day settings: sensors, voice, tracking, notification. */
+    private fun applyConfig() {
+        val t = store.triggers
+        val sosOn = store.sos != null
+        val journey = store.journey
+        val vehicle = journey?.optString("mode") in setOf("cab", "auto", "bus", "own_vehicle")
+        val shakeMode = t.optString("shakeMode", "off")
+        detectors.apply(
+            Detectors.Config(
+                shake = !sosOn && t.optBoolean("featureShake", true) && (shakeMode == "always" || (shakeMode == "journey" && journey != null)),
+                fall = !sosOn && t.optBoolean("featureFall", true) && t.optBoolean("fallOn", false),
+                crash = !sosOn && t.optBoolean("featureCrash", true) && t.optBoolean("driveMode", false) && journey != null && vehicle,
+                shakeG = t.optDouble("shakeG", 2.5),
+                crashG = t.optDouble("crashG", 4.0),
+                fallG = t.optDouble("fallG", 3.0),
+            ),
+        )
+        if (store.dailyOn) ActivityWatch.start(this) else ActivityWatch.stop(this)
+        // Voice SOS listens only during an active journey (not during an SOS: the recorder has the mic).
+        val wantVoice = !sosOn && journey != null && t.optBoolean("voiceOn", false) && t.optBoolean("featureVoice", true)
+        if (wantVoice && !VoiceSos.listening) {
+            goForeground(withMic = true)
+            val ok = VoiceSos.start(this, t.optString("voiceLang", "en"), t.optString("voicePhrase", ""),
+                onHeard = { handler.post { onDetected("voice", emptyMap()) } },
+                onStopped = { handler.post { voicePaused = true; updateNotification() } })
+            voicePaused = !ok
+        } else if (!wantVoice && VoiceSos.listening) {
+            VoiceSos.stop()
+            voicePaused = false
+        }
+        startOrStopDaily()
+        updateNotification()
+        emitState()
+        stopIfIdle()
+    }
+
+    /** A detection (shake, voice, crash, fall): open the SOS countdown. Nothing is sent yet. */
+    private fun onDetected(trigger: String, extras: Map<String, String>) {
+        if (store.sos != null) return
+        val t = store.triggers
+        val detection = trigger == "crash" || trigger == "fall"
+        val seconds = if (detection) t.optInt("countdownSeconds", 10) else 0
+        val quiet = !detection && t.optBoolean("quietCountdown", false)
+        val data = HashMap<String, String>(extras)
+        data["trigger"] = trigger
+        data["quiet"] = quiet.toString()
+        if (seconds > 0) data["seconds"] = seconds.toString()
+        Alerts.detection(this, trigger, data, loud = detection)
+        EngineBus.emit("launch", HashMap<String, Any?>(data).apply { put("action", "sos") })
+    }
+
     @SuppressLint("MissingPermission")
     private fun startTracking() {
         val fine = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -311,7 +465,10 @@ class SafetyService : Service() {
         if (locationOff) return
         fused.removeLocationUpdates(locationCallback)
         trackingIntervalMs = intervalMs()
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, trackingIntervalMs)
+        // Full-day only (no SOS or journey): save battery unless in a vehicle.
+        val dailyOnly = store.sos == null && store.journey == null
+        val priority = if (dailyOnly && store.activity != "vehicle") Priority.PRIORITY_BALANCED_POWER_ACCURACY else Priority.PRIORITY_HIGH_ACCURACY
+        val request = LocationRequest.Builder(priority, trackingIntervalMs)
             .setMinUpdateIntervalMillis(trackingIntervalMs / 2)
             .setWaitForAccurateLocation(false)
             .build()
@@ -324,9 +481,15 @@ class SafetyService : Service() {
     }
 
     private fun intervalMs(): Long = when {
-        batteryPct() < 15 -> 15_000L
-        store.sos != null -> 4_000L
-        else -> 7_000L
+        store.sos != null -> if (batteryPct() < 15) 15_000L else 4_000L
+        store.journey != null -> if (batteryPct() < 15) 15_000L else 7_000L
+        // Full-day location (feature 7): fewer points when still.
+        else -> when (store.activity) {
+            "vehicle" -> 10_000L
+            "walking" -> 30_000L
+            "still" -> 300_000L
+            else -> 60_000L
+        }
     }
 
     // ---- Sending ----------------------------------------------------------------------------------
@@ -381,6 +544,7 @@ class SafetyService : Service() {
                 val items = outbox.peekOrdered()
                 if (items.isEmpty()) {
                     flushClips() // only once everything before them (e.g. the SOS) is on the server
+                    flushDaily()
                     break
                 }
                 val first = items.first()
@@ -558,15 +722,23 @@ class SafetyService : Service() {
             "audioSavedSeconds" to clips.sumOf { it.optInt("seconds") },
             "audioClipSince" to (if (sos != null) audio.currentSince else 0L),
             "locationOff" to locationOff,
+            // Phase 2
+            "dailyOn" to store.dailyOn,
+            "dailyActive" to dailyActive(),
+            "dailyQueued" to outbox.countDaily(),
+            "activity" to store.activity,
+            "voiceListening" to VoiceSos.listening,
+            "voicePaused" to voicePaused,
         ))
     }
 
-    private fun goForeground() {
-        val n = Alerts.service(this, notificationText())
+    private fun goForeground(withMic: Boolean = false) {
+        val journeyButton = store.journey != null && store.sos == null && store.triggers.optBoolean("journeySosButton", true)
+        val n = Alerts.service(this, notificationText(), journeySosButton = journeyButton)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-            val sosOn = store.sos != null
-            if (sosOn && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            val micWanted = store.sos != null || withMic || VoiceSos.listening
+            if (micWanted && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             }
             try {
@@ -586,8 +758,11 @@ class SafetyService : Service() {
     private fun notificationText(): String = when {
         store.sos != null && store.sos!!.optBoolean("sentToServer") -> "SOS active — your guardians can see your location"
         store.sos != null -> "SOS active — sending…"
+        store.journey != null && voicePaused && store.triggers.optBoolean("voiceOn") -> "Journey on — Voice SOS paused"
         store.journey != null -> "Journey on — your guardians can follow you"
         outbox.countOrdered() > 0 -> "Sending saved updates…"
+        store.dailyOn && !dailyActive() -> "Full-day location paused"
+        store.dailyOn -> "Location on all day — only you can see it"
         else -> "Protection on"
     }
 
@@ -604,13 +779,18 @@ class SafetyService : Service() {
         } else if (outbox.count() > 0) { // also tries waiting clips once
             handler.postDelayed(flushTick, 0)
         }
-        updateNotification()
-        emitState()
-        stopIfIdle()
+        // After a restart: full-day location and the detectors carry on (feature 9).
+        applyConfig()
+    }
+
+    /** Runs in the background for full-day location, "Always on" shake or fall detection too. */
+    private fun keepRunning(): Boolean {
+        val t = store.triggers
+        return store.dailyOn || t.optString("shakeMode") == "always" || t.optBoolean("fallOn", false)
     }
 
     private fun stopIfIdle() {
-        if (store.sos == null && store.journey == null && outbox.countOrdered() == 0) {
+        if (store.sos == null && store.journey == null && outbox.countOrdered() == 0 && !keepRunning()) {
             stopTracking()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -638,6 +818,9 @@ class SafetyService : Service() {
         const val ACTION_STOP_JOURNEY = "sarthi.STOP_JOURNEY"
         const val ACTION_CHECKIN_ANSWER = "sarthi.CHECKIN_ANSWER"
         const val ACTION_RESUME = "sarthi.RESUME"
+        const val ACTION_CONFIG = "sarthi.CONFIG"
+        const val ACTION_ACTIVITY = "sarthi.ACTIVITY"
+        private const val DAILY_FLUSH_MS = 3 * 60_000L
         private const val FLUSH_MS = 5_000L
         private const val HEARTBEAT_MS = 45_000L
         private const val CLIP_GIVE_UP_MS = 24 * 3600_000L
@@ -655,7 +838,9 @@ class SafetyService : Service() {
 
         fun hasWork(context: Context): Boolean {
             val s = Store(context)
-            return s.sos != null || s.journey != null
+            val t = s.triggers
+            return s.sos != null || s.journey != null || s.dailyOn ||
+                t.optString("shakeMode") == "always" || t.optBoolean("fallOn", false)
         }
     }
 }

@@ -45,6 +45,13 @@ import { LocationsController } from './locations/locations.controller';
 import { LocationsService } from './locations/locations.service';
 import { SosController } from './sos/sos.controller';
 import { SosService } from './sos/sos.service';
+import { AdminPhase2Controller, AdminPhase2Service } from './phase2/admin-phase2';
+import { CommunityController, CommunityService } from './phase2/community';
+import { DailyLocationController, DailyLocationService } from './phase2/daily-location';
+import { GooglePlay, PlansController, PlansService } from './phase2/plans';
+import { RakshakController, RakshakService } from './phase2/rakshak';
+import { SosExtrasController, SosPhotosService, SosTriggersService } from './phase2/sos-extras';
+import { VaultController, VaultService } from './phase2/vault';
 
 /** Everything the Android app and the guardian pages call: /v1/... and /g/... */
 @Module({
@@ -63,6 +70,13 @@ import { SosService } from './sos/sos.service';
     AudioController,
     DeliveryController,
     LiveController,
+    SosExtrasController,
+    DailyLocationController,
+    VaultController,
+    CommunityController,
+    RakshakController,
+    PlansController,
+    AdminPhase2Controller,
   ],
   providers: [
     {
@@ -82,6 +96,15 @@ import { SosService } from './sos/sos.service';
     SupportService,
     AccountService,
     AudioService,
+    SosTriggersService,
+    SosPhotosService,
+    DailyLocationService,
+    VaultService,
+    CommunityService,
+    RakshakService,
+    GooglePlay,
+    PlansService,
+    AdminPhase2Service,
     { provide: JobHandlers, useFactory: () => new JobHandlers() },
     {
       provide: JobQueue,

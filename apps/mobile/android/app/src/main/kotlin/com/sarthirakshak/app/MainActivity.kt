@@ -23,9 +23,28 @@ import com.sarthirakshak.app.engine.Alerts
 import com.sarthirakshak.app.engine.Crypto
 import com.sarthirakshak.app.engine.EngineBus
 import com.sarthirakshak.app.engine.LocalClips
+import com.sarthirakshak.app.engine.Outbox
 import com.sarthirakshak.app.engine.SafetyService
 import com.sarthirakshak.app.engine.Store
-import io.flutter.embedding.android.FlutterActivity
+import com.sarthirakshak.app.engine.ShakeLogic
+import com.sarthirakshak.app.engine.Vault
+import com.sarthirakshak.app.engine.VoiceSos
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.ContentValues
+import android.content.pm.ShortcutInfo
+import android.content.pm.ShortcutManager
+import android.graphics.drawable.Icon
+import android.os.Environment
+import android.os.StatFs
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.provider.MediaStore
+import android.util.Base64
+import androidx.core.content.FileProvider
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
@@ -35,7 +54,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Hosts the Flutter screens and the bridge (MethodChannel "sarthi/engine") to the safety engine. */
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private var player: MediaPlayer? = null
     private var ringtone: Ringtone? = null
 
@@ -62,11 +81,17 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_SEND || intent?.action == Intent.ACTION_SEND_MULTIPLE) {
+            handleShare(intent)
+            return
+        }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
         val data = HashMap<String, Any?>()
         data["action"] = action
         intent.getStringExtra(EXTRA_TRIGGER)?.let { data["trigger"] = it }
-        for (key in listOf("checkinId", "reason", "journeyId")) intent.getStringExtra(key)?.let { data[key] = it }
+        for (key in listOf("checkinId", "reason", "journeyId", "quiet", "seconds", "heightM")) {
+            intent.getStringExtra(key)?.let { data[key] = it }
+        }
         intent.removeExtra(EXTRA_ACTION)
         if (EngineBus.sink != null) EngineBus.emit("launch", data) else EngineBus.pendingLaunch = data
     }
@@ -97,6 +122,12 @@ class MainActivity : FlutterActivity() {
                         store.clearSession()
                         // Recordings are private: nobody who logs in next on this phone may hear them.
                         LocalClips.dir(this).deleteRecursively()
+                        // The vault key leaves this phone too (evidence stays encrypted; the
+                        // recovery phrase brings it back).
+                        Vault.forget(this)
+                        File(cacheDir, "vault").deleteRecursively()
+                        File(cacheDir, "shared").deleteRecursively()
+                        Outbox(this).clearDaily()
                         result.success(null)
                     }
                     "listClips" -> {
@@ -118,6 +149,18 @@ class MainActivity : FlutterActivity() {
                         } else {
                             playEncrypted(file.readBytes())
                             result.success(null)
+                        }
+                    }
+                    "exportClip" -> {
+                        // An SOS recording, decrypted into the private cache so the vault can
+                        // encrypt it with the vault key (the cache copy is deleted right after).
+                        val file = LocalClips.file(this, call.argument<String>("id")!!)
+                        if (!file.exists()) {
+                            result.success(null)
+                        } else {
+                            val out = File(File(cacheDir, "vault").apply { mkdirs() }, "${call.argument<String>("id")}.m4a")
+                            out.writeBytes(Crypto.decrypt(Crypto.AUDIO_KEY, file.readBytes()))
+                            result.success(out.absolutePath)
                         }
                     }
                     "cacheGuardians" -> {
@@ -233,7 +276,7 @@ class MainActivity : FlutterActivity() {
                             result.success(null)
                         }
                     }
-                    else -> result.notImplemented()
+                    else -> if (!phase2(call, result)) result.notImplemented()
                 }
             } catch (e: Exception) {
                 result.error("engine_error", e.message, null)
@@ -270,6 +313,228 @@ class MainActivity : FlutterActivity() {
         } catch (e: Exception) {
             result.success(null)
         }
+    }
+
+    /**
+     * Android Share → Sarthi Rakshak (feature 15): copies the shared files into the app's private
+     * cache so the vault can encrypt them. Nothing is read from other apps by itself.
+     */
+    private fun handleShare(intent: Intent) {
+        val uris = ArrayList<Uri>()
+        @Suppress("DEPRECATION")
+        if (intent.action == Intent.ACTION_SEND) {
+            (intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))?.let { uris.add(it) }
+        } else {
+            intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris.addAll(it) }
+        }
+        val text = intent.getStringExtra(Intent.EXTRA_TEXT)
+        val dir = File(cacheDir, "shared").apply { mkdirs() }
+        val files = ArrayList<Map<String, Any?>>()
+        for (uri in uris.take(20)) {
+            try {
+                var name = "shared"
+                contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) name = c.getString(0) ?: name
+                }
+                val safe = name.replace(Regex("[^A-Za-z0-9._ -]"), "_").take(80)
+                val out = File(dir, "${System.currentTimeMillis()}-$safe")
+                contentResolver.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
+                files.add(mapOf("path" to out.absolutePath, "name" to name, "mime" to (contentResolver.getType(uri) ?: "application/octet-stream")))
+            } catch (e: Exception) {
+                // a file that could not be read is skipped
+            }
+        }
+        val data = HashMap<String, Any?>()
+        data["action"] = "share"
+        data["files"] = files
+        if (text != null) data["text"] = text
+        intent.action = null
+        if (EngineBus.sink != null) EngineBus.emit("launch", data) else EngineBus.pendingLaunch = data
+    }
+
+    private fun phase2(call: io.flutter.plugin.common.MethodCall, result: MethodChannel.Result): Boolean {
+        val store = Store(this)
+        when (call.method) {
+            "engineConfig" -> {
+                call.argument<String>("triggers")?.let { store.triggers = JSONObject(it) }
+                call.argument<String>("daily")?.let { store.daily = JSONObject(it) }
+                if (SafetyService.hasWork(this) || store.sos != null || store.journey != null) {
+                    SafetyService.send(this, SafetyService.ACTION_CONFIG)
+                }
+                result.success(null)
+            }
+            "dailyClear" -> {
+                // Location history deleted on the server: drop points still waiting on the phone too.
+                Outbox(this).clearDaily()
+                result.success(null)
+            }
+            "voiceHasModel" -> result.success(VoiceSos.hasModel(this, call.argument<String>("lang") ?: "en"))
+            "voiceDownload" -> {
+                val lang = call.argument<String>("lang") ?: "en"
+                Thread {
+                    try {
+                        VoiceSos.download(this, lang) { p -> runOnUiThread { EngineBus.emit("voiceDownload", mapOf("progress" to p)) } }
+                        runOnUiThread { result.success(true) }
+                    } catch (e: Exception) {
+                        runOnUiThread { result.error("download_failed", "Could not download the voice model. Check your internet.", null) }
+                    }
+                }.start()
+            }
+            "voiceTest" -> {
+                VoiceSos.test(
+                    this,
+                    call.argument<String>("lang") ?: "en",
+                    call.argument<String>("phrase") ?: "",
+                    call.argument<Int>("seconds") ?: 10,
+                ) { heard -> runOnUiThread { result.success(heard) } }
+            }
+            "practiceShake" -> {
+                // "Try a practice shake": listens for up to [seconds]; never starts an SOS.
+                val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+                val acc = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+                if (acc == null) {
+                    result.success(false)
+                } else {
+                    val threshold = call.argument<Double>("g") ?: 2.5
+                    val logic = ShakeLogic()
+                    var done = false
+                    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+                    lateinit var listener: SensorEventListener
+                    val finish = { ok: Boolean ->
+                        if (!done) {
+                            done = true
+                            sm.unregisterListener(listener)
+                            result.success(ok)
+                        }
+                    }
+                    listener = object : SensorEventListener {
+                        override fun onSensorChanged(e: SensorEvent) {
+                            val g = Math.sqrt((e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2]).toDouble()) / SensorManager.GRAVITY_EARTH
+                            if (logic.onSample(System.currentTimeMillis(), g, threshold)) handler.post { finish(true) }
+                        }
+                        override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+                    }
+                    sm.registerListener(listener, acc, SensorManager.SENSOR_DELAY_GAME, handler)
+                    handler.postDelayed({ finish(false) }, (call.argument<Int>("seconds") ?: 10) * 1000L)
+                }
+            }
+            "vaultExists" -> result.success(Vault.exists(this))
+            "vaultNewKey" -> result.success(Vault.newKey())
+            "vaultStore" -> {
+                try {
+                    Vault.store(this, call.argument<String>("key")!!)
+                    result.success(null)
+                } catch (e: Vault.AuthNeeded) {
+                    result.error("auth_needed", e.message, null)
+                }
+            }
+            "vaultUnlock" -> {
+                try {
+                    result.success(Vault.unlock(this))
+                } catch (e: Vault.AuthNeeded) {
+                    result.error("auth_needed", e.message, null)
+                }
+            }
+            "vaultForget" -> {
+                Vault.forget(this)
+                File(cacheDir, "vault").deleteRecursively()
+                File(cacheDir, "shared").deleteRecursively()
+                result.success(null)
+            }
+            "vaultEncryptFile" -> Thread {
+                try {
+                    val (sha, size) = Vault.encryptFile(File(call.argument<String>("input")!!), File(call.argument<String>("output")!!), call.argument<String>("fileKey")!!)
+                    runOnUiThread { result.success(mapOf("sha256" to sha, "size" to size)) }
+                } catch (e: Exception) {
+                    runOnUiThread { result.error("encrypt_failed", e.message, null) }
+                }
+            }.start()
+            "vaultDecryptFile" -> Thread {
+                try {
+                    Vault.decryptFile(File(call.argument<String>("input")!!), File(call.argument<String>("output")!!), call.argument<String>("fileKey")!!)
+                    runOnUiThread { result.success(null) }
+                } catch (e: Exception) {
+                    runOnUiThread { result.error("decrypt_failed", "This file could not be opened. It may be damaged.", null) }
+                }
+            }.start()
+            "vaultEncrypt" -> result.success(Vault.encryptBytes(call.argument<String>("key")!!, Base64.decode(call.argument<String>("plain")!!, Base64.NO_WRAP)))
+            "vaultDecrypt" -> result.success(Base64.encodeToString(Vault.decryptBytes(call.argument<String>("key")!!, call.argument<String>("locked")!!), Base64.NO_WRAP))
+            "sha256Bytes" -> result.success(Vault.sha256(Base64.decode(call.argument<String>("data")!!, Base64.NO_WRAP).inputStream()))
+            "freeBytes" -> result.success(StatFs(filesDir.absolutePath).availableBytes)
+            "pinWidget" -> {
+                val mgr = getSystemService(AppWidgetManager::class.java)
+                val ok = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mgr.isRequestPinAppWidgetSupported &&
+                    mgr.requestPinAppWidget(ComponentName(this, DiscreetWidgetProvider::class.java), null, null)
+                result.success(ok)
+            }
+            "pinShortcut" -> {
+                val sm = getSystemService(ShortcutManager::class.java)
+                val ok = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && sm.isRequestPinShortcutSupported &&
+                    sm.requestPinShortcut(
+                        ShortcutInfo.Builder(this, "quick_help")
+                            .setShortLabel("Quick help")
+                            .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
+                            .setIntent(Intent(this, MainActivity::class.java).apply {
+                                action = Intent.ACTION_VIEW
+                                putExtra(EXTRA_ACTION, "sos")
+                                putExtra(EXTRA_TRIGGER, "discreet")
+                            })
+                            .build(),
+                        null,
+                    )
+                result.success(ok)
+            }
+            "playFile" -> {
+                stopPlayback()
+                player = MediaPlayer().apply {
+                    setDataSource(call.argument<String>("path")!!)
+                    setOnCompletionListener {
+                        stopPlayback()
+                        EngineBus.emit("playback", mapOf("playing" to false))
+                    }
+                    prepare()
+                    start()
+                }
+                result.success(null)
+            }
+            "openFile" -> {
+                val file = File(call.argument<String>("path")!!)
+                val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+                val view = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, call.argument<String>("mime") ?: "*/*")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                try {
+                    startActivity(view)
+                    result.success(true)
+                } catch (e: ActivityNotFoundException) {
+                    result.success(false)
+                }
+            }
+            "saveToDownloads" -> {
+                val file = File(call.argument<String>("path")!!)
+                val name = call.argument<String>("name") ?: file.name
+                val mime = call.argument<String>("mime") ?: "application/octet-stream"
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Downloads.DISPLAY_NAME, name)
+                        put(MediaStore.Downloads.MIME_TYPE, mime)
+                        put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Sarthi Rakshak")
+                    }
+                    val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    if (uri == null) {
+                        result.success(false)
+                    } else {
+                        contentResolver.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
+                        result.success(true)
+                    }
+                } else {
+                    result.success(false)
+                }
+            }
+            else -> return false
+        }
+        return true
     }
 
     private fun deviceInfo(): Map<String, Any?> {

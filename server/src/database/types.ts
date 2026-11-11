@@ -112,6 +112,7 @@ export interface JourneysTable {
   checkins_paused_until: Date | null;
   /** Guardians were told the phone went silent; cleared when it is back. */
   lost_contact_at: Date | null;
+  mode: 'walk' | 'cab' | 'auto' | 'bus' | 'own_vehicle' | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }
@@ -122,7 +123,7 @@ export interface SosEventsTable {
   /** NULL after the user deleted their account. */
   user_id: string | null;
   journey_id: string | null;
-  trigger: 'button' | 'widget' | 'tile' | 'checkin' | 'journey';
+  trigger: SosTriggerValue;
   is_test: Generated<boolean>;
   status: Generated<'active' | 'ended' | 'cancelled'>;
   started_at: Date | string;
@@ -152,6 +153,8 @@ export interface LocationPointsTable {
   recorded_at: Date | string;
   /** Made on the phone; unique per user, so a point sent twice is saved once. */
   client_point_id: string | null;
+  /** Set by the database from sos_event_id / journey_id when not given. */
+  kind: ColumnType<'sos' | 'journey' | 'daily', 'sos' | 'journey' | 'daily' | undefined, never>;
   delete_after: Date | null;
   created_at: CreatedAt;
 }
@@ -311,6 +314,179 @@ export interface SavedPlacesTable {
   updated_at: Timestamp;
 }
 
+export type SosTriggerValue =
+  | 'button'
+  | 'widget'
+  | 'tile'
+  | 'checkin'
+  | 'journey'
+  | 'shake'
+  | 'voice'
+  | 'crash'
+  | 'fall'
+  | 'discreet';
+
+export interface SosFalseAlarmsTable {
+  id: string;
+  user_id: string | null;
+  trigger: string;
+  created_at: CreatedAt;
+}
+
+export interface SosTriggerSettingsTable {
+  user_id: string;
+  shake_mode: Generated<'off' | 'journey' | 'always'>;
+  voice_on: Generated<boolean>;
+  drive_mode: Generated<boolean>;
+  fall_on: Generated<boolean>;
+  quiet_countdown: Generated<boolean>;
+  journey_sos_button: Generated<boolean>;
+  updated_at: Timestamp;
+}
+
+export interface SosPhotosTable {
+  id: string;
+  user_id: string;
+  sos_event_id: string;
+  camera: 'front' | 'back';
+  storage_key: string;
+  size_bytes: number;
+  taken_at: Date | string;
+  keep: Generated<boolean>;
+  delete_after: Date | string;
+  created_at: CreatedAt;
+}
+
+export interface DailyTrackingSettingsTable {
+  user_id: string;
+  enabled: Generated<boolean>;
+  paused_until: Date | null;
+  retention_days: Generated<number>;
+  consent_version: string | null;
+  consent_at: Date | null;
+  updated_at: Timestamp;
+}
+
+export interface VaultKeysTable {
+  user_id: string;
+  locked_key: string;
+  kdf: ColumnType<unknown, string, string>;
+  check_value: string;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface EvidenceIncidentsTable {
+  id: string;
+  user_id: string;
+  kind: 'blackmail' | 'harassment' | 'physical' | 'sos' | 'other';
+  locked_details: string;
+  sos_event_id: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+  deleted_at: Date | null;
+}
+
+export interface EvidenceItemsTable {
+  id: string;
+  user_id: string;
+  incident_id: string | null;
+  kind: 'audio' | 'video' | 'photo' | 'file' | 'detail' | 'report';
+  storage_key: string | null;
+  /** bigint, returned as a string by pg. */
+  size_bytes: ColumnType<string, number, number>;
+  locked_file_key: string;
+  locked_details: string;
+  sha256: string;
+  captured_at: Date | string;
+  received_at: CreatedAt;
+  delete_locked_until: Date | string;
+  hidden: Generated<boolean>;
+  uploaded: Generated<boolean>;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface EvidenceAccessLogTable {
+  id: Generated<string>;
+  user_id: string;
+  item_id: string | null;
+  incident_id: string | null;
+  action: string;
+  device: string | null;
+  at: CreatedAt;
+}
+
+export interface CommunityPostsTable {
+  id: string;
+  author_user_id: string | null;
+  author_admin_id: string | null;
+  category: 'lighting' | 'unsafe_spot' | 'harassment_area' | 'road' | 'other';
+  area: string;
+  body: string;
+  photo_key: string | null;
+  status: Generated<'pending' | 'published' | 'rejected' | 'removed'>;
+  reason: string | null;
+  reviewed_by: string | null;
+  reviewed_at: Date | null;
+  flags_count: Generated<number>;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface CommunityFlagsTable {
+  post_id: string;
+  user_id: string;
+  reason: string;
+  created_at: CreatedAt;
+}
+
+export interface RakshakApplicationsTable {
+  id: Generated<string>;
+  user_id: string | null;
+  locked_details: string;
+  area: string;
+  id_type: 'aadhaar' | 'pan' | 'driving_licence' | 'voter_id' | 'passport';
+  id_last4: string;
+  documents: ColumnType<unknown, string | undefined, string>;
+  consent_at: Date;
+  status: Generated<'under_review' | 'approved' | 'rejected' | 'withdrawn'>;
+  reason: string | null;
+  reviewed_by: string | null;
+  decided_at: Date | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface PlansTable {
+  id: 'basic' | 'silver' | 'gold';
+  name: string;
+  monthly_price_inr: number | null;
+  yearly_price_inr: number | null;
+  monthly_product_id: string | null;
+  yearly_product_id: string | null;
+  features: ColumnType<unknown, string, string>;
+  evidence_storage_mb: number;
+  location_history_days: number;
+  on_sale: boolean;
+  sort_order: number;
+  updated_by: string | null;
+  updated_at: Timestamp;
+}
+
+export interface SubscriptionsTable {
+  id: Generated<string>;
+  user_id: string | null;
+  plan_id: string;
+  product_id: string;
+  purchase_token_hash: string;
+  status: 'active' | 'pending' | 'cancelled' | 'expired' | 'refunded';
+  renews_at: Date | null;
+  cancelled_at: Date | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   devices: DevicesTable;
@@ -331,4 +507,17 @@ export interface Database {
   media_clips: MediaClipsTable;
   audit_log: AuditLogTable;
   support_tickets: SupportTicketsTable;
+  sos_false_alarms: SosFalseAlarmsTable;
+  sos_trigger_settings: SosTriggerSettingsTable;
+  sos_photos: SosPhotosTable;
+  daily_tracking_settings: DailyTrackingSettingsTable;
+  vault_keys: VaultKeysTable;
+  evidence_incidents: EvidenceIncidentsTable;
+  evidence_items: EvidenceItemsTable;
+  evidence_access_log: EvidenceAccessLogTable;
+  community_posts: CommunityPostsTable;
+  community_flags: CommunityFlagsTable;
+  rakshak_applications: RakshakApplicationsTable;
+  plans: PlansTable;
+  subscriptions: SubscriptionsTable;
 }

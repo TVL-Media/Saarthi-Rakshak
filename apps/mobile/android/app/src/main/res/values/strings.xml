@@ -1,3 +1,5 @@
 <resources>
     <string name="widget_description">Opens the SOS countdown</string>
+    <string name="discreet_widget_description">Quick help: opens the SOS countdown quietly</string>
+    <string name="quick_help">Quick help</string>
 </resources>

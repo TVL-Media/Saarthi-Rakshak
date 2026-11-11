@@ -5,7 +5,10 @@ Each phase starts only when what it depends on is ready. **Do not build these ye
 
 ## Phase 2 — Smarter protection
 
-Starts when Phase 1 works reliably in Noida. Needs: lawyer's review of evidence tools, plan prices, NDMA alert feed access.
+**Being built (started 11 Nov 2026, owner's decision; Phase 1 launch postponed).** What is built and how: `docs/app-api.md`
+("Phase 2") and `docs/decisions.md`. Still needed before release: lawyer's review of the evidence tools, plan prices
+(everything is free for now), the Google Maps key, and Play Console declarations (background location, special-use
+foreground service, activity recognition, camera, SMS).
 
 | Area | Feature | What it does |
 | --- | --- | --- |

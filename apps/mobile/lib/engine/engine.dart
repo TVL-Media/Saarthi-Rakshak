@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
@@ -26,6 +27,12 @@ class EngineState {
         audioSavedSeconds = (m['audioSavedSeconds'] as int?) ?? 0,
         audioClipSince = (m['audioClipSince'] as int?) ?? 0,
         locationOff = (m['locationOff'] as bool?) ?? false,
+        dailyOn = (m['dailyOn'] as bool?) ?? false,
+        dailyActive = (m['dailyActive'] as bool?) ?? false,
+        dailyQueued = (m['dailyQueued'] as int?) ?? 0,
+        activity = (m['activity'] as String?) ?? 'unknown',
+        voiceListening = (m['voiceListening'] as bool?) ?? false,
+        voicePaused = (m['voicePaused'] as bool?) ?? false,
         journeyStatus = m['journeyStatus'] as String?;
 
   /// idle, sos, journey or sos_journey.
@@ -69,6 +76,21 @@ class EngineState {
 
   /// on_route, stopped, off_route, late (journey only).
   final String? journeyStatus;
+
+  // ---- Phase 2 ----
+  /// Full-day location is switched on / recording now (not paused, battery fine).
+  final bool dailyOn;
+  final bool dailyActive;
+
+  /// Full-day points waiting to be sent (kept up to 7 days offline).
+  final int dailyQueued;
+
+  /// still / walking / vehicle / unknown.
+  final String activity;
+  final bool voiceListening;
+
+  /// Voice SOS is on but could not listen (microphone busy or not allowed).
+  final bool voicePaused;
 
   bool get sosActive => sosId != null;
   bool get journeyActive => journeyId != null;
@@ -149,9 +171,71 @@ class SafetyEngine {
         'offRouteMetres': rules['checkin.off_route_metres'] ?? 500,
         'lateMinutes': rules['checkin.late_minutes'] ?? 15,
         'replyWaitMinutes': rules['checkin.reply_wait_minutes'] ?? 2,
+        'mode': journey.mode,
       });
 
   Future<void> stopJourney() => _ch.invokeMethod('stopJourney');
+
+  // ---- Phase 2 ----------------------------------------------------------------------------------
+
+  /// SOS triggers and full-day location for the engine (it keeps them across restarts).
+  Future<void> configure({Map<String, Object?>? triggers, Map<String, Object?>? daily}) =>
+      _ch.invokeMethod('engineConfig', {
+        if (triggers != null) 'triggers': jsonEncode(triggers),
+        if (daily != null) 'daily': jsonEncode(daily),
+      });
+
+  Future<bool> voiceHasModel(String lang) async => (await _ch.invokeMethod<bool>('voiceHasModel', {'lang': lang})) ?? false;
+
+  /// Downloads the offline voice model (progress comes as `voiceDownload` events).
+  Future<void> voiceDownload(String lang) => _ch.invokeMethod('voiceDownload', {'lang': lang});
+
+  /// Listens up to [seconds] for the phrase; true if it was heard.
+  Future<bool> voiceTest(String lang, String phrase, {int seconds = 10}) async =>
+      (await _ch.invokeMethod<bool>('voiceTest', {'lang': lang, 'phrase': phrase, 'seconds': seconds})) ?? false;
+
+  Future<bool> vaultExists() async => (await _ch.invokeMethod<bool>('vaultExists')) ?? false;
+  Future<String> vaultNewKey() async => (await _ch.invokeMethod<String>('vaultNewKey'))!;
+
+  /// Keeps the vault key on this phone, locked by fingerprint / face / phone PIN.
+  Future<void> vaultStore(String key) => _ch.invokeMethod('vaultStore', {'key': key});
+
+  /// The vault key after a recent unlock; null when this phone has none. Throws `auth_needed`.
+  Future<String?> vaultUnlock() => _ch.invokeMethod<String>('vaultUnlock');
+  Future<void> vaultForget() => _ch.invokeMethod('vaultForget');
+
+  Future<({String sha256, int size})> vaultEncryptFile(String input, String output, String fileKey) async {
+    final r = (await _ch.invokeMethod<Map<dynamic, dynamic>>('vaultEncryptFile', {'input': input, 'output': output, 'fileKey': fileKey}))!;
+    return (sha256: r['sha256'] as String, size: (r['size'] as num).toInt());
+  }
+
+  Future<void> vaultDecryptFile(String input, String output, String fileKey) =>
+      _ch.invokeMethod('vaultDecryptFile', {'input': input, 'output': output, 'fileKey': fileKey});
+
+  Future<String> vaultEncrypt(String key, List<int> plain) async =>
+      (await _ch.invokeMethod<String>('vaultEncrypt', {'key': key, 'plain': base64Encode(plain)}))!;
+
+  Future<List<int>> vaultDecrypt(String key, String locked) async =>
+      base64Decode((await _ch.invokeMethod<String>('vaultDecrypt', {'key': key, 'locked': locked}))!);
+
+  Future<String> sha256(List<int> data) async =>
+      (await _ch.invokeMethod<String>('sha256Bytes', {'data': base64Encode(data)}))!;
+
+  /// "Try a practice shake": true if a shake was felt within [seconds] (no SOS is started).
+  Future<bool> practiceShake({double g = 2.5, int seconds = 10}) async =>
+      (await _ch.invokeMethod<bool>('practiceShake', {'g': g, 'seconds': seconds})) ?? false;
+  /// Drops full-day points still waiting on the phone (after "Delete all location history").
+  Future<void> dailyClear() => _ch.invokeMethod('dailyClear');
+  /// Decrypts an SOS recording into the private cache (for Mere Saboot); null if it is gone.
+  Future<String?> exportClip(String id) => _ch.invokeMethod<String>('exportClip', {'id': id});
+  Future<int> freeBytes() async => (await _ch.invokeMethod<int>('freeBytes')) ?? 0;
+  Future<bool> pinWidget() async => (await _ch.invokeMethod<bool>('pinWidget')) ?? false;
+  Future<bool> pinShortcut() async => (await _ch.invokeMethod<bool>('pinShortcut')) ?? false;
+  Future<void> playFile(String path) => _ch.invokeMethod('playFile', {'path': path});
+  Future<bool> openFile(String path, String mime) async =>
+      (await _ch.invokeMethod<bool>('openFile', {'path': path, 'mime': mime})) ?? false;
+  Future<bool> saveToDownloads(String path, String name, String mime) async =>
+      (await _ch.invokeMethod<bool>('saveToDownloads', {'path': path, 'name': name, 'mime': mime})) ?? false;
 
   /// The user answered a check-in: stops the alarm; `traffic_pause` pauses checks.
   Future<void> checkinAnswered(String reason, String answer, {int pauseMinutes = 10}) =>

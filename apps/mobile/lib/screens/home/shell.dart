@@ -6,6 +6,10 @@ import 'package:flutter/services.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../community/community_screen.dart';
+import '../community/rakshak_screen.dart';
+import '../daily/daily_location_screen.dart';
+import '../vault/vault_screen.dart';
 import '../../widgets/format.dart';
 import '../auth/profile_screen.dart';
 import '../fakecall/fake_call_screen.dart';
@@ -146,6 +150,10 @@ class _Menu extends StatelessWidget {
             _MenuItem(Icons.group, 'Guardians', () => tab(3)),
             _MenuItem(Icons.phone_in_talk_outlined, 'Fake Call', () => open(const FakeCallScreen())),
             _MenuItem(Icons.place_outlined, 'Saved Places', () => open(const SavedPlacesScreen())),
+            if (state.feature('vault')) _MenuItem(Icons.lock_outline, 'Mere Saboot', () => open(const VaultScreen())),
+            if (state.feature('daily_location')) _MenuItem(Icons.timeline, 'My Timeline', () => open(const TimelineScreen())),
+            if (state.feature('community')) _MenuItem(Icons.groups_outlined, 'Community', () => open(const CommunityScreen())),
+            if (state.feature('rakshak')) _MenuItem(Icons.volunteer_activism_outlined, 'Become a Rakshak', () => open(const RakshakScreen())),
             _MenuItem(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),
             _MenuItem(Icons.settings, 'Settings', () => tab(4)),
             _MenuItem(Icons.help, 'Help & Support', () => open(const ReportProblemScreen())),
@@ -293,13 +301,20 @@ class _SosHoldButtonState extends State<SosHoldButton> with SingleTickerProvider
 }
 
 /// Opens the SOS countdown — or the running SOS, if there is one (never a second SOS).
-void openSos(BuildContext context, {required String trigger, String? journeyId}) {
+void openSos(BuildContext context,
+    {required String trigger, String? journeyId, bool? quiet, int? seconds, String? heightM}) {
   final state = AppScope.read(context);
   final running = state.engineState.sosId;
   unawaited(Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
     fullscreenDialog: true,
     builder: (_) => running != null
         ? SosActiveScreen(sosId: running)
-        : SosCountdownScreen(trigger: trigger, journeyId: journeyId ?? state.engineState.journeyId),
+        : SosCountdownScreen(
+            trigger: trigger,
+            journeyId: journeyId ?? state.engineState.journeyId,
+            quiet: quiet,
+            seconds: seconds,
+            heightM: heightM,
+          ),
   )));
 }

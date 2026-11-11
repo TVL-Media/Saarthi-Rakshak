@@ -1,0 +1,11 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="64dp"
+    android:minHeight="64dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen|keyguard"
+    android:initialLayout="@layout/widget_discreet"
+    android:previewLayout="@layout/widget_discreet"
+    android:description="@string/discreet_widget_description"
+    android:updatePeriodMillis="0" />

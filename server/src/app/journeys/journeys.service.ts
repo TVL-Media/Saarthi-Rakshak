@@ -114,6 +114,7 @@ export class JourneysService {
           destination_label: input.destination.label,
           expected_arrival_at: arrival,
           route_polyline: input.route ?? null,
+          mode: input.mode ?? null,
           rules,
         })
         .execute();
@@ -343,6 +344,7 @@ export class JourneysService {
         'ended_at',
         'checkins_paused_until',
         'route_polyline',
+        'mode',
       ])
       .where('id', '=', journeyId)
       .where('user_id', '=', userId)
@@ -367,6 +369,7 @@ export class JourneysService {
           ? j.checkins_paused_until.toISOString()
           : null,
       route: j.route_polyline,
+      mode: j.mode,
     };
   }
 

@@ -3,6 +3,7 @@ import type { LivePoint, LiveView } from '@sarthi/shared';
 import { sql } from 'kysely';
 import { DatabaseService } from '../../database/database.module';
 import { RedisService } from '../../redis/redis.module';
+import { StorageService } from '../../storage/storage.module';
 import { hashLinkCode } from '../common/guardian-links';
 import { appError } from '../common/app-http';
 import { liveKeys } from '../locations/live-location';
@@ -26,6 +27,9 @@ export interface OpenLink {
 const firstName = (name: string | null | undefined, fallback: string) =>
   name?.trim().split(/\s+/)[0] || fallback;
 
+/** How long a photo link on the live page works (the page refreshes before that). */
+const PHOTO_LINK_SECONDS = 900;
+
 /** The guardian's live page: what it shows, "I'm responding", and who may watch live updates. */
 @Injectable()
 export class LiveService {
@@ -34,6 +38,7 @@ export class LiveService {
     private readonly redis: RedisService,
     private readonly messages: OutgoingMessages,
     private readonly events: LiveEvents,
+    private readonly storage: StorageService,
   ) {}
 
   /** A link that still works, or `link_expired`. Unknown codes look the same as expired ones. */
@@ -143,13 +148,15 @@ export class LiveService {
     let endedAt: Date | null;
     let lostContact: boolean;
     let journey: LiveView['journey'] = null;
+    let trigger: LiveView['trigger'] = null;
 
     if (link.kind === 'sos') {
       const sos = await db
         .selectFrom('sos_events')
-        .select(['status', 'started_at', 'ended_at', 'lost_contact_at'])
+        .select(['status', 'started_at', 'ended_at', 'lost_contact_at', 'trigger'])
         .where('id', '=', link.id)
         .executeTakeFirstOrThrow();
+      trigger = sos.trigger;
       status = sos.status === 'active' ? 'active' : 'ended';
       if (status === 'ended') outcome = 'safe';
       startedAt = new Date(sos.started_at);
@@ -221,7 +228,28 @@ export class LiveService {
         isYou: l.id === link.linkId,
       })),
       youAreResponding: link.respondingAt !== null,
+      trigger,
+      photos: isSos ? await this.photos(link.id) : [],
     };
+  }
+
+  /** SOS photos for the guardian: short-lived links, newest first (deleted ones are gone). */
+  private async photos(sosId: string): Promise<LiveView['photos']> {
+    const rows = await this.database.db
+      .selectFrom('sos_photos')
+      .select(['camera', 'storage_key', 'taken_at'])
+      .where('sos_event_id', '=', sosId)
+      .where('delete_after', '>', new Date())
+      .orderBy('taken_at', 'desc')
+      .limit(6)
+      .execute();
+    return Promise.all(
+      rows.map(async (r) => ({
+        camera: r.camera,
+        url: await this.storage.downloadUrl(r.storage_key, PHOTO_LINK_SECONDS),
+        takenAt: new Date(r.taken_at).toISOString(),
+      })),
+    );
   }
 
   /** Newest point: from Redis, or from the database if Redis has none. */

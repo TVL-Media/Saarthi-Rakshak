@@ -47,6 +47,17 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
   RouteResult? _route;
   DateTime? _arriveBy;
 
+  /// How the user travels (cab / auto: drive mode and the stopped check use it).
+  String? _mode;
+
+  static const _modes = {
+    'walk': ('Walk', Icons.directions_walk),
+    'cab': ('Cab', Icons.local_taxi_outlined),
+    'auto': ('Auto', Icons.electric_rickshaw_outlined),
+    'bus': ('Bus / Metro', Icons.directions_bus_outlined),
+    'own_vehicle': ('Own vehicle', Icons.two_wheeler_outlined),
+  };
+
   @override
   void initState() {
     super.initState();
@@ -175,7 +186,8 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
     final state = AppScope.read(context);
     final dest = _destination!;
     try {
-      final journey = await state.api.startJourney(state.newId(), dest, _arriveBy!, _route?.polyline.isEmpty ?? true ? null : _route!.polyline);
+      final journey = await state.api
+          .startJourney(state.newId(), dest, _arriveBy!, _route?.polyline.isEmpty ?? true ? null : _route!.polyline, mode: _mode);
       await state.engine.startJourney(journey: journey, rules: state.me?.rules ?? const {});
       if (!mounted) return;
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => JourneyOnScreen(journeyId: journey.id)));
@@ -274,6 +286,20 @@ class _StartJourneyScreenState extends State<StartJourneyScreen> {
                 const Text('Change', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w600)),
               ]),
             ),
+          if (_destination != null) ...[
+            const SizedBox(height: 16),
+            const SectionLabel('Travelling by'),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final e in _modes.entries)
+                PillChoice(
+                  key: Key('mode-${e.key}'),
+                  icon: e.value.$2,
+                  label: e.value.$1,
+                  selected: _mode == e.key,
+                  onSelected: (on) => setState(() => _mode = on ? e.key : null),
+                ),
+            ]),
+          ],
           const SizedBox(height: 16),
           BusyButton(label: 'Start journey', onPressed: canStart ? _start : null),
           if (accepted == 0)

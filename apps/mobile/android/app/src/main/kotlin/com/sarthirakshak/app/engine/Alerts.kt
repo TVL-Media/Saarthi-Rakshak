@@ -26,6 +26,7 @@ object Alerts {
     const val ID_SERVICE = 1
     const val ID_CHECKIN = 2
     const val ID_SMS = 3
+    const val ID_DETECTION = 4
 
     private var alarm: Ringtone? = null
 
@@ -50,14 +51,53 @@ object Alerts {
         return PendingIntent.getActivity(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    fun service(context: Context, text: String): Notification =
-        builder(context, CH_PROTECTION)
+    fun service(context: Context, text: String, journeySosButton: Boolean = false): Notification {
+        val b = builder(context, CH_PROTECTION)
             .setSmallIcon(R.drawable.ic_sos)
             .setContentTitle("Sarthi Rakshak")
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(openApp(context))
+        if (journeySosButton) {
+            // Discreet mode (feature 4): an SOS button on the journey notification.
+            val sos = openApp(context, "sos", mapOf(MainActivity.EXTRA_TRIGGER to "discreet"), requestCode = 5)
+            b.addAction(Notification.Action.Builder(null, "SOS", sos).build())
+        }
+        return b.build()
+    }
+
+    /**
+     * A detection (shake, voice, crash, fall) opens the SOS countdown over the lock screen. Crash
+     * and fall also sound the alarm, so a hurt user is noticed; "I'm OK" stops it.
+     */
+    fun detection(context: Context, trigger: String, extras: Map<String, String>, loud: Boolean) {
+        val title = when (trigger) {
+            "crash" -> "Did you crash?"
+            "fall" -> "Did you fall?"
+            else -> "SOS starting"
+        }
+        val text = if (loud) "Tap to open. Sending SOS unless you tap I'm OK." else "Tap to open the SOS countdown."
+        val launch = HashMap(extras)
+        launch[MainActivity.EXTRA_TRIGGER] = trigger
+        val open = openApp(context, "sos", launch, requestCode = 6)
+        val n = builder(context, CH_CHECKIN)
+            .setSmallIcon(R.drawable.ic_sos)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setPriority(Notification.PRIORITY_MAX)
+            .setFullScreenIntent(open, true)
+            .setContentIntent(open)
+            .setAutoCancel(true)
             .build()
+        context.getSystemService(NotificationManager::class.java).notify(ID_DETECTION, n)
+        if (loud) startAlarm(context)
+    }
+
+    fun clearDetection(context: Context) {
+        stopAlarm()
+        context.getSystemService(NotificationManager::class.java).cancel(ID_DETECTION)
+    }
 
     fun checkin(context: Context, reason: String, extras: Map<String, String>) {
         val text = when (reason) {

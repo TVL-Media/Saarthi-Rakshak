@@ -425,7 +425,8 @@ export class SosService {
           sosId,
         });
       } else {
-        const text = `SOS from ${name} on Sarthi Rakshak. See their live location: ${url} If you can't reach them, call 112.`;
+        const how = await this.triggerNote(sosId);
+        const text = `SOS from ${name} on Sarthi Rakshak${how}. See their live location: ${url} If you can't reach them, call 112.`;
         await this.messages.sendSms(link.phone, {
           guardianId: link.guardianId,
           kind: 'sos',
@@ -434,6 +435,16 @@ export class SosService {
         });
       }
     }
+  }
+
+  /** " (started by crash detection)" for the SOS that were not raised by hand. */
+  private async triggerNote(sosId: string): Promise<string> {
+    const row = await this.database.db
+      .selectFrom('sos_events')
+      .select('trigger')
+      .where('id', '=', sosId)
+      .executeTakeFirst();
+    return TRIGGER_NOTES[row?.trigger ?? ''] ?? '';
   }
 
   private async tellGuardiansSafe(userId: string, sosId: string, isTest: boolean): Promise<void> {
@@ -451,6 +462,14 @@ export class SosService {
     }
   }
 }
+
+/** Added to the guardian SMS so they know the user may not have pressed SOS herself. */
+const TRIGGER_NOTES: Record<string, string> = {
+  crash: ' (started by crash detection)',
+  fall: ' (started by fall detection)',
+  shake: ' (started by shaking the phone)',
+  voice: ' (started by voice)',
+};
 
 /** A phone time: not more than a minute ahead, not older than a day. */
 function checkTime(value: string, field: string): Date {

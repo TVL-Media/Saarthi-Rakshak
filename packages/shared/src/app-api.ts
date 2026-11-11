@@ -274,7 +274,19 @@ export const InviteInfo = z.object({
 // A4 — SOS
 // ---------------------------------------------------------------------------------------------
 
-export const SosTrigger = z.enum(['button', 'widget', 'tile', 'checkin', 'journey']);
+export const SosTrigger = z.enum([
+  'button',
+  'widget',
+  'tile',
+  'checkin',
+  'journey',
+  // Phase 2
+  'shake',
+  'voice',
+  'crash',
+  'fall',
+  'discreet',
+]);
 export const SosStatus = z.enum(['active', 'ended', 'cancelled']);
 
 /** POST /v1/sos — a real SOS. Sending the same `id` again returns the same SOS. */
@@ -378,6 +390,8 @@ export const CheckinStatus = z.enum(['pending', 'fine', 'traffic_pause', 'sos', 
  * POST /v1/journeys — sending the same `id` again returns the same journey. Shared with all
  * accepted guardians (at least one needed). Arrival between 5 minutes and 12 hours from now.
  */
+export const JourneyMode = z.enum(['walk', 'cab', 'auto', 'bus', 'own_vehicle']);
+
 export const StartJourneyRequest = z.object({
   id: Id,
   destination: z.object({
@@ -389,6 +403,8 @@ export const StartJourneyRequest = z.object({
   expectedArrivalAt: DateTime,
   /** Route from Google Directions as an encoded polyline; optional (no route = no off-route check). */
   route: z.string().min(1).max(20_000).optional(),
+  /** How the user travels (Phase 2); a vehicle switches on drive mode if the user turned it on. */
+  mode: JourneyMode.optional(),
 });
 
 /** POST /v1/journeys/:id/end */
@@ -417,6 +433,7 @@ export const Journey = z.object({
   checkinsPausedUntil: DateTime.nullable(),
   /** Encoded polyline, if one was sent. */
   route: z.string().nullable(),
+  mode: JourneyMode.nullable(),
 });
 
 /**
@@ -625,6 +642,12 @@ export const LiveView = z.object({
     .nullable(),
   guardians: z.array(LiveGuardian),
   youAreResponding: z.boolean(),
+  /** How the SOS was raised (SOS only), e.g. "crash" → "Started by crash detection". */
+  trigger: SosTrigger.nullable(),
+  /** Photos taken at SOS start (SOS only): short-lived links, newest first. */
+  photos: z.array(
+    z.object({ camera: z.enum(['front', 'back']), url: z.string(), takenAt: DateTime }),
+  ),
 });
 
 // ---------------------------------------------------------------------------------------------

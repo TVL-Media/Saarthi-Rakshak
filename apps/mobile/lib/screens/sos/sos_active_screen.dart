@@ -12,6 +12,7 @@ import '../../theme.dart';
 import '../../widgets/common.dart';
 import '../../widgets/format.dart';
 import 'recordings_screen.dart';
+import 'sos_photos.dart';
 
 /// SOS active (design: "Live Location Sharing"). Status comes from the engine (works offline) and,
 /// when online, the guardians' status from the server.
@@ -176,6 +177,15 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
                 for (final g in guardians)
                   _GuardianRow(name: g.name, status: engine.simSmsSentTo.contains(g.id) ? 'Sent by SMS' : 'Sending…', responding: false),
             ]),
+          const SizedBox(height: 10),
+          SosPhotos(sosId: widget.sosId, active: !ended),
+          if (ended && state.feature('vault'))
+            OutlinedButton.icon(
+              key: const Key('sos-to-vault'),
+              onPressed: () => saveSosToVault(context, widget.sosId, startedAt),
+              icon: const Icon(Icons.lock_outline),
+              label: const Text('Save photos and recording to Mere Saboot'),
+            ),
           const SizedBox(height: 24),
           if (!ended) FilledButton(style: FilledButton.styleFrom(backgroundColor: AppColors.green), onPressed: _safe, child: const Text('I’m safe'))
           else FilledButton(onPressed: () => Navigator.of(context).popUntil((r) => r.isFirst), child: const Text('Back to Home')),
