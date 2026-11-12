@@ -44,19 +44,32 @@ class MapsService {
 
   Future<List<PlaceResult>> search(String text, {double? nearLat, double? nearLng}) async {
     if (text.trim().length < 2) return const [];
-    if (!available) {
-      if (!_device) return const [];
-      final found = await _engine.geocodeSearch(text.trim());
-      return [
-        for (final m in found)
-          PlaceResult(
-            (m['name'] as String?) ?? text.trim(),
-            (m['address'] as String?) ?? '',
-            (m['lat'] as num).toDouble(),
-            (m['lng'] as num).toDouble(),
-          ),
-      ];
+    if (!available) return _deviceSearch(text);
+    try {
+      return await _googleSearch(text, nearLat: nearLat, nearLng: nearLng);
+    } catch (e) {
+      // Google refused or failed (e.g. the API is not enabled for the key, or no internet to
+      // Google): the phone's own geocoder still finds the place.
+      if (!_device) rethrow;
+      return _deviceSearch(text);
     }
+  }
+
+  Future<List<PlaceResult>> _deviceSearch(String text) async {
+    if (!_device) return const [];
+    final found = await _engine.geocodeSearch(text.trim());
+    return [
+      for (final m in found)
+        PlaceResult(
+          (m['name'] as String?) ?? text.trim(),
+          (m['address'] as String?) ?? '',
+          (m['lat'] as num).toDouble(),
+          (m['lng'] as num).toDouble(),
+        ),
+    ];
+  }
+
+  Future<List<PlaceResult>> _googleSearch(String text, {double? nearLat, double? nearLng}) async {
     final res = await _http
         .post(
           Uri.parse('https://places.googleapis.com/v1/places:searchText'),
@@ -109,15 +122,28 @@ class MapsService {
   /// Area name for the Home screen, e.g. "Sector 62, Noida" (Geocoding API, or the phone's
   /// geocoder without a key). Null when not available.
   Future<String?> areaName(double lat, double lng) async {
-    if (!available) {
-      if (!_device) return null;
-      try {
-        final area = ((await _engine.geocodeReverse(lat, lng))?['area'] as String?)?.trim();
-        return area == null || area.isEmpty ? null : area;
-      } catch (_) {
-        return null;
-      }
+    if (!available) return _deviceArea(lat, lng);
+    String? google;
+    try {
+      google = await _googleArea(lat, lng);
+    } catch (_) {
+      google = null;
     }
+    // Google gave no name (refused, not enabled, offline): ask the phone's geocoder instead.
+    return google ?? await _deviceArea(lat, lng);
+  }
+
+  Future<String?> _deviceArea(double lat, double lng) async {
+    if (!_device) return null;
+    try {
+      final area = ((await _engine.geocodeReverse(lat, lng))?['area'] as String?)?.trim();
+      return area == null || area.isEmpty ? null : area;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _googleArea(double lat, double lng) async {
     final res = await _http
         .get(Uri.https('maps.googleapis.com', '/maps/api/geocode/json', {
           'latlng': '$lat,$lng',
