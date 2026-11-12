@@ -390,7 +390,7 @@ class MainActivity : FlutterFragmentActivity() {
                     call.argument<String>("lang") ?: "en",
                     call.argument<String>("phrase") ?: "",
                     call.argument<Int>("seconds") ?: 10,
-                ) { heard -> runOnUiThread { result.success(heard) } }
+                ) { status -> runOnUiThread { result.success(status) } }
             }
             "practiceShake" -> {
                 // "Try a practice shake": listens for up to [seconds]; never starts an SOS.

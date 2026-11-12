@@ -95,13 +95,52 @@ object VoiceSos {
 
     private fun grammar(phrase: String) = JSONArray().put(normalise(phrase)).put("[unk]").toString()
 
+    /**
+     * The recognizer only knows the phrase (plus "[unk]" for any other sound), so any result made
+     * only of the phrase's own words is the phrase. Words the model does not know are left out by
+     * Vosk, so the result can be shorter than the typed phrase: comparing whole strings would then
+     * never match.
+     */
     private fun matches(json: String, phrase: String): Boolean {
         val text = try {
-            JSONObject(json).optString("text", JSONObject(json).optString("partial"))
+            JSONObject(json).optString("text", "")
         } catch (e: Exception) {
             ""
         }
-        return text.isNotBlank() && normalise(text) == normalise(phrase)
+        if (text.isBlank() || text.contains("[unk]")) return false
+        val heard = normalise(text).split(' ').filter { it.isNotEmpty() }
+        val wanted = normalise(phrase).split(' ').filter { it.isNotEmpty() }.toSet()
+        return heard.isNotEmpty() && heard.all { it in wanted }
+    }
+
+    /** vosk_model_find_word is in libvosk but not in the Java wrapper: called through JNA. */
+    private interface VoskWords : com.sun.jna.Library {
+        fun vosk_model_find_word(model: com.sun.jna.Pointer, word: String): Int
+    }
+
+    private val voskWords: VoskWords? by lazy {
+        try {
+            com.sun.jna.Native.load("vosk", VoskWords::class.java)
+        } catch (e: Throwable) {
+            Log.w(TAG, "vosk_model_find_word not available", e)
+            null
+        }
+    }
+
+    /**
+     * Words of the phrase the loaded model does not know (e.g. "sarthi" in the English model).
+     * Empty if it cannot be checked.
+     */
+    private fun unknownWords(model: Model, phrase: String): List<String> {
+        val lib = voskWords ?: return emptyList()
+        val pointer = model.pointer ?: return emptyList()
+        return normalise(phrase).split(' ').filter {
+            it.isNotEmpty() && try {
+                lib.vosk_model_find_word(pointer, it) < 0
+            } catch (e: Throwable) {
+                false
+            }
+        }
     }
 
     /** Starts listening (journey only). Returns false if the model or microphone is missing. */
@@ -145,17 +184,40 @@ object VoiceSos {
      * "Test my phrase" / setup: listens up to [seconds] and calls [done] with true when the phrase
      * was heard. Only used while the app screen is open.
      */
-    fun test(context: Context, lang: String, phrase: String, seconds: Int, done: (Boolean) -> Unit) {
+    fun test(context: Context, lang: String, phrase: String, seconds: Int, done: (String) -> Unit) {
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
         var finished = false
-        val finish = { ok: Boolean ->
-            if (!finished) {
-                finished = true
-                stop()
-                done(ok)
+        fun finish(status: String) {
+            main.post {
+                if (!finished) {
+                    finished = true
+                    stop()
+                    done(status)
+                }
             }
         }
-        val ok = start(context, lang, phrase, onHeard = { finish(true) }, onStopped = { finish(false) })
-        if (!ok) return finish(false)
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ finish(false) }, seconds * 1000L)
+        when {
+            !micAllowed(context) -> return finish("no_mic")
+            !hasModel(context, lang) -> return finish("no_model")
+            phrase.isBlank() -> return finish("no_phrase")
+        }
+        // Loading the model takes a moment: never on the main thread.
+        Thread {
+            val loaded = try {
+                synchronized(this) { loadModel(context, lang) }
+            } catch (e: Exception) {
+                Log.w(TAG, "Voice model could not load", e)
+                return@Thread finish("no_model")
+            }
+            val unknown = unknownWords(loaded, phrase)
+            val words = normalise(phrase).split(' ').filter { it.isNotEmpty() }
+            // At least 2 words the model knows, so a single common word never starts an SOS.
+            if (unknown.isNotEmpty() && words.size - unknown.size < 2) return@Thread finish("unknown:" + unknown.joinToString(" "))
+            main.post {
+                if (finished) return@post
+                val ok = start(context, lang, phrase, onHeard = { finish("heard") }, onStopped = { finish("error") })
+                if (!ok) finish("error") else main.postDelayed({ finish("not_heard") }, seconds * 1000L)
+            }
+        }.start()
     }
 }

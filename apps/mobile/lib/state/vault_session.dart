@@ -194,7 +194,13 @@ class VaultSession extends ChangeNotifier {
   /// A new 12-word recovery phrase.
   String newPhrase() => bip39.generateMnemonic();
 
-  static String normalisePhrase(String phrase) => phrase.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
+  /// Lower case, one space between words. Numbers, commas, dots and new lines typed or pasted with
+  /// the words are ignored ("1. apple, 2. river" = "apple river"); the 12 words themselves are
+  /// letters only, so a correctly typed phrase gives exactly the same key as before.
+  static String normalisePhrase(String phrase) =>
+      phrase.toLowerCase().split(RegExp(r'[^a-z]+')).where((w) => w.isNotEmpty).join(' ');
+
+  static int wordCount(String phrase) => normalisePhrase(phrase).split(' ').where((w) => w.isNotEmpty).length;
 
   bool validPhrase(String phrase) => bip39.validateMnemonic(normalisePhrase(phrase));
 
@@ -394,10 +400,12 @@ class VaultSession extends ChangeNotifier {
   }
 
   Future<void> retryUploads() async {
-    for (final p in await pending()) {
-      try {
+    try {
+      for (final p in await pending()) {
         await _upload(p.id);
-      } catch (_) {}
+      }
+    } catch (_) {
+      // Tried again next time the vault opens.
     }
   }
 

@@ -224,34 +224,61 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
     return null;
   }
 
+  /// What happened on the last try (green), e.g. "Heard 2 of 3".
+  String? _ok;
+
   Future<void> _listen() async {
     final p = _phraseProblem();
     if (p != null) {
       setState(() => _error = p);
       return;
     }
-    if (!await Permission.microphone.request().isGranted) {
+    setState(() {
+      _error = null;
+      _ok = null;
+    });
+    final mic = await Permission.microphone.request();
+    if (!mic.isGranted) {
       setState(() => _error = 'Allow the microphone for Voice SOS.');
+      if (mic.isPermanentlyDenied) await openAppSettings();
       return;
     }
-    setState(() {
-      _listening = true;
-      _error = null;
-    });
-    final ok = await _state.engine.voiceTest(_lang, _phrase.text.trim(), seconds: 8).catchError((_) => false);
+    // The offline model is needed to listen: download it first if this phone does not have it.
+    if (_hasModel != true) {
+      await _download();
+      if (_hasModel != true) return;
+    }
+    if (!mounted) return;
+    setState(() => _listening = true);
+    final status = await _state.engine.voiceTest(_lang, _phrase.text.trim(), seconds: 8).catchError((_) => 'error');
     if (!mounted) return;
     setState(() {
       _listening = false;
-      if (ok) {
+      if (status == 'heard') {
         _heard++;
+        _ok = _heard >= 3 ? 'Heard 3 of 3. Voice SOS is ready.' : 'Heard $_heard of 3. Say it again.';
+      } else if (status.startsWith('unknown:')) {
+        _heard = 0;
+        _error = 'The ${_lang == 'hi' ? 'Hindi' : 'English'} voice model does not know: '
+            '${status.substring(8)}. Use 2 to 5 common ${_lang == 'hi' ? 'Hindi' : 'English'} words.';
       } else {
-        _error = 'Did not hear it. Say it clearly, at a normal volume.';
+        _error = switch (status) {
+          'not_heard' => 'Did not hear the phrase. Say it clearly, at a normal volume, within 8 seconds.',
+          'no_mic' => 'Allow the microphone for Voice SOS.',
+          'no_model' => 'The voice model is missing or damaged. Download it again.',
+          _ => 'Listening could not start. Close other apps using the microphone and try again.',
+        };
+        if (status == 'no_model') _hasModel = false;
       }
     });
-    if (_heard >= 3) {
-      await _state.saveVoicePhrase(_phrase.text.trim(), _lang);
-      await _state.saveTriggers({'voiceOn': true});
-      if (mounted) showInfo(context, 'Voice SOS is on during journeys.');
+    if (_heard >= 3 && status == 'heard') {
+      try {
+        await _state.saveVoicePhrase(_phrase.text.trim(), _lang);
+        await _state.saveTriggers({'voiceOn': true});
+        if (mounted) showInfo(context, 'Voice SOS is on during journeys.');
+      } catch (e) {
+        if (mounted) showError(context, e);
+      }
     }
   }
 
@@ -321,8 +348,11 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
         TextField(
           controller: _phrase,
           maxLength: 60,
-          onChanged: (_) => setState(() => _heard = 0),
-          decoration: const InputDecoration(hintText: 'e.g. "Sarthi help me now"'),
+          onChanged: (_) => setState(() {
+            _heard = 0;
+            _ok = null;
+          }),
+          decoration: InputDecoration(hintText: _lang == 'hi' ? 'उदाहरण: "मुझे बचाओ मदद करो"' : 'e.g. "please help me now"'),
         ),
         const SizedBox(height: 4),
         const SectionLabel('3. Say it 3 times'),
@@ -339,14 +369,28 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: !ready || _listening ? null : _listen,
+                key: const Key('voice-listen'),
+                onPressed: _listening || _downloading ? null : _listen,
                 icon: Icon(_listening ? Icons.hearing : Icons.mic),
-                label: Text(_listening ? 'Listening… say it now' : (_heard >= 3 ? 'Test again' : 'Tap, then say your phrase')),
+                label: Text(_listening
+                    ? 'Listening… say it now'
+                    : (_heard >= 3 ? 'Test again' : (ready ? 'Tap, then say your phrase' : 'Download and say your phrase'))),
               ),
             ),
+            if (_listening) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(color: AppColors.red),
+              const SizedBox(height: 6),
+              const Text('Listening for 8 seconds', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+            ],
           ]),
         ),
-        if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: AppColors.red))),
+        if (_ok != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: NoticeBox(key: const Key('voice-ok'), text: _ok!, icon: Icons.check_circle_outline, color: AppColors.green, background: AppColors.greenSoft),
+          ),
+        if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, key: const Key('voice-error'), style: const TextStyle(color: AppColors.red))),
         const SizedBox(height: 16),
         const NoticeBox(text: 'Voice SOS listens only while a journey is on. It may not work in a very noisy place, so keep the SOS button handy.'),
       ]),

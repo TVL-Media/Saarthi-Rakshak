@@ -139,6 +139,7 @@ void main() {
         'vaultEncrypt' => 'L${args['plain']}',
         'vaultDecrypt' => (args['locked'] as String).substring(1),
         'sha256Bytes' => 'a' * 64,
+        'vaultUnlock' => base64Encode(List.filled(32, 7)),
         'practiceShake' => true,
         'voiceHasModel' => false,
         _ => null,
@@ -343,5 +344,122 @@ void main() {
     expect(source.existsSync(), isFalse); // only the encrypted copy is kept
     expect((await state.vault.pending()).single.id, id);
     expect(state.vault.isUploading(id), isTrue);
+  });
+
+  /// The 12 words shown in the grid, by number.
+  Map<int, String> shownWords(WidgetTester tester) {
+    final texts = tester
+        .widgetList<Text>(find.descendant(of: find.byType(PhraseGrid), matching: find.byType(Text)))
+        .map((t) => t.data!)
+        .toList();
+    final words = <int, String>{};
+    for (var i = 0; i < texts.length - 1; i++) {
+      final m = RegExp(r'^(\d+)\.$').firstMatch(texts[i]);
+      if (m != null) words[int.parse(m.group(1)!)] = texts[i + 1];
+    }
+    return words;
+  }
+
+  testWidgets('New recovery phrase: a clear "saved" message before going back to Mere Saboot', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final tmp = Directory.systemTemp.createTempSync('phrase');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (c) async => tmp.path);
+    final state = makeState();
+    await tester.runAsync(() => state.vault.unlock());
+    expect(state.vault.isOpen, isTrue);
+    await tester.pumpWidget(host(
+      state,
+      Builder(
+        builder: (c) => TextButton(
+          onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const NewPhraseScreen())),
+          child: const Text('vault page'),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('vault page'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show my 12 words'));
+    await tester.pumpAndSettle();
+    final words = shownWords(tester);
+    await tester.tap(find.text('I have written them down'));
+    await tester.pumpAndSettle();
+    for (var k = 0; k < 3; k++) {
+      final n = int.parse(tester.widget<TextField>(find.byKey(Key('check-word-$k'))).decoration!.labelText!.replaceAll('Word ', ''));
+      await tester.enterText(find.byKey(Key('check-word-$k')), words[n]!);
+    }
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Save new phrase'));
+      for (var i = 0; i < 60 && !serverCalls.any((r) => r.url.path == '/v1/vault/setup'); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
+    });
+    // The button keeps its spinner behind the dialog, so pump a few frames instead of settling.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(find.text('New recovery phrase saved'), findsOneWidget);
+    expect(find.byType(NewPhraseScreen), findsOneWidget); // still here until OK
+    await tester.tap(find.text('OK'));
+    // The save ran outside the fake clock (Argon2id above), so its last step does too.
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    expect(find.text('New recovery phrase saved'), findsNothing);
+    expect(find.byType(NewPhraseScreen), findsNothing);
+    expect(find.text('vault page'), findsOneWidget);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('Restore: counts the words and says exactly what is wrong', (tester) async {
+    await tester.pumpWidget(host(makeState(), Scaffold(body: VaultRestoreView(onDone: () async {}))));
+    await tester.pumpAndSettle();
+    expect(find.text('0 of 12 words'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('restore-words')), '1. Apple, river\n3. stone');
+    await tester.pump();
+    expect(find.text('3 of 12 words'), findsOneWidget);
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    expect(find.text('You entered 3 words. Enter all 12, in order.'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('restore-words')), List.filled(12, 'zzz').join(' '));
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    expect(find.text('One or more words are not right. Check the spelling and the order.'), findsOneWidget);
+    // Typed with numbers and commas = the same phrase (the same key as before).
+    expect(VaultSession.normalisePhrase('1. Apple,  RIVER\n2. stone'), 'apple river stone');
+  });
+
+  testWidgets('Voice SOS: the button downloads the model if needed, listens and counts the phrase', (tester) async {
+    var hasModel = false;
+    final results = ['heard', 'unknown:sarthi'];
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('sarthi/engine'), (call) async {
+      calls.add(call.method);
+      switch (call.method) {
+        case 'voiceHasModel':
+          return hasModel;
+        case 'voiceDownload':
+          hasModel = true;
+          return true;
+        case 'voiceTest':
+          return results.removeAt(0);
+      }
+      return null;
+    });
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(host(makeState(), const VoiceSetupScreen()));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'please help me now');
+    await tester.tap(find.byKey(const Key('voice-listen')));
+    await tester.pumpAndSettle();
+    expect(calls, containsAllInOrder(['voiceDownload', 'voiceTest']));
+    expect(find.text('Heard 1 of 3. Say it again.'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('voice-listen')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('does not know: sarthi'), findsOneWidget);
   });
 }

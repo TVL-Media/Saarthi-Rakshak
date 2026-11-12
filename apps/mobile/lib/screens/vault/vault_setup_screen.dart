@@ -179,8 +179,15 @@ class _VaultRestoreViewState extends State<VaultRestoreView> {
 
   Future<void> _restore() async {
     final phrase = _words.text;
+    final count = VaultSession.wordCount(phrase);
+    if (count != 12) {
+      setState(() => _error = count == 0
+          ? 'Enter your 12 words, in order.'
+          : 'You entered $count word${count == 1 ? '' : 's'}. Enter all 12, in order.');
+      return;
+    }
     if (!_vault.validPhrase(phrase)) {
-      setState(() => _error = 'Enter all 12 words, in order, with a space between them.');
+      setState(() => _error = 'One or more words are not right. Check the spelling and the order.');
       return;
     }
     setState(() => _error = null);
@@ -209,7 +216,15 @@ class _VaultRestoreViewState extends State<VaultRestoreView> {
           maxLines: 4,
           autocorrect: false,
           enableSuggestions: false,
+          onChanged: (_) => setState(() => _error = null),
           decoration: const InputDecoration(hintText: 'word1 word2 word3 …'),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6, right: 4),
+          child: Text('${VaultSession.wordCount(_words.text)} of 12 words',
+              key: const Key('restore-count'),
+              textAlign: TextAlign.end,
+              style: const TextStyle(color: AppColors.muted, fontSize: 13)),
         ),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: AppColors.red))),
         const SizedBox(height: 20),
@@ -229,8 +244,25 @@ class NewPhraseScreen extends StatelessWidget {
         body: VaultSetupView(
           changeOnly: true,
           onDone: () async {
-            showInfo(context, 'New recovery phrase saved. The old words no longer work.');
-            Navigator.pop(context);
+            // A clear answer before leaving: the user must know the new words are the ones that count.
+            await showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (c) => AlertDialog(
+                icon: const Icon(Icons.check_circle_outline, color: AppColors.green, size: 40),
+                title: const Text('New recovery phrase saved'),
+                content: const Text(
+                    'Keep the 12 new words safe. The old words no longer work. Your evidence is unchanged.'),
+                actions: [
+                  FilledButton(
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                    onPressed: () => Navigator.pop(c),
+                    child: const Text('OK'),
+                  ),
+                ],
+              ),
+            );
+            if (context.mounted) Navigator.pop(context);
           },
         ),
       );

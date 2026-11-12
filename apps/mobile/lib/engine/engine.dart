@@ -190,9 +190,10 @@ class SafetyEngine {
   /// Downloads the offline voice model (progress comes as `voiceDownload` events).
   Future<void> voiceDownload(String lang) => _ch.invokeMethod('voiceDownload', {'lang': lang});
 
-  /// Listens up to [seconds] for the phrase; true if it was heard.
-  Future<bool> voiceTest(String lang, String phrase, {int seconds = 10}) async =>
-      (await _ch.invokeMethod<bool>('voiceTest', {'lang': lang, 'phrase': phrase, 'seconds': seconds})) ?? false;
+  /// Listens up to [seconds] for the phrase. Answers `heard`, `not_heard`, `no_mic`, `no_model`,
+  /// `no_phrase`, `unknown:<words>` (the model does not know enough of the words) or `error`.
+  Future<String> voiceTest(String lang, String phrase, {int seconds = 10}) async =>
+      (await _ch.invokeMethod<String>('voiceTest', {'lang': lang, 'phrase': phrase, 'seconds': seconds})) ?? 'error';
 
   /// Fingerprint or phone screen lock for Mere Saboot (also unlocks the Keystore vault key).
   /// False if cancelled; PlatformException `no_lock` if the phone has no screen lock.

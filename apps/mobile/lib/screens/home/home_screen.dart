@@ -281,7 +281,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         title: 'My day',
                         text: state.daily.enabled ? (state.daily.paused ? 'Paused' : 'Full-day location on') : 'Full-day location off',
                         on: state.daily.enabled && !state.daily.paused,
-                        onTap: () => _open(state.daily.enabled ? const TimelineScreen() : const DailyLocationScreen()),
+                        onTap: () => _open(const DailyLocationScreen()),
                       ),
                     ),
                   if (state.feature('daily_location') && state.feature('community')) const SizedBox(width: 12),

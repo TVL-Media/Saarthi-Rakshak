@@ -9,6 +9,9 @@ Each phase starts only when what it depends on is ready. **Do not build these ye
 ("Phase 2") and `docs/decisions.md`. Still needed before release: lawyer's review of the evidence tools, plan prices
 (everything is free for now), the Google Maps key, and Play Console declarations (background location, special-use
 foreground service, activity recognition, camera, SMS).
+Later (not built): more ways to restore Mere Saboot besides the 12 words, e.g. approval from a trusted
+second phone, or an encrypted backup protected by strong authentication. Never OTP-only (an SMS code alone
+must not open a vault of evidence).
 
 | Area | Feature | What it does |
 | --- | --- | --- |
