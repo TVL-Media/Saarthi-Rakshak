@@ -462,4 +462,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('does not know: sarthi'), findsOneWidget);
   });
+
+  testWidgets('Switches move at once on a slow server, and go back if the server refuses', (tester) async {
+    final answers = <Completer<http.Response>>[];
+    final api = ApiClient(
+      baseUrl: 'http://server',
+      client: MockClient((req) {
+        final c = Completer<http.Response>();
+        answers.add(c);
+        return c.future;
+      }),
+    )..token = 't';
+    final state = AppState(api: api)..me = Me.fromJson(fixtures.me);
+    await tester.pumpWidget(host(state, const DiscreetModeScreen()));
+    await tester.pump();
+
+    bool quiet() => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Quiet countdown')).value;
+    expect(quiet(), isFalse);
+    await tester.tap(find.text('Quiet countdown'));
+    await tester.pump();
+    expect(quiet(), isTrue); // one tap, no waiting for the server
+
+    // The server answers OK: stays on.
+    answers.removeAt(0).complete(http.Response(jsonEncode({...state.triggers.toJson(), 'quietCountdown': true}), 200));
+    await tester.pump();
+    expect(quiet(), isTrue);
+
+    // Turning it off is refused by the server: it goes back on and says why.
+    await tester.tap(find.text('Quiet countdown'));
+    await tester.pump();
+    expect(quiet(), isFalse);
+    answers.removeAt(0).complete(http.Response(jsonEncode({'error': 'invalid_input', 'message': 'Not allowed now.'}), 400));
+    await tester.pump();
+    await tester.pump();
+    expect(quiet(), isTrue);
+    expect(find.text('Not allowed now.'), findsOneWidget);
+  });
 }

@@ -16,18 +16,14 @@ class SosTriggersScreen extends StatefulWidget {
 
 class _SosTriggersScreenState extends State<SosTriggersScreen> {
   late final AppState _state = AppScope.read(context);
-  bool _saving = false;
-
+  /// The switch moves at once (see AppState.saveTriggers); only a refusal is shown here.
   Future<void> _save(Map<String, Object?> change) async {
-    setState(() => _saving = true);
     try {
       await _state.saveTriggers(change);
     } on ApiException catch (e) {
       if (mounted) showInfo(context, e.message);
     } catch (e) {
       if (mounted) showError(context, e);
-    } finally {
-      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -56,9 +52,7 @@ class _SosTriggersScreenState extends State<SosTriggersScreen> {
     final seconds = state.me?.rules['detection.countdown_seconds'] ?? 10;
     return Scaffold(
       appBar: AppBar(title: const Text('SOS triggers')),
-      body: AbsorbPointer(
-        absorbing: _saving,
-        child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
+      body: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
           const Text('More ways to start an SOS when you cannot reach the button. Every one starts a countdown first, so you can cancel a mistake.',
               style: TextStyle(color: AppColors.muted, fontSize: 15, height: 1.4)),
           const SizedBox(height: 16),
@@ -162,7 +156,6 @@ class _SosTriggersScreenState extends State<SosTriggersScreen> {
           ]),
           const NoticeBox(text: 'Sarthi Rakshak alerts your guardians and helps you call 112. It is not a 24/7 monitoring service.'),
         ]),
-      ),
     );
   }
 }

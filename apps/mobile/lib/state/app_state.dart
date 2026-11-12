@@ -260,9 +260,32 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Changes saved one after the other (newest last), so quick taps never cross on the server.
+  Future<void> _saving = Future.value();
+  int _triggerChanges = 0;
+  int _dailyChanges = 0;
+
+  /// The switch moves at once (and the phone uses the new setting at once); the server is told
+  /// right after. If the server refuses, the switch goes back and the error is shown.
   Future<void> saveTriggers(Map<String, Object?> change) async {
-    triggers = await api.saveSosTriggers(change);
-    await _configureEngine();
+    final before = triggers;
+    final n = ++_triggerChanges;
+    triggers = SosTriggerSettings.fromJson({...triggers.toJson(), ...change});
+    notifyListeners();
+    unawaited(_configureEngine());
+    final done = _saving.then((_) => api.saveSosTriggers(change));
+    _saving = done.then((_) {}, onError: (_) {});
+    try {
+      final saved = await done;
+      if (n == _triggerChanges) triggers = saved; // no newer tap since: take the server's copy
+    } catch (_) {
+      if (n == _triggerChanges) {
+        triggers = before;
+        unawaited(_configureEngine());
+      }
+      notifyListeners();
+      rethrow;
+    }
     notifyListeners();
   }
 
@@ -275,9 +298,33 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Same as [saveTriggers]: the switch moves at once, the server is told right after.
   Future<void> saveDaily(Map<String, Object?> change) async {
-    daily = await api.saveDailyTracking(change);
-    await _configureEngine();
+    final before = daily;
+    final n = ++_dailyChanges;
+    daily = DailyTracking(
+      enabled: change.containsKey('enabled') ? change['enabled']! as bool : daily.enabled,
+      pausedUntil: change.containsKey('pausedUntil')
+          ? (change['pausedUntil'] == null ? null : DateTime.parse(change['pausedUntil']! as String).toLocal())
+          : daily.pausedUntil,
+      retentionDays: (change['retentionDays'] as int?) ?? daily.retentionDays,
+      consentVersion: (change['consentVersion'] as String?) ?? daily.consentVersion,
+    );
+    notifyListeners();
+    unawaited(_configureEngine());
+    final done = _saving.then((_) => api.saveDailyTracking(change));
+    _saving = done.then((_) {}, onError: (_) {});
+    try {
+      final saved = await done;
+      if (n == _dailyChanges) daily = saved;
+    } catch (_) {
+      if (n == _dailyChanges) {
+        daily = before;
+        unawaited(_configureEngine());
+      }
+      notifyListeners();
+      rethrow;
+    }
     notifyListeners();
   }
 
