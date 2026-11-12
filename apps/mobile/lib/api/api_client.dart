@@ -136,7 +136,10 @@ class ApiClient {
   /// Downloads a file to disk.
   Future<void> downloadFile(String url, String path) async {
     final res = await _http.send(http.Request('GET', Uri.parse(url))).timeout(const Duration(minutes: 15));
-    if (res.statusCode != 200) throw ApiException(res.statusCode, 'download_failed', 'Could not download the file.');
+    if (res.statusCode == 404) {
+      throw ApiException(404, 'file_missing', 'This file is no longer on the server, so it cannot be opened.');
+    }
+    if (res.statusCode != 200) throw ApiException(res.statusCode, 'download_failed', 'Could not download the file. Please try again.');
     await res.stream.pipe(File(path).openWrite());
   }
 

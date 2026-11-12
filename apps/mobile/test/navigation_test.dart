@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -282,5 +283,41 @@ void main() {
     await t.tap(find.text('Save'));
     await settle(t);
     expect(find.text('Enter the phone number.'), findsOneWidget);
+  });
+
+  testWidgets('Back on Home: the first press asks, the second press within 2 s leaves the app', (t) async {
+    final calls = <String>[];
+    t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
+      calls.add(c.method);
+      return null;
+    });
+    await start(t, const Shell());
+    await t.binding.handlePopRoute();
+    await t.pump();
+    expect(find.text('Press back again to exit'), findsOneWidget);
+    expect(calls, isNot(contains('SystemNavigator.pop')));
+    await t.binding.handlePopRoute();
+    await t.pump();
+    expect(calls, contains('SystemNavigator.pop'));
+
+    // On another tab, Back goes to Home first (the app stays open).
+    calls.clear();
+    await t.pump(const Duration(seconds: 3));
+    await t.tap(find.text('Settings').last);
+    await settle(t);
+    await t.binding.handlePopRoute();
+    await settle(t);
+    expect(find.byType(SettingsScreen).hitTestable(), findsNothing);
+    expect(calls, isNot(contains('SystemNavigator.pop')));
+  });
+
+  testWidgets('Log out ends at once, even when the server does not answer', (t) async {
+    final api = ApiClient(baseUrl: 'http://s', client: MockClient((r) => Completer<http.Response>().future))..token = 't';
+    final state = AppState(api: api)
+      ..me = Me.fromJson(fixtures.me)
+      ..stage = Stage.home;
+    await t.runAsync(() => state.logout().timeout(const Duration(seconds: 3)));
+    expect(state.stage, Stage.login);
+    expect(api.token, isNull);
   });
 }

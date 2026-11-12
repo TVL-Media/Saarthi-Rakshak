@@ -280,6 +280,7 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
   String? _path;
   bool _recording = false;
   bool _saving = false;
+  Future<({double lat, double lng, String? place})?>? _place;
 
   @override
   void dispose() {
@@ -298,6 +299,7 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
       if (mounted) showInfo(context, 'Free up space to record.');
       return;
     }
+    _place = currentPlace(); // looked up while recording, ready when it stops
     final dir = await getTemporaryDirectory();
     _path = '${dir.path}/rec_${DateTime.now().millisecondsSinceEpoch}.m4a';
     await _rec.start(const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 64000, sampleRate: 22050, numChannels: 1), path: _path!);
@@ -320,7 +322,7 @@ class _AudioRecorderScreenState extends State<AudioRecorderScreen> {
     });
     try {
       if (path == null) return;
-      final place = await currentPlace();
+      final place = await (_place ?? currentPlace());
       await _state.vault.addFile(
         path: path,
         kind: 'audio',

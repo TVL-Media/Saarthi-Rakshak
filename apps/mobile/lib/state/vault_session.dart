@@ -283,8 +283,9 @@ class VaultSession extends ChangeNotifier {
     return dir;
   }
 
-  /// Encrypts a file on the phone, then uploads it. If the upload fails it stays encrypted on the
-  /// phone ("Waiting to upload") and is tried again later. Returns the item id.
+  /// Encrypts a file on the phone and returns at once (the item id); the upload runs in the
+  /// background. Until it is uploaded the item stays encrypted on the phone ("Waiting to upload")
+  /// and is tried again later. Saving never waits for the internet.
   Future<String> addFile({
     required String path,
     required String kind,
@@ -316,7 +317,8 @@ class VaultSession extends ChangeNotifier {
       'sosId': ?sosId,
     };
     await File('${(await _pendingDir()).path}/$id.json').writeAsString(jsonEncode(body));
-    await _upload(id);
+    notifyListeners();
+    unawaited(_upload(id));
     return id;
   }
 
@@ -337,27 +339,43 @@ class VaultSession extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Items being uploaded right now (never the same one twice at a time).
+  final Set<String> _uploading = {};
+
+  bool isUploading(String id) => _uploading.contains(id);
+
+  /// Why the last upload was refused for good (e.g. storage full), shown on the vault screen.
+  String? uploadProblem;
+
   Future<void> _upload(String id) async {
-    final dir = await _pendingDir();
-    final meta = File('${dir.path}/$id.json');
-    final enc = File('${dir.path}/$id.enc');
-    if (!await meta.exists() || !await enc.exists()) return;
-    final body = jsonDecode(await meta.readAsString()) as Map<String, dynamic>;
+    if (!_uploading.add(id)) return;
     try {
-      final link = await _app.api.evidenceUploadLink(id, await enc.length());
+      final dir = await _pendingDir();
+      final meta = File('${dir.path}/$id.json');
+      final enc = File('${dir.path}/$id.enc');
+      if (!meta.existsSync() || !enc.existsSync()) return;
+      final body = jsonDecode(await meta.readAsString()) as Map<String, dynamic>;
+      final link = await _app.api.evidenceUploadLink(id, enc.lengthSync());
       await _app.api.uploadFile(link, enc.path);
       await _app.api.saveEvidence(body);
-      await meta.delete();
-      await enc.delete();
-      notifyListeners();
+      meta.deleteSync();
+      enc.deleteSync();
+      uploadProblem = null;
     } on ApiException catch (e) {
-      // Refused for good (e.g. storage full): tell the user; keep the file for a retry later.
-      if (e.code == 'limit_reached') throw VaultProblem(e.message);
-      if (e.status == 400 || e.status == 409) throw VaultProblem(e.message);
-      notifyListeners();
+      // Refused (e.g. storage full): say why; the file stays encrypted here for a later retry.
+      if (e.code == 'limit_reached' || e.status == 400 || e.status == 409) uploadProblem = e.message;
     } catch (_) {
+      // Offline or slow network: tried again later.
+    } finally {
+      _uploading.remove(id);
       notifyListeners();
     }
+  }
+
+  /// The encrypted file of an item still waiting on this phone (null once uploaded).
+  Future<File?> _pendingFile(String id) async {
+    final f = File('${(await _pendingDir()).path}/$id.enc');
+    return f.existsSync() ? f : null;
   }
 
   /// Files encrypted on this phone and not uploaded yet.
@@ -393,13 +411,27 @@ class VaultSession extends ChangeNotifier {
     if (!dir.existsSync()) dir.createSync(recursive: true);
     final ext = (d.fileName ?? '').contains('.') ? d.fileName!.split('.').last : _ext(item.kind, d.mime);
     final out = File('${dir.path}/${item.id}.$ext');
-    if (await out.exists()) return out.path;
-    final enc = File('${dir.path}/${item.id}.enc');
-    await _app.api.downloadFile(await _app.api.evidenceDownloadUrl(item.id), enc.path);
+    if (out.existsSync()) return out.path;
     final fileKey = base64Encode(await _app.engine.vaultDecrypt(key, item.lockedFileKey));
-    await _app.engine.vaultDecryptFile(enc.path, out.path, fileKey);
-    await enc.delete();
-    await log('viewed', itemId: item.id, incidentId: item.incidentId);
+    // Decrypted into a temporary name first, so a failed or interrupted open never leaves a
+    // half-written file that would be shown next time.
+    final part = File('${out.path}.part');
+    final local = await _pendingFile(item.id);
+    final enc = File('${dir.path}/${item.id}.enc');
+    try {
+      if (local != null) {
+        // Not uploaded yet: open the encrypted copy on this phone (no download).
+        await _app.engine.vaultDecryptFile(local.path, part.path, fileKey);
+      } else {
+        await _app.api.downloadFile(await _app.api.evidenceDownloadUrl(item.id), enc.path);
+        await _app.engine.vaultDecryptFile(enc.path, part.path, fileKey);
+      }
+      part.renameSync(out.path);
+    } finally {
+      if (enc.existsSync()) enc.deleteSync();
+      if (part.existsSync()) part.deleteSync();
+    }
+    unawaited(log('viewed', itemId: item.id, incidentId: item.incidentId));
     return out.path;
   }
 

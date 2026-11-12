@@ -12,7 +12,6 @@ import '../../state/app_state.dart';
 import '../../state/vault_session.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
-import '../../widgets/format.dart';
 import 'evidence_screens.dart';
 import 'vault_setup_screen.dart';
 
@@ -52,18 +51,29 @@ String sizeText(int bytes) {
 }
 
 /// Where the user is now, for a new item ("Sector 62, Noida"); null if not allowed / not known.
+/// Never waits long: the phone's last known position (instant), a fresh one only if there is
+/// none (at most 4 s), and the place name at most 3 s. Saving evidence must not wait for GPS.
 Future<({double lat, double lng, String? place})?> currentPlace() async {
+  final cached = _lastPlace;
+  if (cached != null && DateTime.now().difference(cached.$1) < const Duration(minutes: 2)) return cached.$2;
   try {
     final perm = await Geolocator.checkPermission();
     if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return null;
     final pos = await Geolocator.getLastKnownPosition() ??
-        await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 8)));
-    final area = await MapsService().areaName(pos.latitude, pos.longitude).catchError((_) => null);
-    return (lat: pos.latitude, lng: pos.longitude, place: area);
+        await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(timeLimit: Duration(seconds: 4)));
+    final area = await MapsService()
+        .areaName(pos.latitude, pos.longitude)
+        .timeout(const Duration(seconds: 3), onTimeout: () => null)
+        .catchError((_) => null);
+    final place = (lat: pos.latitude, lng: pos.longitude, place: area);
+    _lastPlace = (DateTime.now(), place);
+    return place;
   } catch (_) {
     return null;
   }
 }
+
+(DateTime, ({double lat, double lng, String? place}))? _lastPlace;
 
 /// "Mere Saboot": the evidence vault (features 12–21). Opens with fingerprint, face or phone PIN
 /// every time and locks again after 2 minutes away. Only the user can open what is inside.
@@ -158,11 +168,33 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
     }
   }
 
+  bool _loading = false;
+  bool _loadAgain = false;
+
+  /// Reloads the lists; calls that arrive while loading are merged into one more load.
   Future<void> _load() async {
+    if (_loading) {
+      _loadAgain = true;
+      return;
+    }
+    _loading = true;
     try {
-      final items = await _state.api.evidence();
-      final incidents = await _state.api.incidents();
-      final usage = await _state.api.vaultUsage();
+      do {
+        _loadAgain = false;
+        await _loadOnce();
+      } while (_loadAgain && mounted);
+    } finally {
+      _loading = false;
+    }
+  }
+
+  Future<void> _loadOnce() async {
+    try {
+      // The three lists at the same time (one wait, not three).
+      final lists = await Future.wait<Object>([_state.api.evidence(), _state.api.incidents(), _state.api.vaultUsage()]);
+      final items = lists[0] as List<EvidenceItem>;
+      final incidents = lists[1] as List<Incident>;
+      final usage = lists[2] as VaultUsage;
       final pending = await _vault.pending();
       for (final i in incidents) {
         if (!_incidentDetails.containsKey(i.id)) _incidentDetails[i.id] = await _vault.incidentDetails(i);
@@ -221,6 +253,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
       if (mounted) showInfo(context, 'Free up space to record.');
       return;
     }
+    unawaited(currentPlace()); // looked up while the camera is open
     final picker = ImagePicker();
     final file = video
         ? await picker.pickVideo(source: ImageSource.camera, maxDuration: const Duration(minutes: 10))
@@ -335,6 +368,10 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
           NoticeBox(text: _error!, icon: Icons.error_outline, color: AppColors.red, background: AppColors.redSoft),
           const SizedBox(height: 16),
         ],
+        if (_vault.uploadProblem != null) ...[
+          NoticeBox(text: _vault.uploadProblem!, icon: Icons.cloud_off_outlined),
+          const SizedBox(height: 16),
+        ],
         const SectionLabel('Add evidence'),
         GridView.count(
           crossAxisCount: 3,
@@ -363,8 +400,12 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                 MenuRow(
                   icon: evidenceIcon(p.kind),
                   title: evidenceLabel(p.kind),
-                  subtitle: '${dateTime(p.capturedAt)} · encrypted on this phone',
-                  trailing: const Icon(Icons.cloud_upload_outlined, color: AppColors.muted),
+                  subtitle: _vault.isUploading(p.id)
+                      ? 'Saved on this phone · uploading…'
+                      : 'Saved on this phone · uploads when online',
+                  trailing: _vault.isUploading(p.id)
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.cloud_upload_outlined, color: AppColors.muted),
                   onTap: () async {
                     await _vault.retryUploads();
                     await _load();

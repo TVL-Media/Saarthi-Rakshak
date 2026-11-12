@@ -180,9 +180,10 @@ class AppState extends ChangeNotifier {
     await _loadLocalPhoto();
     await _loadNotices();
     await engine.setSession(api.baseUrl, token, m.firstName.isEmpty ? 'Someone' : m.firstName);
-    await refreshGuardians(quiet: true);
     if (m.consentGiven) await _saveSignUpName();
     stage = await _stageFor(me!);
+    // Loaded in the background: the next screen opens at once (the stage needs only `me`).
+    unawaited(refreshGuardians(quiet: true).catchError((_) {}));
     unawaited(registerDevice());
     unawaited(syncPhase2());
   }
@@ -381,12 +382,11 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Logs out on this phone at once; the server is told in the background (it may be slow or
+  /// asleep, and ending locally is enough: the old token is never used again).
   Future<void> logout() async {
-    try {
-      await api.logout();
-    } on ApiException {
-      // ending locally is enough
-    }
+    // The request takes the current token now, before it is cleared below.
+    unawaited(api.logout().timeout(const Duration(seconds: 15)).catchError((_) {}));
     await _endLocally();
   }
 

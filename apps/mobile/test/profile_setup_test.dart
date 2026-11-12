@@ -82,6 +82,30 @@ void main() {
     expect(engineCalls, contains('askBatteryOptimisationOff'));
   });
 
+  testWidgets('SMS blocked by Android (app from an APK file): the steps to allow it are shown', (tester) async {
+    // Android answers "denied" for SMS without showing any dialog (restricted setting).
+    final m = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    m.setMockMethodCallHandler(const MethodChannel('flutter.baseflow.com/permissions/methods'), (c) async {
+      switch (c.method) {
+        case 'checkPermissionStatus':
+          return c.arguments == 13 ? 0 : 1;
+        case 'requestPermissions':
+          return {for (final p in (c.arguments as List).cast<int>()) p: p == 13 ? 0 : 1};
+        default:
+          return true;
+      }
+    });
+    await tester.binding.setSurfaceSize(const Size(412, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(host(makeState(), const SafetySetupScreen()));
+    await tester.pumpAndSettle();
+    // Missing here: SMS, then the battery setting below it; the first Allow is the SMS row.
+    await tester.tap(find.text('Allow').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Allow SMS in settings'), findsOneWidget);
+    expect(find.textContaining('Allow restricted settings'), findsOneWidget);
+  });
+
   testWidgets('My Profile saves the extra details; empty ones are cleared', (tester) async {
     await tester.binding.setSurfaceSize(const Size(412, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));

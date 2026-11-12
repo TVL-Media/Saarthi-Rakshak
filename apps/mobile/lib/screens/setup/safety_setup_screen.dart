@@ -83,8 +83,41 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
 
   Future<void> _ask(Permission p) async {
     final status = await p.request();
-    if (status.isPermanentlyDenied) await openAppSettings();
+    if (p == Permission.sms && !status.isGranted) {
+      await _smsHelp();
+    } else if (status.isPermanentlyDenied) {
+      await openAppSettings();
+    }
     await _check();
+  }
+
+  /// Android 13+ blocks SMS permission for apps installed from an APK file ("restricted
+  /// setting"): no dialog appears. The user has to allow restricted settings once in App info.
+  /// (Apps installed from the Play Store are not affected.)
+  Future<void> _smsHelp() async {
+    if (!mounted) return;
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Allow SMS in settings'),
+        content: const Text(
+          'Android blocks SMS permission for apps installed from an APK file. To allow it:\n\n'
+          '1. Tap Open settings (App info for Sarthi Rakshak).\n'
+          '2. Tap ⋮ (top right) → Allow restricted settings, and confirm.\n'
+          '3. Go to Permissions → SMS → Allow.\n'
+          '4. Come back to this screen.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Not now')),
+          FilledButton(
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
+    if (open ?? false) await openAppSettings();
   }
 
   bool _allowingAll = false;
@@ -109,8 +142,13 @@ class _SafetySetupScreenState extends State<SafetySetupScreen> with WidgetsBindi
       await ask(Permission.notification, _notifications);
       await ask(Permission.microphone, _microphone);
       await ask(Permission.sms, _sms);
+      final smsBlocked = !await Permission.sms.isGranted;
       if (!_battery) await engine.askBatteryOptimisationOff();
-      if (needsSettings) await openAppSettings();
+      if (smsBlocked) {
+        await _smsHelp(); // opens App info itself, where the other permissions can be turned on too
+      } else if (needsSettings) {
+        await openAppSettings();
+      }
     } catch (_) {
       // A dialog that could not open: the rows below still show what is missing.
     } finally {

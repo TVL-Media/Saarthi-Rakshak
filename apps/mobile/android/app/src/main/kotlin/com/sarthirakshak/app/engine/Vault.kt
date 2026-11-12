@@ -150,55 +150,64 @@ object Vault {
     private fun aad(index: Int, last: Boolean) = ByteBuffer.allocate(5).putInt(index).put(if (last) 1 else 0).array()
 
     /**
-     * Encrypts [input] to [output] with [fileKeyB64]. Returns the SHA-256 of the original (the
-     * tamper-evident fingerprint) and the encrypted size.
+     * Encrypts [input] to [output] with [fileKeyB64] in one pass (the file is read once). Returns
+     * the SHA-256 of the original (the tamper-evident fingerprint) and the encrypted size.
      */
     fun encryptFile(input: File, output: File, fileKeyB64: String): Pair<String, Long> {
-        val fingerprint = sha256(input)
+        val md = MessageDigest.getInstance("SHA-256")
         val base = ByteArray(12).also { random.nextBytes(it) }
         val key = aes(fileKeyB64)
-        DataOutputStream(output.outputStream().buffered()).use { out ->
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        // Two buffers: the chunk being encrypted and the next one (to know which chunk is last).
+        var buf = ByteArray(CHUNK)
+        var next = ByteArray(CHUNK)
+        DataOutputStream(output.outputStream().buffered(256 * 1024)).use { out ->
             out.write(MAGIC)
             out.write(base)
-            input.inputStream().buffered().use { inp ->
-                val buf = ByteArray(CHUNK)
-                var index = 0
+            input.inputStream().use { inp ->
                 var n = inp.readNBytesCompat(buf)
+                var index = 0
                 while (true) {
-                    val next = ByteArray(CHUNK)
                     val m = if (n == CHUNK) inp.readNBytesCompat(next) else 0
                     val last = m <= 0
-                    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                    md.update(buf, 0, n)
                     cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(128, chunkNonce(base, index)))
                     cipher.updateAAD(aad(index, last))
-                    val enc = cipher.doFinal(buf, 0, n.coerceAtLeast(0))
+                    val enc = cipher.doFinal(buf, 0, n)
                     out.writeInt(enc.size)
                     out.write(enc)
                     if (last) break
-                    System.arraycopy(next, 0, buf, 0, m)
+                    val t = buf
+                    buf = next
+                    next = t
                     n = m
                     index++
                 }
             }
         }
+        val fingerprint = md.digest().joinToString("") { "%02x".format(it) }
         return fingerprint to output.length()
     }
 
     /** Decrypts a file made by [encryptFile]; fails if anything was changed, cut or reordered. */
     fun decryptFile(input: File, output: File, fileKeyB64: String) {
         val key = aes(fileKeyB64)
-        DataInputStream(input.inputStream().buffered()).use { inp ->
+        val total = input.length()
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        DataInputStream(input.inputStream().buffered(256 * 1024)).use { inp ->
             val magic = ByteArray(4).also { inp.readFully(it) }
             require(magic.contentEquals(MAGIC)) { "Not a vault file" }
             val base = ByteArray(12).also { inp.readFully(it) }
-            output.outputStream().buffered().use { out ->
+            var read = 16L
+            output.outputStream().buffered(256 * 1024).use { out ->
                 var index = 0
                 while (true) {
                     val size = inp.readInt()
                     require(size in 16..(CHUNK + 16)) { "Damaged vault file" }
                     val enc = ByteArray(size).also { inp.readFully(it) }
-                    val last = inp.available() == 0
-                    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                    read += 4 + size
+                    // Last chunk = the end of the file (counted, not guessed from available()).
+                    val last = read >= total
                     cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, chunkNonce(base, index)))
                     cipher.updateAAD(aad(index, last))
                     out.write(cipher.doFinal(enc))

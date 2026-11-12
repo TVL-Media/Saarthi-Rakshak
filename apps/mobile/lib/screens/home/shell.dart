@@ -41,15 +41,33 @@ class _ShellState extends State<Shell> {
       const GuardiansScreen(),
       const SettingsScreen(),
     ];
-    // Back on another tab goes to Home first; only Back on Home leaves the app.
+    // Back on another tab goes to Home first. On Home, Back must be pressed twice (within 2 s) to
+    // leave the app, so a single accidental press never closes it.
     return PopScope(
-      canPop: _tab == 0,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _tab != 0) setState(() => _tab = 0);
+        if (didPop) return;
+        if (_tab != 0) {
+          setState(() => _tab = 0);
+          return;
+        }
+        final now = DateTime.now();
+        if (_backAt != null && now.difference(_backAt!) < const Duration(seconds: 2)) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          SystemNavigator.pop();
+          return;
+        }
+        _backAt = now;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('Press back again to exit'), duration: Duration(seconds: 2)));
       },
       child: _scaffold(pages),
     );
   }
+
+  /// When Back was last pressed on Home.
+  DateTime? _backAt;
 
   Widget _scaffold(List<Widget> pages) {
     return Scaffold(

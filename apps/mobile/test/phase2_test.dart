@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -306,5 +308,40 @@ void main() {
         .catchError((_) => throw StateError('ignored'))
         .then((_) {}, onError: (_) {});
     expect(lastBody('POST', '/v1/journeys')['mode'], 'cab');
+  });
+
+  test('Mere Saboot saves at once; the upload runs in the background (no waiting for the internet)', () async {
+    final tmp = Directory.systemTemp.createTempSync('vault');
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (c) async => tmp.path);
+    messenger.setMockMethodCallHandler(const MethodChannel('sarthi/engine'), (call) async {
+      final args = (call.arguments as Map?) ?? const {};
+      switch (call.method) {
+        case 'vaultUnlock':
+          return base64Encode(List.filled(32, 7));
+        case 'vaultNewKey':
+          return base64Encode(List.filled(32, 9));
+        case 'vaultEncrypt':
+          return 'L${args['plain']}';
+        case 'vaultEncryptFile':
+          File(args['output'] as String).writeAsBytesSync(List.filled(64, 1));
+          return {'sha256': 'a' * 64, 'size': 64};
+      }
+      return null;
+    });
+    // The server never answers (a very slow network).
+    final never = Completer<http.Response>();
+    final api = ApiClient(baseUrl: 'http://server', client: MockClient((req) => never.future))..token = 't';
+    final state = AppState(api: api)..me = Me.fromJson(fixtures.me);
+    expect(await state.vault.unlock(), isTrue);
+    final source = File('${tmp.path}/rec.m4a')..writeAsBytesSync(List.filled(100, 2));
+
+    final id = await state.vault
+        .addFile(path: source.path, kind: 'audio', details: ItemDetails(note: 'x'), deleteSource: true)
+        .timeout(const Duration(seconds: 5));
+
+    expect(source.existsSync(), isFalse); // only the encrypted copy is kept
+    expect((await state.vault.pending()).single.id, id);
+    expect(state.vault.isUploading(id), isTrue);
   });
 }
