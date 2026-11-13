@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   createAdminForTest,
+  createEvidenceForTest,
   createUserForTest,
   resetForBrowserTests,
   userStatusForTest,
@@ -118,4 +119,25 @@ test('Delete data: says what is deleted and kept, needs a reason, refused while 
   await expect(page).toHaveURL(/\/users$/);
   await expect(page.getByRole('row', { name: /Done/ })).toHaveCount(0);
   expect(await userStatusForTest(done)).toBeUndefined();
+});
+
+test('profile: evidence shows as recorded and encrypted, with no way to open it', async ({
+  page,
+}) => {
+  const id = await createUserForTest('+919812344521', { name: 'Priya', complete: true });
+  await createEvidenceForTest(id);
+  await openUsers(page, 'support_admin');
+  await page.getByRole('row', { name: /Priya/ }).click();
+  await expect(page.getByText('Mere Saboot (evidence)')).toBeVisible();
+  await expect(page.getByText("Encrypted on the user's phone")).toBeVisible();
+  const row = page.getByRole('row', { name: /Audio/ });
+  await expect(row.getByText('2.3 MB')).toBeVisible();
+  await expect(row.getByText('abababababab…')).toBeVisible();
+  await expect(row.getByText('Encrypted')).toBeVisible();
+  // No download, play or open anywhere for evidence.
+  await expect(page.getByRole('button', { name: /download|play|open/i })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /download|play/i })).toHaveCount(0);
+  // Triggers are shown as on/off only.
+  await expect(page.getByText('Shake to SOS')).toBeVisible();
+  await expect(page.getByText('Always')).toBeVisible();
 });

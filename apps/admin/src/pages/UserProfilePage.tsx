@@ -7,6 +7,7 @@ import { useMe } from '../auth/session';
 import { EmptyState, ErrorState, LoadingState, SectionCard } from '../components/states';
 import { formatTime } from '../format';
 import { PageHead } from '../layout/AppLayout';
+import { UserPhase2Cards } from './Phase2Pages';
 
 interface Profile {
   id: string;
@@ -267,6 +268,8 @@ function ProfileView({ profile }: { profile: Profile }) {
           }}
         />
       </SectionCard>
+
+      <UserPhase2Cards userId={profile.id} />
 
       <SectionCard title="Actions">
         <div className="sr-row-actions sr-wrap">

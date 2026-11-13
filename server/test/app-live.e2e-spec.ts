@@ -221,6 +221,7 @@ describe('GET /g/l/:code (journey)', () => {
         destinationLabel: 'Home',
         destination: { lat: 28.62, lng: 77.36 },
         route: '_p~iF~ps|U_ulLnnqC',
+        mode: null, // the phone did not say how she travels
       },
     });
     await api().post(`/g/l/${code}/responding`).expect(409);

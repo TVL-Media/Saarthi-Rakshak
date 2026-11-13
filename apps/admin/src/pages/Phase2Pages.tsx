@@ -20,9 +20,10 @@ import { api, ApiError } from '../api';
 import { EmptyState, ErrorState, LoadingState, SectionCard } from '../components/states';
 import { formatTimeShort } from '../format';
 
-// Phase 2 admin screens: Community moderation, Rakshak applications, Plans & Subscriptions and
-// the Phase 2 counts on Reports. There is no screen for evidence or full-day location: admins
-// only ever see counts of those.
+// Phase 2 admin screens: Community moderation, Rakshak applications, Plans & Subscriptions, the
+// Phase 2 counts on Reports, and the Phase 2 part of a user's profile. Evidence: admins see only
+// that it was recorded (type, time, size, fingerprint), never what is in it: it is encrypted on
+// the user's phone and only they can open it. Full-day location: on / off only, never where.
 
 const errorText = (e: unknown) =>
   e instanceof ApiError
@@ -906,5 +907,229 @@ export function Phase2Stats() {
         </>
       )}
     </SectionCard>
+  );
+}
+
+// ---- User profile: Phase 2 ------------------------------------------------------------------------
+
+interface UserPhase2 {
+  sosTriggers: {
+    shakeMode: 'off' | 'journey' | 'always';
+    voiceOn: boolean;
+    driveMode: boolean;
+    fallOn: boolean;
+    quietCountdown: boolean;
+  };
+  fullDayLocation: { enabled: boolean; paused: boolean; retentionDays: number };
+  evidence: {
+    vaultSetUpAt: string | null;
+    items: number;
+    sizeBytes: number;
+    byKind: Record<string, number>;
+    incidents: Record<string, number>;
+    latest: {
+      id: string;
+      kind: string;
+      sizeBytes: number;
+      sha256: string;
+      capturedAt: string;
+      receivedAt: string;
+      inIncident: boolean;
+      uploaded: boolean;
+    }[];
+  };
+  rakshak: { status: string; area: string; appliedAt: string } | null;
+  communityReports: Record<string, number>;
+}
+
+const EVIDENCE_KIND: Record<string, string> = {
+  audio: 'Audio',
+  video: 'Video',
+  photo: 'Photo',
+  file: 'File',
+  detail: 'Details (number, link…)',
+  report: 'Report (PDF)',
+};
+const SHAKE: Record<UserPhase2['sosTriggers']['shakeMode'], string> = {
+  off: 'Off',
+  journey: 'On journeys',
+  always: 'Always',
+};
+const RAKSHAK_STATUS: Record<string, string> = {
+  under_review: 'Under review',
+  approved: 'Approved',
+  rejected: 'Not approved',
+  withdrawn: 'Withdrawn',
+};
+
+export function bytesText(n: number): string {
+  if (n >= 1024 * 1024 * 1024) return `${(n / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n === 0) return '—';
+  return `${Math.ceil(n / 1024)} KB`;
+}
+
+function OnOff({ on, label }: { on: boolean; label: string }) {
+  return (
+    <div className="sr-status-row">
+      <span>{label}</span>
+      {on ? <span className="sr-badge ok">On</span> : <span className="sr-badge off">Off</span>}
+    </div>
+  );
+}
+
+/** The Phase 2 cards on a user's profile (Users → a user). */
+export function UserPhase2Cards({ userId }: { userId: string }) {
+  const q = useQuery({
+    queryKey: ['user-phase2', userId],
+    queryFn: () => api<UserPhase2>(`/admin/users/${userId}/phase2`),
+  });
+  if (q.isLoading) return <LoadingState />;
+  if (q.isError || !q.data) return <ErrorState onRetry={() => void q.refetch()} />;
+  const d = q.data;
+  const ev = d.evidence;
+  const kinds = Object.entries(ev.byKind)
+    .map(([k, n]) => `${EVIDENCE_KIND[k] ?? k}: ${n}`)
+    .join(' · ');
+  const incidents = Object.values(ev.incidents).reduce((s, n) => s + n, 0);
+  const reports = Object.entries(d.communityReports)
+    .map(([s, n]) => `${s}: ${n}`)
+    .join(' · ');
+
+  return (
+    <>
+      <div className="sr-cols">
+        <SectionCard title="SOS triggers">
+          <div className="sr-status-list">
+            <div className="sr-status-row">
+              <span>Shake to SOS</span>
+              <span className={`sr-badge ${d.sosTriggers.shakeMode === 'off' ? 'off' : 'ok'}`}>
+                {SHAKE[d.sosTriggers.shakeMode]}
+              </span>
+            </div>
+            <OnOff on={d.sosTriggers.voiceOn} label="Voice SOS" />
+            <OnOff on={d.sosTriggers.driveMode} label="Drive mode (crash)" />
+            <OnOff on={d.sosTriggers.fallOn} label="Fall detection" />
+            <OnOff on={d.sosTriggers.quietCountdown} label="Quiet countdown" />
+          </div>
+        </SectionCard>
+        <SectionCard title="Other features">
+          <div className="sr-status-list">
+            <div className="sr-status-row">
+              <span>Full-day location</span>
+              <span
+                className={`sr-badge ${d.fullDayLocation.enabled && !d.fullDayLocation.paused ? 'ok' : 'off'}`}
+              >
+                {!d.fullDayLocation.enabled
+                  ? 'Off'
+                  : d.fullDayLocation.paused
+                    ? 'Paused'
+                    : `On · kept ${d.fullDayLocation.retentionDays} days`}
+              </span>
+            </div>
+            <div className="sr-status-row">
+              <span>Rakshak application</span>
+              <span>
+                {d.rakshak
+                  ? `${RAKSHAK_STATUS[d.rakshak.status] ?? d.rakshak.status} · ${d.rakshak.area}`
+                  : 'None'}
+              </span>
+            </div>
+            <div className="sr-status-row">
+              <span>Community reports</span>
+              <span>{reports || 'None'}</span>
+            </div>
+          </div>
+          <p className="sr-muted">Where the user goes is never shown to admins.</p>
+        </SectionCard>
+      </div>
+
+      <SectionCard title="Mere Saboot (evidence)">
+        <Alert
+          type="info"
+          showIcon
+          message="Encrypted on the user's phone"
+          description="You can see that evidence was recorded, but not what is in it. Only the user who recorded it can open it: the app and the server never have the key."
+          style={{ marginBottom: 16 }}
+        />
+        <Descriptions
+          size="small"
+          column={{ xs: 1, md: 2 }}
+          items={[
+            {
+              key: 'vault',
+              label: 'Vault',
+              children: ev.vaultSetUpAt
+                ? `Set up ${formatTimeShort(ev.vaultSetUpAt)}`
+                : 'Not set up',
+            },
+            { key: 'items', label: 'Items', children: ev.items },
+            { key: 'size', label: 'Storage used', children: bytesText(ev.sizeBytes) },
+            { key: 'incidents', label: 'Incidents', children: incidents },
+            { key: 'kinds', label: 'By type', children: kinds || '—' },
+          ]}
+        />
+        <Table
+          className="sr-table"
+          rowKey="id"
+          size="small"
+          style={{ marginTop: 12 }}
+          pagination={false}
+          scroll={{ x: 'max-content' }}
+          dataSource={ev.latest}
+          columns={[
+            {
+              title: 'Type',
+              key: 'kind',
+              render: (_: unknown, r: UserPhase2['evidence']['latest'][number]) =>
+                EVIDENCE_KIND[r.kind] ?? r.kind,
+            },
+            {
+              title: 'Recorded',
+              key: 'captured',
+              render: (_: unknown, r: UserPhase2['evidence']['latest'][number]) => (
+                <span className="sr-mono">{formatTimeShort(r.capturedAt)}</span>
+              ),
+            },
+            {
+              title: 'Received by server',
+              key: 'received',
+              render: (_: unknown, r: UserPhase2['evidence']['latest'][number]) => (
+                <span className="sr-mono">{formatTimeShort(r.receivedAt)}</span>
+              ),
+            },
+            {
+              title: 'Size',
+              key: 'size',
+              render: (_: unknown, r: UserPhase2['evidence']['latest'][number]) =>
+                bytesText(r.sizeBytes),
+            },
+            {
+              title: 'Fingerprint (SHA-256)',
+              key: 'sha',
+              render: (_: unknown, r: UserPhase2['evidence']['latest'][number]) => (
+                <span className="sr-mono" title={r.sha256}>
+                  {r.sha256.slice(0, 12)}…
+                </span>
+              ),
+            },
+            {
+              title: 'Content',
+              key: 'content',
+              render: () => <span className="sr-badge off">Encrypted</span>,
+            },
+          ]}
+          locale={{
+            emptyText: (
+              <EmptyState
+                icon="list"
+                title="No evidence"
+                text="Items the user saves appear here (content stays encrypted)."
+              />
+            ),
+          }}
+        />
+      </SectionCard>
+    </>
   );
 }

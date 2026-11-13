@@ -398,7 +398,7 @@ The SMS links open the guardian pages (`apps/guardian-web`): `GUARDIAN_WEB_URL/i
 
 - `LiveView` = `{ kind, status, outcome, person: { firstName, phone, bloodGroup }, location, batteryPct,
   lostContact, startedAt, endedAt, journey, guardians: [{ firstName, status, isYou }], youAreResponding }`.
-  `phone` and `bloodGroup` only for an SOS. `journey` = `{ destinationLabel, destination, expectedArrivalAt, route }`.
+  `phone` and `bloodGroup` only for an SOS. `journey` = `{ destinationLabel, destination, expectedArrivalAt, route, mode }` (`mode`: how the person travels, or null).
 - The first open of a link is recorded (`opened`) and pushed to the user; "I'm responding" too, and it stops the
   "no guardian responded" reminder.
 - Live updates: Socket.IO at path `/g/socket.io`, connect with `auth: { code }`. Events: `ready` (joined),

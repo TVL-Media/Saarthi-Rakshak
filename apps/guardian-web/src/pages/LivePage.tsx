@@ -19,6 +19,15 @@ type State =
   | { step: 'error'; message: string }
   | { step: 'live'; view: LiveView };
 
+/** How the person said they travel (journey only). */
+const TRAVEL_MODE: Record<NonNullable<NonNullable<LiveView['journey']>['mode']>, string> = {
+  walk: 'Walking',
+  cab: 'Cab',
+  auto: 'Auto',
+  bus: 'Bus / Metro',
+  own_vehicle: 'Own vehicle',
+};
+
 /** /l/<code>: live location during an SOS or a shared journey. */
 export function LivePage({ code }: { code: string }) {
   const [state, setState] = useState<State>({ step: 'loading' });
@@ -156,6 +165,7 @@ export function LivePage({ code }: { code: string }) {
         <Fact label="Battery">{view.batteryPct != null ? `${view.batteryPct}%` : '—'}</Fact>
         {isSos && <Fact label="Blood group">{view.person.bloodGroup ?? 'Not given'}</Fact>}
         {view.journey && <Fact label="Expected by">{clock(view.journey.expectedArrivalAt)}</Fact>}
+        {view.journey?.mode && <Fact label="Travelling by">{TRAVEL_MODE[view.journey.mode]}</Fact>}
       </section>
 
       {isSos && view.photos.length > 0 && (

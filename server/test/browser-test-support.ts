@@ -167,6 +167,40 @@ export async function createUserForTest(
  * an opened link and a location gap; a TEST SOS; a journey that turned into an SOS; a journey
  * with lost contact; an SOS from a user who deleted their data.
  */
+/** One encrypted evidence item (only metadata is readable) and Shake "always" for a user. */
+export async function createEvidenceForTest(userId: string): Promise<void> {
+  await withTestDatabase(async (db) => {
+    await db
+      .insertInto('vault_keys')
+      .values({
+        user_id: userId,
+        locked_key: 'LOCKED',
+        kdf: JSON.stringify({ name: 'argon2id' }),
+        check_value: 'c'.repeat(64),
+      })
+      .execute();
+    await db
+      .insertInto('evidence_items')
+      .values({
+        id: '7c0f9d1e-6a35-4c5b-9e0a-1b2c3d4e5f60',
+        user_id: userId,
+        kind: 'audio',
+        storage_key: `users/${userId}/vault/7c0f9d1e-6a35-4c5b-9e0a-1b2c3d4e5f60.enc`,
+        size_bytes: 2_400_000,
+        locked_file_key: 'LOCKED',
+        locked_details: 'LOCKED',
+        sha256: 'ab'.repeat(32),
+        captured_at: new Date(),
+        delete_locked_until: new Date(Date.now() + 86_400_000),
+      })
+      .execute();
+    await db
+      .insertInto('sos_trigger_settings')
+      .values({ user_id: userId, shake_mode: 'always' })
+      .execute();
+  });
+}
+
 export async function createHistoryForTest(): Promise<{
   userId: string;
   realSos: string;

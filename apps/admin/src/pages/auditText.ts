@@ -52,6 +52,13 @@ const PAGES: Record<string, string> = {
   '/admin/settings': 'Settings',
   '/admin/admins': 'Admin Team',
   '/admin/audit': 'Audit Log',
+  '/admin/users/:id/phase2': "User's Phase 2 details (evidence list only, never its content)",
+  '/admin/community/posts': 'Community reports',
+  '/admin/rakshak/applications': 'Rakshak applications',
+  '/admin/rakshak/applications/:id': 'Rakshak application',
+  '/admin/plans': 'Plans',
+  '/admin/subscriptions': 'Subscriptions',
+  '/admin/phase2/stats': 'Phase 2 counts (Reports)',
 };
 
 function pageName(route: string): string {

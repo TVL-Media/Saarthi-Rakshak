@@ -173,6 +173,7 @@ export class LiveService {
           'destination_label',
           'expected_arrival_at',
           'route_polyline',
+          'mode',
           sql<number>`ST_Y(destination::geometry)`.as('lat'),
           sql<number>`ST_X(destination::geometry)`.as('lng'),
         ])
@@ -189,6 +190,7 @@ export class LiveService {
         destination: { lat: Number(j.lat), lng: Number(j.lng) },
         expectedArrivalAt: (j.expected_arrival_at ?? j.started_at).toISOString(),
         route: j.route_polyline,
+        mode: j.mode ?? null,
       };
     }
 

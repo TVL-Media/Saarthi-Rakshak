@@ -234,3 +234,81 @@ describe('Admin: plans, subscriptions and Phase 2 counts', () => {
     expect((await support.get('/admin/phase2/stats')).status).toBe(200);
   });
 });
+
+describe("Admin: a user's Phase 2 details", () => {
+  it('shows that evidence was recorded, never its content, keys or a way to open it', async () => {
+    const id = await user();
+    await db
+      .insertInto('vault_keys')
+      .values({
+        user_id: id,
+        locked_key: 'LOCKED-VAULT-KEY',
+        kdf: JSON.stringify({ name: 'argon2id' }),
+        check_value: 'c'.repeat(64),
+      })
+      .execute();
+    const item = randomUUID();
+    await db
+      .insertInto('evidence_items')
+      .values({
+        id: item,
+        user_id: id,
+        kind: 'audio',
+        storage_key: `users/${id}/vault/${item}.enc`,
+        size_bytes: 120_000,
+        locked_file_key: 'LOCKED-FILE-KEY',
+        locked_details: 'LOCKED-DETAILS',
+        sha256: 'a'.repeat(64),
+        captured_at: new Date(),
+        delete_locked_until: new Date(Date.now() + 86_400_000),
+      })
+      .execute();
+    await db
+      .insertInto('sos_trigger_settings')
+      .values({ user_id: id, shake_mode: 'always', voice_on: true })
+      .execute();
+    await db
+      .insertInto('daily_tracking_settings')
+      .values({ user_id: id, enabled: true, consent_version: '2026-11' })
+      .execute();
+
+    const a = await admin('support_admin');
+    const res = await a.get(`/admin/users/${id}/phase2`);
+    expect(res.status).toBe(200);
+    expect(res.body.sosTriggers).toMatchObject({
+      shakeMode: 'always',
+      voiceOn: true,
+      driveMode: false,
+    });
+    expect(res.body.fullDayLocation).toMatchObject({ enabled: true, paused: false });
+    expect(res.body.evidence).toMatchObject({ items: 1, sizeBytes: 120_000, byKind: { audio: 1 } });
+    expect(res.body.evidence.latest[0]).toMatchObject({
+      id: item,
+      kind: 'audio',
+      sha256: 'a'.repeat(64),
+    });
+    // Nothing that could open the evidence leaves the server.
+    const text = JSON.stringify(res.body);
+    for (const secret of [
+      'LOCKED-VAULT-KEY',
+      'LOCKED-FILE-KEY',
+      'LOCKED-DETAILS',
+      '/vault/',
+      'http',
+    ]) {
+      expect(text).not.toContain(secret);
+    }
+    // No location points either.
+    expect(text).not.toMatch(/"lat"|"lng"/);
+
+    // The view is in the audit log, with the user as the target.
+    const logged = await db
+      .selectFrom('audit_log')
+      .select(['action', 'target_id'])
+      .where('action', '=', 'GET /admin/users/:id/phase2')
+      .execute();
+    expect(logged).toEqual([{ action: 'GET /admin/users/:id/phase2', target_id: id }]);
+
+    expect((await a.get(`/admin/users/${randomUUID()}/phase2`)).status).toBe(404);
+  });
+});

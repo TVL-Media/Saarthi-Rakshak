@@ -638,6 +638,8 @@ export const LiveView = z.object({
       expectedArrivalAt: DateTime,
       /** Google encoded polyline, if the app sent one. */
       route: z.string().nullable(),
+      /** How the person travels (walk, cab, auto, bus, own vehicle), if they said. */
+      mode: JourneyMode.nullable(),
     })
     .nullable(),
   guardians: z.array(LiveGuardian),

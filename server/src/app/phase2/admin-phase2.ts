@@ -412,6 +412,113 @@ export class AdminPhase2Service {
 
   // ---- Reports additions (counts only) --------------------------------------------------------
 
+  /**
+   * A user's Phase 2 settings and what is in their Mere Saboot, for the user's profile page.
+   * Evidence: only that it exists (type, times, size, fingerprint). Never the file, its key, its
+   * details or a download link: those are encrypted on the user's phone and only they can open
+   * them. Full-day location: on / off only, never the points.
+   */
+  async userPhase2(userId: string) {
+    const db = this.database.db;
+    const user = await db
+      .selectFrom('users')
+      .select('id')
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    if (!user) throw new NotFoundException('User not found');
+    const t = await db
+      .selectFrom('sos_trigger_settings')
+      .select(['shake_mode', 'voice_on', 'drive_mode', 'fall_on', 'quiet_countdown'])
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    const daily = await db
+      .selectFrom('daily_tracking_settings')
+      .select(['enabled', 'paused_until', 'retention_days'])
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    const vault = await db
+      .selectFrom('vault_keys')
+      .select('created_at')
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    const items = await db
+      .selectFrom('evidence_items')
+      .select([
+        'id',
+        'kind',
+        'size_bytes',
+        'sha256',
+        'captured_at',
+        'received_at',
+        'incident_id',
+        'uploaded',
+      ])
+      .where('user_id', '=', userId)
+      .orderBy('received_at', 'desc')
+      .execute();
+    const incidents = await db
+      .selectFrom('evidence_incidents')
+      .select(['kind', sql<string>`count(*)`.as('n')])
+      .where('user_id', '=', userId)
+      .where('deleted_at', 'is', null)
+      .groupBy('kind')
+      .execute();
+    const rakshak = await db
+      .selectFrom('rakshak_applications')
+      .select(['status', 'area', 'created_at'])
+      .where('user_id', '=', userId)
+      .orderBy('created_at', 'desc')
+      .executeTakeFirst();
+    const reports = await db
+      .selectFrom('community_posts')
+      .select(['status', sql<string>`count(*)`.as('n')])
+      .where('author_user_id', '=', userId)
+      .groupBy('status')
+      .execute();
+    const byKind: Record<string, number> = {};
+    for (const i of items) byKind[i.kind] = (byKind[i.kind] ?? 0) + 1;
+    const pausedUntil = daily?.paused_until ? new Date(daily.paused_until) : null;
+    return {
+      sosTriggers: {
+        shakeMode: t?.shake_mode ?? 'off',
+        voiceOn: t?.voice_on ?? false,
+        driveMode: t?.drive_mode ?? false,
+        fallOn: t?.fall_on ?? false,
+        quietCountdown: t?.quiet_countdown ?? false,
+      },
+      fullDayLocation: {
+        enabled: daily?.enabled ?? false,
+        paused: pausedUntil !== null && pausedUntil > new Date(),
+        retentionDays: daily?.retention_days ?? 30,
+      },
+      evidence: {
+        vaultSetUpAt: vault ? new Date(vault.created_at).toISOString() : null,
+        items: items.length,
+        sizeBytes: items.reduce((s, i) => s + Number(i.size_bytes), 0),
+        byKind,
+        incidents: Object.fromEntries(incidents.map((r) => [r.kind, Number(r.n)])),
+        latest: items.slice(0, 50).map((i) => ({
+          id: i.id,
+          kind: i.kind,
+          sizeBytes: Number(i.size_bytes),
+          sha256: i.sha256,
+          capturedAt: new Date(i.captured_at).toISOString(),
+          receivedAt: new Date(i.received_at).toISOString(),
+          inIncident: i.incident_id !== null,
+          uploaded: i.uploaded,
+        })),
+      },
+      rakshak: rakshak
+        ? {
+            status: rakshak.status,
+            area: rakshak.area,
+            appliedAt: new Date(rakshak.created_at).toISOString(),
+          }
+        : null,
+      communityReports: Object.fromEntries(reports.map((r) => [r.status, Number(r.n)])),
+    };
+  }
+
   async stats(days: number) {
     const db = this.database.db;
     const since = sql<Date>`now() - make_interval(days => ${days})`;
@@ -547,6 +654,12 @@ export class AdminPhase2Controller {
         ? status
         : undefined;
     return this.service.subscriptions(s);
+  }
+
+  /** Both roles. Written to the audit log (a view of this user). No evidence content, ever. */
+  @Get('users/:id/phase2')
+  userPhase2(@Param('id', uuid) id: string) {
+    return this.service.userPhase2(id);
   }
 
   @Get('phase2/stats')

@@ -197,11 +197,14 @@ test.describe('Live page', () => {
           destination: { lat: 28.62, lng: 77.36 },
           expectedArrivalAt: '2026-11-02T17:58:00Z',
           route: null,
+          mode: 'cab',
         },
       }),
     );
     await page.goto(`/l/${CODE}`);
     await expect(page.getByRole('heading', { name: 'Priya is on the way to Home' })).toBeVisible();
+    await expect(page.getByText('Travelling by')).toBeVisible();
+    await expect(page.getByText('Cab', { exact: true })).toBeVisible();
     await expect(page.getByText('11:28 pm')).toBeVisible(); // 17:58 UTC in India time
     await expect(page.getByRole('link', { name: 'Call 112' })).toHaveCount(0);
     await expect(page.getByText('Blood group')).toHaveCount(0);
@@ -223,6 +226,7 @@ test.describe('Live page', () => {
           destination: { lat: 28.62, lng: 77.36 },
           expectedArrivalAt: '2026-11-02T17:58:00Z',
           route: null,
+          mode: null,
         },
       }),
     );
