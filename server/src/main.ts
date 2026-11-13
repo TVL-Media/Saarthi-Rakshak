@@ -4,6 +4,8 @@ import { configureApp } from './app-setup';
 import { AppModule } from './app.module';
 import { loadEnvFile } from './config/env';
 import { validateEnv, type Env } from './config/env.schema';
+import { DatabaseService } from './database/database.module';
+import { applyTempAdminPassword } from './setup/setup';
 import { serveWeb } from './web/serve-web';
 
 async function bootstrap(): Promise<void> {
@@ -19,6 +21,18 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create(AppModule);
   configureApp(app, env);
+  // Test servers only: a temporary admin password from the settings (see env.schema.ts).
+  if (env.ADMIN_TEMP_EMAIL && env.ADMIN_TEMP_PASSWORD) {
+    try {
+      const result = await applyTempAdminPassword(app.get(DatabaseService).db, {
+        email: env.ADMIN_TEMP_EMAIL,
+        password: env.ADMIN_TEMP_PASSWORD,
+      });
+      console.log(`Temporary admin password for ${env.ADMIN_TEMP_EMAIL}: ${result}`);
+    } catch (err) {
+      console.error(`Temporary admin password not applied: ${(err as Error).message}`);
+    }
+  }
   if (env.SERVE_WEB === 'on') serveWeb(app);
   app.enableShutdownHooks();
   await app.listen(env.PORT);

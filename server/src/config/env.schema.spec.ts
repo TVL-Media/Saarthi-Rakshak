@@ -61,6 +61,12 @@ describe('validateEnv', () => {
       ).toBe('off');
     });
 
+    it('refuses the temporary admin password in production', () => {
+      expect(() =>
+        validateEnv({ ...production, ADMIN_TEMP_PASSWORD: 'temporary-river-77' }),
+      ).toThrow(/ADMIN_TEMP_PASSWORD: The temporary admin password is for test servers only/);
+    });
+
     it('refuses the development test login in production', () => {
       expect(() => validateEnv({ ...production, DEV_LOGIN_CODE: '123456' })).toThrow(
         /DEV_LOGIN_CODE: The test login is for development only/,

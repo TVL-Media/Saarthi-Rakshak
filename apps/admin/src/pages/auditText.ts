@@ -137,6 +137,8 @@ export function describe(entry: AuditEntry): string {
       return `Setup · first Super Admin created (${name})`;
     case 'setup.super_admin_reissued':
       return `Setup · new temporary password for ${name}`;
+    case 'setup.temp_password_applied':
+      return `Setup · temporary password from the server settings for ${name} (test server)`;
     default:
       return entry.action;
   }

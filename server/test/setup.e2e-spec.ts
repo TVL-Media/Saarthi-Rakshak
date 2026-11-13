@@ -5,6 +5,7 @@ import type { Database } from '../src/database/types';
 import { DEFAULT_SETTINGS } from '../src/settings/default-settings';
 import {
   SetupError,
+  applyTempAdminPassword,
   createFirstSuperAdmin,
   insertDefaultSettings,
   reissueSuperAdminPassword,
@@ -225,5 +226,75 @@ describe('reissueSuperAdminPassword (break-glass)', () => {
       .where('email', '=', 'support@example.test')
       .executeTakeFirstOrThrow();
     expect(support).toEqual({ role: 'support_admin', password_hash: 'x' });
+  });
+});
+
+describe('applyTempAdminPassword (test servers: ADMIN_TEMP_EMAIL + ADMIN_TEMP_PASSWORD)', () => {
+  const PASS = 'temporary-river-mango-77';
+
+  it('sets the password once; a password chosen later is not overwritten on restart', async () => {
+    await createFirstSuperAdmin(db, FIRST);
+    expect(await applyTempAdminPassword(db, { email: FIRST.email, password: PASS })).toBe(
+      'applied',
+    );
+    let [a] = await admins();
+    expect(await verifyPassword(PASS, a.password_hash)).toBe(true);
+    expect(a.must_change_password).toBe(true);
+    expect(a.totp_secret_encrypted).toBeNull();
+
+    // The admin chooses a new password; the server restarts with the same settings.
+    await db
+      .updateTable('admins')
+      .set({ password_hash: 'chosen', must_change_password: false })
+      .execute();
+    expect(await applyTempAdminPassword(db, { email: FIRST.email, password: PASS })).toBe(
+      'already applied',
+    );
+    [a] = await admins();
+    expect(a.password_hash).toBe('chosen');
+
+    // A different temporary password is applied once more.
+    expect(await applyTempAdminPassword(db, { email: FIRST.email, password: `${PASS}-2` })).toBe(
+      'applied',
+    );
+    // The audit log keeps a fingerprint, never the password.
+    const log = await db
+      .selectFrom('audit_log')
+      .select('reason')
+      .where('action', '=', 'setup.temp_password_applied')
+      .execute();
+    expect(log).toHaveLength(2);
+    expect(JSON.stringify(log)).not.toContain(PASS);
+  });
+
+  it('creates the first Super Admin when there is none; never touches a Support Admin', async () => {
+    expect(await applyTempAdminPassword(db, { email: 'new@example.test', password: PASS })).toBe(
+      'created',
+    );
+    const [a] = await admins();
+    expect(a).toMatchObject({
+      email: 'new@example.test',
+      role: 'super_admin',
+      must_change_password: true,
+    });
+
+    await db
+      .insertInto('admins')
+      .values({
+        name: 'S',
+        email: 'support@example.test',
+        role: 'support_admin',
+        password_hash: 'x',
+      })
+      .execute();
+    expect(
+      await applyTempAdminPassword(db, { email: 'support@example.test', password: PASS }),
+    ).toBe('not a super admin');
+    const support = await db
+      .selectFrom('admins')
+      .select('password_hash')
+      .where('email', '=', 'support@example.test')
+      .executeTakeFirstOrThrow();
+    expect(support.password_hash).toBe('x');
   });
 });

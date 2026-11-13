@@ -1,5 +1,6 @@
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { generateTemporaryPassword, hashPassword } from '../auth/password';
 import type { Database } from '../database/types';
 import { DEFAULT_SETTINGS } from '../settings/default-settings';
@@ -198,5 +199,98 @@ export async function reissueSuperAdminPassword(
       expiresAt: issued.expiresAt,
       reEnabled,
     };
+  });
+}
+
+/**
+ * Test servers only (ADMIN_TEMP_EMAIL + ADMIN_TEMP_PASSWORD, refused in production): gives the
+ * Super Admin with that email this temporary password, or creates the first Super Admin if there
+ * is none. Applied ONCE per password (a fingerprint of it is kept in the audit log, never the
+ * password), so the password the admin then chooses is not overwritten at the next restart.
+ * Like --reissue: must be changed at login, 2-step set up again, sessions ended.
+ */
+export async function applyTempAdminPassword(
+  db: Kysely<Database>,
+  input: { email: string; password: string },
+): Promise<'applied' | 'created' | 'already applied' | 'not a super admin'> {
+  const email = parse(emailSchema, input.email);
+  const marker = `temp-password:${createHash('sha256').update(`${email}\n${input.password}`).digest('hex').slice(0, 16)}`;
+  return db.transaction().execute(async (trx) => {
+    await lockSetup(trx);
+    const done = await trx
+      .selectFrom('audit_log')
+      .select('id')
+      .where('action', '=', 'setup.temp_password_applied')
+      .where('reason', 'like', `%${marker}%`)
+      .executeTakeFirst();
+    if (done) return 'already applied';
+
+    const passwordHash = await hashPassword(input.password);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 3600_000);
+    const admin = await trx
+      .selectFrom('admins')
+      .select(['id', 'role'])
+      .where('email', '=', email)
+      .executeTakeFirst();
+    let id: string;
+    let result: 'applied' | 'created';
+    if (admin) {
+      if (admin.role !== 'super_admin') return 'not a super admin';
+      await trx
+        .updateTable('admins')
+        .set({
+          password_hash: passwordHash,
+          must_change_password: true,
+          password_expires_at: expiresAt,
+          status: 'active',
+          totp_secret_encrypted: null,
+          totp_enabled_at: null,
+          totp_last_step: null,
+          failed_login_count: 0,
+          locked_until: null,
+        })
+        .where('id', '=', admin.id)
+        .execute();
+      await trx.deleteFrom('admin_backup_codes').where('admin_id', '=', admin.id).execute();
+      await trx
+        .updateTable('admin_sessions')
+        .set({ ended_at: new Date(), end_reason: 'temporary password set' })
+        .where('admin_id', '=', admin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      id = admin.id;
+      result = 'applied';
+    } else {
+      const anySuper = await trx
+        .selectFrom('admins')
+        .select('id')
+        .where('role', '=', 'super_admin')
+        .executeTakeFirst();
+      if (anySuper) return 'not a super admin';
+      const created = await trx
+        .insertInto('admins')
+        .values({
+          name: 'Super Admin',
+          email,
+          role: 'super_admin',
+          password_hash: passwordHash,
+          must_change_password: true,
+          password_expires_at: expiresAt,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+      id = created.id;
+      result = 'created';
+    }
+    await trx
+      .insertInto('audit_log')
+      .values({
+        action: 'setup.temp_password_applied',
+        target_type: 'admin',
+        target_id: id,
+        reason: `Temporary password from the server settings (test server); 2-step cleared; ${marker}`,
+      })
+      .execute();
+    return result;
   });
 }

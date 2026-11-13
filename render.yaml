@@ -12,15 +12,15 @@ services:
     name: sarthi-rakshak-test
     runtime: node
     region: singapore
-    # Paid plan on purpose: a free service sleeps when idle, and then SOS timers
-    # ("no guardian responded", lost contact) stop running.
-    plan: starter
+    # Free plan: sleeps after 15 min without traffic and takes ~1 min to wake. During an SOS or
+    # journey the phone keeps it awake (a point every few seconds); the phone sends SIM SMS
+    # itself if the server does not answer in 10 s. Use "starter" for an always-on server.
+    plan: free
     healthCheckPath: /health
     autoDeploy: true # every push to the connected branch deploys
     buildCommand: >-
       corepack enable &&
       pnpm install --frozen-lockfile &&
-      pnpm --filter @sarthi/shared build &&
       pnpm --filter server build &&
       VITE_API_URL=$PUBLIC_URL pnpm --filter admin build &&
       pnpm --filter guardian-web exec vite build --base=/gw/
@@ -103,6 +103,12 @@ services:
         sync: false
       - key: DEV_LOGIN_UNTIL
         sync: false
+      # Temporary admin password (test server only; the server refuses it in production).
+      # Remove both before going live.
+      - key: ADMIN_TEMP_EMAIL
+        sync: false
+      - key: ADMIN_TEMP_PASSWORD
+        sync: false
 
   # File storage: SeaweedFS (the same as docker-compose locally) with an S3 API, on a disk.
   # Public on purpose: phones upload with short signed links; anything unsigned is refused.
@@ -112,15 +118,13 @@ services:
     image:
       url: docker.io/chrislusf/seaweedfs:4.48
     region: singapore
-    plan: starter # disks need a paid plan
-    # Render's Docker Command replaces the image's entrypoint, so call it here. 30 volumes of
-    # 256 MB fit the 10 GB disk.
-    dockerCommand: /entrypoint.sh server -dir=/data -s3 -s3.port=8333 -master.volumeSizeLimitMB=256 -volume.max=30
+    # Free plan has no disk: photos and audio are lost when this service sleeps or restarts.
+    # For files that stay, use "starter" and add:  disk: {name: files, mountPath: /data, sizeGB: 10}
+    plan: free
+    # Render's Docker Command replaces the image's entrypoint, so call it here. Small volumes
+    # (64 MB) keep memory use low on the free plan.
+    dockerCommand: /entrypoint.sh server -dir=/data -s3 -s3.port=8333 -master.volumeSizeLimitMB=64 -volume.max=20
     healthCheckPath: /healthz
-    disk:
-      name: files
-      mountPath: /data
-      sizeGB: 10
     envVars:
       - key: PORT
         value: "8333" # the S3 port is the only one Render makes public
@@ -132,14 +136,14 @@ services:
   - type: keyvalue
     name: sarthi-rakshak-test-redis
     region: singapore
-    plan: starter # keeps data on disk (BullMQ timers survive a restart)
+    plan: free # in memory only: waiting timers are lost on a restart (the 30 s sweep catches up)
     maxmemoryPolicy: noeviction # required by BullMQ: jobs must never be dropped
     ipAllowList: [] # only reachable from Render services
 
 databases:
   - name: sarthi-rakshak-test-db
     region: singapore
-    plan: basic-256mb
+    plan: free # 1 GB; Render deletes free databases 30 days after they are made
     postgresMajorVersion: "17" # PostGIS is enabled by the first database migration
     databaseName: sarthi
     user: sarthi

@@ -107,6 +107,17 @@ const envSchema = z
       .regex(/^\d{6}$/, { error: 'Must be 6 digits' })
       .optional(),
     DEV_LOGIN_UNTIL: z.iso.date({ error: 'Must be a date like 2026-11-09' }).optional(),
+    /**
+     * Test servers only (e.g. Render free plan, which has no Shell to run the setup command):
+     * a temporary admin password. On start, the Super Admin with ADMIN_TEMP_EMAIL gets this
+     * password once (must be changed at login; 2-step set up again). Remove both before going live.
+     */
+    ADMIN_TEMP_EMAIL: z.email({ error: 'Must be an email' }).optional(),
+    ADMIN_TEMP_PASSWORD: z
+      .string()
+      .min(12, { error: 'Use at least 12 characters' })
+      .max(200)
+      .optional(),
     /** Run the background worker (alerts, timers, cleanup) in this server process. */
     WORKER: z.enum(['on', 'off'], { error: 'Must be on or off' }).default('on'),
     /**
@@ -155,6 +166,16 @@ const envSchema = z
             code: 'custom',
             path: [key],
             message: 'The test login is for development only and must not be set in production',
+          });
+        }
+      }
+      for (const key of ['ADMIN_TEMP_EMAIL', 'ADMIN_TEMP_PASSWORD'] as const) {
+        if (env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message:
+              'The temporary admin password is for test servers only; remove it in production',
           });
         }
       }
