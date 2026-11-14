@@ -1,4 +1,4 @@
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, sql } from 'kysely';
 import { Migrator, type Migration } from 'kysely/migration';
 import type { Pool } from 'pg';
 import * as m0001 from './migrations/0001_extensions';
@@ -51,4 +51,45 @@ export function createKysely(pool: Pool): Kysely<Database> {
 
 export function createMigrator(db: Kysely<Database>): Migrator {
   return new Migrator({ db, provider: { getMigrations: () => Promise.resolve(migrations) } });
+}
+
+/** The lock Kysely holds while migrating (pg_advisory_lock(3853314791062309107)), as pg_locks shows it. */
+const LOCK_ID = 3853314791062309107n;
+const MIGRATION_LOCK = { classid: Number(LOCK_ID >> 32n), objid: Number(LOCK_ID & 0xffffffffn) };
+
+/**
+ * A migration that was cut off (e.g. a deploy cancelled by a newer push) can leave its database
+ * session behind, still holding the migration lock. The next migration would then wait up to an
+ * hour. A holder that has been idle for longer than `idleMs` is not migrating: end its session.
+ * A holder that is busy (a real migration running) is left alone.
+ */
+export async function clearStaleMigrationLock(
+  db: Kysely<Database>,
+  idleMs = 2 * 60_000,
+): Promise<string[]> {
+  const { rows } = await sql<{ pid: number; state: string | null; idle_ms: number }>`
+    SELECT a.pid, a.state,
+           (EXTRACT(EPOCH FROM (now() - a.state_change)) * 1000)::float8 AS idle_ms
+    FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+    WHERE l.locktype = 'advisory' AND l.granted
+      AND l.classid = ${MIGRATION_LOCK.classid} AND l.objid = ${MIGRATION_LOCK.objid} AND l.objsubid = 1
+      AND a.pid <> pg_backend_pid()`.execute(db);
+  const notes: string[] = [];
+  for (const r of rows) {
+    if (r.state === 'idle' && r.idle_ms >= idleMs) {
+      const { rows: done } = await sql<{
+        ok: boolean;
+      }>`SELECT pg_terminate_backend(${r.pid}) AS ok`.execute(db);
+      notes.push(
+        done[0]?.ok
+          ? `Cleared a stale migration lock (session ${r.pid}, idle ${Math.round(r.idle_ms / 1000)} s).`
+          : `A stale session (${r.pid}) holds the migration lock and could not be ended.`,
+      );
+    } else {
+      notes.push(
+        `Another migration is running (session ${r.pid}, ${r.state ?? 'unknown'}); waiting for it.`,
+      );
+    }
+  }
+  return notes;
 }

@@ -4,7 +4,7 @@ import type { MigrationResultSet } from 'kysely/migration';
 import { Pool } from 'pg';
 import { loadEnvFile } from '../config/env';
 import { activeConnections, validateEnv } from '../config/env.schema';
-import { createKysely, createMigrator } from './migrator';
+import { clearStaleMigrationLock, createKysely, createMigrator } from './migrator';
 
 const COMMANDS = ['latest', 'down', 'status'] as const;
 
@@ -18,11 +18,20 @@ async function main(): Promise<void> {
   loadEnvFile();
   const env = validateEnv(process.env);
   const { databaseUrl } = activeConnections(env);
-  const db = createKysely(new Pool({ connectionString: databaseUrl }));
+  const db = createKysely(
+    new Pool({
+      connectionString: databaseUrl,
+      application_name: 'sarthi-migrate',
+      keepAlive: true,
+    }),
+  );
   console.log(`Database: ${new URL(databaseUrl).pathname.slice(1)}`);
 
   try {
     const migrator = createMigrator(db);
+    if (command !== 'status') {
+      for (const note of await clearStaleMigrationLock(db)) console.log(`  ${note}`);
+    }
     if (command === 'status') {
       for (const m of await migrator.getMigrations()) {
         console.log(`  ${m.executedAt ? 'done   ' : 'pending'}  ${m.name}`);
