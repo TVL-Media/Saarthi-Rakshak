@@ -281,6 +281,14 @@ class SafetyEngine {
 
   Future<void> stopRingtone() => _ch.invokeMethod('stopRingtone');
 
+  /// Fake call after [delaySeconds], also when the app is in the background (native, so Android
+  /// does not freeze the wait). Opens the call screen, or rings with a call notification.
+  Future<void> scheduleFakeCall(String caller, int delaySeconds) =>
+      _ch.invokeMethod('scheduleFakeCall', {'caller': caller, 'delaySeconds': delaySeconds});
+
+  /// Stops a waiting or ringing fake call (its notification and ringtone).
+  Future<void> cancelFakeCall() => _ch.invokeMethod('cancelFakeCall');
+
   /// A strong buzz (e.g. each second of the SOS countdown).
   Future<void> vibrate(int ms) => _ch.invokeMethod('vibrate', {'ms': ms});
 

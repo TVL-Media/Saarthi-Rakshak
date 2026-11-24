@@ -69,6 +69,13 @@ void main() {
     m.setMockMethodCallHandler(const MethodChannel('flutter.baseflow.com/permissions/methods'), (c) async => 1);
   });
 
+  /// A phone-sized screen, so the whole Fake Call page fits without scrolling.
+  void phoneScreen(WidgetTester tester) {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+  }
+
   Future<void> openCall(WidgetTester tester) async {
     await tester.pumpWidget(
       host(
@@ -94,6 +101,45 @@ void main() {
     expect(find.byType(IncomingCallScreen), findsNothing);
     expect(engineCalls.where((c) => c.method == 'stopRingtone'), isNotEmpty);
     expect(engineCalls.last.method, 'stopRingtone'); // nothing starts it again
+  });
+
+  testWidgets('Fake call: a delay is scheduled in the native engine, so it rings with the app in the background',
+      (tester) async {
+    phoneScreen(tester);
+    await tester.pumpWidget(host(makeState(), const FakeCallScreen()));
+    await tester.tap(find.byKey(const Key('delay-30')));
+    await tester.pump();
+    await tester.tap(find.text('Start Fake Call'));
+    await tester.pumpAndSettle();
+    final call = engineCalls.singleWhere((c) => c.method == 'scheduleFakeCall');
+    expect(call.arguments, {'caller': 'Mom', 'delaySeconds': 30});
+    expect(find.byType(IncomingCallScreen), findsNothing); // the engine opens it when due
+  });
+
+  testWidgets('Fake call: "Now" opens the call at once without the native wait', (tester) async {
+    phoneScreen(tester);
+    await tester.pumpWidget(host(makeState(), const FakeCallScreen()));
+    await tester.tap(find.byKey(const Key('delay-0')));
+    await tester.pump();
+    await tester.tap(find.text('Start Fake Call'));
+    await tester.pumpAndSettle();
+    expect(find.byType(IncomingCallScreen), findsOneWidget);
+    expect(engineCalls.map((c) => c.method), isNot(contains('scheduleFakeCall')));
+  });
+
+  testWidgets('Fake call: the call screen stops the call notification before it rings itself', (tester) async {
+    await openCall(tester);
+    final methods = engineCalls.map((c) => c.method).toList();
+    expect(methods.indexOf('cancelFakeCall'), lessThan(methods.indexOf('startRingtone')));
+  });
+
+  testWidgets('Fake call: Answer on the notification opens a call in progress, without ringing', (tester) async {
+    await tester.pumpWidget(host(makeState(), const IncomingCallScreen(caller: 'Mom', answered: true)));
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('00:02'), findsOneWidget);
+    expect(find.text('End'), findsOneWidget);
+    expect(engineCalls.map((c) => c.method), isNot(contains('startRingtone')));
+    await tester.pumpWidget(const SizedBox()); // closes the screen (stops its timer)
   });
 
   testWidgets('Fake call: Back (closing the screen any other way) also stops the ringtone', (tester) async {

@@ -22,6 +22,7 @@ import android.provider.Settings
 import com.sarthirakshak.app.engine.Alerts
 import com.sarthirakshak.app.engine.Crypto
 import com.sarthirakshak.app.engine.EngineBus
+import com.sarthirakshak.app.engine.FakeCallService
 import com.sarthirakshak.app.engine.LocalClips
 import com.sarthirakshak.app.engine.Outbox
 import com.sarthirakshak.app.engine.SafetyService
@@ -93,7 +94,7 @@ class MainActivity : FlutterFragmentActivity() {
         val data = HashMap<String, Any?>()
         data["action"] = action
         intent.getStringExtra(EXTRA_TRIGGER)?.let { data["trigger"] = it }
-        for (key in listOf("checkinId", "reason", "journeyId", "quiet", "seconds", "heightM")) {
+        for (key in listOf("checkinId", "reason", "journeyId", "quiet", "seconds", "heightM", "caller", "answered")) {
             intent.getStringExtra(key)?.let { data[key] = it }
         }
         intent.removeExtra(EXTRA_ACTION)
@@ -264,6 +265,14 @@ class MainActivity : FlutterFragmentActivity() {
                     "stopRingtone" -> {
                         ringtone?.stop()
                         ringtone = null
+                        result.success(null)
+                    }
+                    "scheduleFakeCall" -> {
+                        FakeCallService.schedule(this, call.argument<String>("caller") ?: "Mom", call.argument<Int>("delaySeconds") ?: 5)
+                        result.success(null)
+                    }
+                    "cancelFakeCall" -> {
+                        FakeCallService.cancel(this)
                         result.success(null)
                     }
                     "pickContact" -> {
@@ -661,6 +670,16 @@ class MainActivity : FlutterFragmentActivity() {
         File(cacheDir, "play.m4a").delete()
     }
 
+    override fun onResume() {
+        super.onResume()
+        visible = true
+    }
+
+    override fun onPause() {
+        visible = false
+        super.onPause()
+    }
+
     override fun onDestroy() {
         stopPlayback()
         ringtone?.stop()
@@ -670,6 +689,10 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         const val EXTRA_ACTION = "sarthi_action"
         const val EXTRA_TRIGGER = "sarthi_trigger"
+
+        /** The app's screens are on screen (resumed); a fake call then opens directly. */
+        @Volatile
+        var visible = false
         private const val PICK_CONTACT = 4711
     }
 }

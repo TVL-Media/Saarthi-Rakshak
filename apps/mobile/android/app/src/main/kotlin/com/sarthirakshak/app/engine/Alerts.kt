@@ -27,6 +27,8 @@ object Alerts {
     const val ID_CHECKIN = 2
     const val ID_SMS = 3
     const val ID_DETECTION = 4
+    const val ID_FAKE_CALL = 5
+    const val CH_FAKE_CALL = "fake_call"
 
     private var alarm: Ringtone? = null
 
@@ -40,6 +42,9 @@ object Alerts {
         nm.createNotificationChannel(NotificationChannel(CH_SOS, "SOS by SMS", NotificationManager.IMPORTANCE_HIGH))
         // Used by push notifications from the server (Firebase).
         nm.createNotificationChannel(NotificationChannel(CH_PUSH, "Guardian updates", NotificationManager.IMPORTANCE_HIGH))
+        nm.createNotificationChannel(NotificationChannel(CH_FAKE_CALL, "Fake call", NotificationManager.IMPORTANCE_HIGH).apply {
+            setSound(null, null) // the ringtone is played by FakeCallService, looping like a real call
+        })
     }
 
     fun openApp(context: Context, action: String? = null, extras: Map<String, String> = emptyMap(), requestCode: Int = 0): PendingIntent {
@@ -125,6 +130,52 @@ object Alerts {
         context.getSystemService(NotificationManager::class.java).cancel(ID_CHECKIN)
     }
 
+    /** Fake call: shown quietly while waiting for the chosen delay. */
+    fun fakeCallWaiting(context: Context): Notification {
+        val cancel = PendingIntent.getService(
+            context, 9,
+            Intent(context, FakeCallService::class.java).setAction(FakeCallService.ACTION_CANCEL),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        return builder(context, CH_PROTECTION)
+            .setSmallIcon(R.drawable.ic_sos)
+            .setContentTitle("Fake call scheduled")
+            .setContentText("Your phone will ring soon.")
+            .setOngoing(true)
+            .setContentIntent(openApp(context))
+            .addAction(Notification.Action.Builder(null, "Cancel", cancel).build())
+            .build()
+    }
+
+    /** Fake call: rings over the lock screen or as a call banner when the app is not on screen. */
+    fun fakeCallRinging(context: Context, caller: String): Notification {
+        val open = openApp(context, "fakecall", mapOf("caller" to caller), requestCode = 7)
+        val answer = openApp(context, "fakecall", mapOf("caller" to caller, "answered" to "true"), requestCode = 8)
+        val decline = PendingIntent.getService(
+            context, 10,
+            Intent(context, FakeCallService::class.java).setAction(FakeCallService.ACTION_CANCEL),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val b = builder(context, CH_FAKE_CALL)
+            .setSmallIcon(R.drawable.ic_sos)
+            .setContentTitle(caller)
+            .setContentText("Incoming call")
+            .setCategory(Notification.CATEGORY_CALL)
+            .setPriority(Notification.PRIORITY_MAX)
+            .setFullScreenIntent(open, true)
+            .setContentIntent(open)
+            .setOngoing(true)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android's own incoming-call look: red Decline and green Answer buttons, like a real call.
+            val person = android.app.Person.Builder().setName(caller).setImportant(true).build()
+            b.setStyle(Notification.CallStyle.forIncomingCall(person, decline, answer))
+        } else {
+            b.addAction(Notification.Action.Builder(null, colored("Decline", 0xFFE53935.toInt()), decline).build())
+            b.addAction(Notification.Action.Builder(null, colored("Answer", 0xFF22C55E.toInt()), answer).build())
+        }
+        return b.build()
+    }
+
     /** No SMS permission: one tap opens the SMS app with the SOS ready to send. */
     fun sendSmsYourself(context: Context, numbers: List<String>, text: String) {
         val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:" + numbers.joinToString(";"))).apply {
@@ -172,6 +223,12 @@ object Alerts {
         }
 
     @Suppress("DEPRECATION")
+    /** Older Android (before 12): coloured button text, as close to a call as it allows. */
+    private fun colored(text: String, color: Int): CharSequence =
+        android.text.SpannableString(text).apply {
+            setSpan(android.text.style.ForegroundColorSpan(color), 0, length, 0)
+        }
+
     private fun builder(context: Context, channel: String): Notification.Builder =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(context, channel) else Notification.Builder(context)
 }

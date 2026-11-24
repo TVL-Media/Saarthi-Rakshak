@@ -89,6 +89,12 @@
                 android:value="Personal safety: detects a deliberate shake or a fall with the motion sensors and starts an SOS countdown that alerts the user's emergency contacts" />
         </service>
 
+        <!-- Fake call: waits the chosen delay (at most 1 minute) and rings, also with the app in the background -->
+        <service
+            android:name=".engine.FakeCallService"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
+
         <!-- Home-screen SOS widget -->
         <receiver
             android:name=".SosWidgetProvider"
