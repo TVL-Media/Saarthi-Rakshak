@@ -192,6 +192,11 @@ class SafetyEngine {
 
   /// Listens up to [seconds] for the phrase. Answers `heard`, `not_heard`, `no_mic`, `no_model`,
   /// `no_phrase`, `unknown:<words>` (the model does not know enough of the words) or `error`.
+  /// Loads the voice model before a test, so the microphone is on when the screen says "say it
+  /// now" (loading takes a few seconds the first time). False if the model is missing or damaged.
+  Future<bool> voicePrepare(String lang) async =>
+      (await _ch.invokeMethod<bool>('voicePrepare', {'lang': lang})) ?? false;
+
   Future<String> voiceTest(String lang, String phrase, {int seconds = 10}) async =>
       (await _ch.invokeMethod<String>('voiceTest', {'lang': lang, 'phrase': phrase, 'seconds': seconds})) ?? 'error';
 

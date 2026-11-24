@@ -443,7 +443,10 @@ void main() {
         case 'voiceDownload':
           hasModel = true;
           return true;
+        case 'voicePrepare':
+          return true;
         case 'voiceTest':
+          expect((call.arguments as Map)['seconds'], 10);
           return results.removeAt(0);
       }
       return null;
@@ -455,8 +458,10 @@ void main() {
     await tester.enterText(find.byType(TextField), 'please help me now');
     await tester.tap(find.byKey(const Key('voice-listen')));
     await tester.pumpAndSettle();
-    expect(calls, containsAllInOrder(['voiceDownload', 'voiceTest']));
+    // The model is loaded before "say it now", so the first words are not lost.
+    expect(calls, containsAllInOrder(['voiceDownload', 'voicePrepare', 'voiceTest']));
     expect(find.text('Heard 1 of 3. Say it again.'), findsOneWidget);
+    expect(find.byKey(const Key('voice-requirements')), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('voice-listen')));
     await tester.pumpAndSettle();

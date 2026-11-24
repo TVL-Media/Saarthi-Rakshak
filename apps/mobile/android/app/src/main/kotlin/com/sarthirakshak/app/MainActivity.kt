@@ -393,6 +393,13 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }.start()
             }
+            "voicePrepare" -> {
+                val lang = call.argument<String>("lang") ?: "en"
+                Thread {
+                    val ok = VoiceSos.prepare(this, lang)
+                    runOnUiThread { result.success(ok) }
+                }.start()
+            }
             "voiceTest" -> {
                 VoiceSos.test(
                     this,
