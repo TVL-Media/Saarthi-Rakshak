@@ -198,7 +198,7 @@ class VaultSession extends ChangeNotifier {
     try {
       final key = await _app.engine.vaultUnlock();
       if (key == null) throw VaultProblem('Fingerprint is not set up on this phone. Use your password.');
-      _opened(key);
+      _opened(key, byFingerprint: true);
       return true;
     } on PlatformException catch (e) {
       if (e.code == 'auth_needed') throw VaultProblem(_authAgain);
@@ -225,8 +225,13 @@ class VaultSession extends ChangeNotifier {
   /// Older name, kept for screens that open the vault without asking (fingerprint only).
   Future<bool> unlock() => unlockWithFingerprint();
 
-  void _opened(String key) {
+  /// Opened with the fingerprint this time: a new password can be set without the old one (the
+  /// fingerprint already proved it is the owner, and the vault key is in hand).
+  bool openedWithFingerprint = false;
+
+  void _opened(String key, {bool byFingerprint = false}) {
     _key = key;
+    openedWithFingerprint = byFingerprint;
     _lastUsed = DateTime.now();
     notifyListeners();
     unawaited(retryUploads());
@@ -350,18 +355,41 @@ class VaultSession extends ChangeNotifier {
   }
 
   /// A new password for the open vault (the vault key and the evidence stay the same).
-  Future<void> changePassword(String current, String password) async {
+  /// [current] may be null only when the vault was opened with the fingerprint (forgotten password,
+  /// evidence kept).
+  Future<void> changePassword(String? current, String password) async {
     final key = _need();
     if (password.isEmpty) throw VaultProblem('Enter a new password.');
-    if (!await checkPassword(current)) throw VaultProblem('Your current password is wrong.');
+    if (current == null) {
+      if (!openedWithFingerprint) throw VaultProblem('Enter your current password.');
+    } else if (!await checkPassword(current)) {
+      throw VaultProblem('Your current password is wrong.');
+    }
     await _lockWithPassword(key, password);
   }
 
-  /// "Forgot password": a new vault can only replace one with no evidence in it (nobody can open
-  /// the old evidence without the password, and it is never deleted this way).
+  /// The vault has nothing in it (a fresh start then loses nothing).
   Future<bool> canStartOver() async {
     final usage = await _app.api.vaultUsage();
     return usage.items == 0 && (await pending()).isEmpty;
+  }
+
+  /// "Forgot password" → Reset: the old evidence can never be opened without the old password, so
+  /// it is deleted (protected items stay hidden on the server until their protection ends). Also
+  /// clears this phone: the saved locked key, the fingerprint key and files not uploaded yet
+  /// (encrypted with the old key). Afterwards the user sets a new password ([setup]).
+  Future<({int deleted, int keptLocked, DateTime? lockedUntil})> reset() async {
+    final result = await _app.api.vaultReset();
+    try {
+      await (await SharedPreferences.getInstance()).remove(_recordKey);
+    } catch (_) {}
+    await _app.engine.vaultForget().catchError((_) {});
+    try {
+      final dir = await _pendingDir();
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    } catch (_) {}
+    lock(); // the server already wrote "reset" in the access history
+    return result;
   }
 
   String _need() {

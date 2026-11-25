@@ -809,6 +809,7 @@ const _actionLabels = {
   'unhidden': 'Shown again',
   'deleted': 'Deleted',
   'report': 'Made a report',
+  'reset': 'Reset Mere Saboot (forgotten password)',
 };
 
 class AccessHistoryScreen extends StatefulWidget {

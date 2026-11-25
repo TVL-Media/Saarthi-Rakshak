@@ -278,6 +278,8 @@ export const AccessAction = z.enum([
   'unhidden',
   'deleted',
   'report',
+  /** The vault was reset after a forgotten password (no item). */
+  'reset',
 ]);
 
 /** POST /v1/vault/access-log — what the user did (no content). */
@@ -302,6 +304,19 @@ export const AccessLogEntry = z.object({
   incidentId: Id.nullable(),
   device: z.string().nullable(),
   at: DateTime,
+});
+
+/** POST /v1/vault/reset — forgotten password: start a new vault. The old evidence cannot be opened
+ * without the old password, so it is deleted; items still protected from deletion are hidden and
+ * deleted when their protection ends. Typing RESET confirms it. */
+export const VaultResetRequest = z.object({ confirm: z.literal('RESET') });
+
+/** Reply to POST /v1/vault/reset. */
+export const VaultResetResult = z.object({
+  deleted: z.number().int(),
+  keptLocked: z.number().int(),
+  /** When the last protected item will be deleted (null if none). */
+  lockedUntil: DateTime.nullable(),
 });
 
 /** GET /v1/vault/usage */
@@ -475,6 +490,8 @@ export type Incident = z.infer<typeof Incident>;
 export type AccessLogRequest = z.infer<typeof AccessLogRequest>;
 export type AccessLogEntry = z.infer<typeof AccessLogEntry>;
 export type VaultUsage = z.infer<typeof VaultUsage>;
+export type VaultResetRequest = z.infer<typeof VaultResetRequest>;
+export type VaultResetResult = z.infer<typeof VaultResetResult>;
 export type CommunityReportRequest = z.infer<typeof CommunityReportRequest>;
 export type CommunityPhotoUploadRequest = z.infer<typeof CommunityPhotoUploadRequest>;
 export type CommunityPost = z.infer<typeof CommunityPost>;

@@ -83,6 +83,23 @@ export class CleanupService implements OnModuleInit {
         this.logger.error(`Photo ${photo.id} not deleted: ${(err as Error).message}`);
       }
     }
+    // … evidence from a reset Mere Saboot whose deletion protection has ended (it could never be
+    // opened again: the key went with the forgotten password) …
+    const orphans = await db
+      .selectFrom('evidence_items')
+      .select(['id', 'storage_key'])
+      .where('orphaned_at', 'is not', null)
+      .where('delete_locked_until', '<', sql<Date>`now()`)
+      .limit(BATCH)
+      .execute();
+    for (const item of orphans) {
+      try {
+        if (item.storage_key) await this.storage.delete(item.storage_key);
+        await db.deleteFrom('evidence_items').where('id', '=', item.id).execute();
+      } catch (err) {
+        this.logger.error(`Evidence ${item.id} not deleted: ${(err as Error).message}`);
+      }
+    }
     // … and Rakshak applications rejected more than 90 days ago (with their documents).
     const oldApps = await db
       .selectFrom('rakshak_applications')

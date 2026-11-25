@@ -21,6 +21,7 @@ import * as m0017 from './migrations/0017_alerts_timers';
 import * as m0018 from './migrations/0018_profile_details';
 import * as m0019 from './migrations/0019_phase2';
 import * as m0020 from './migrations/0020_phase3_bookings';
+import * as m0021 from './migrations/0021_vault_reset';
 import type { Database } from './types';
 
 /** Every migration, in order. Add new ones here (listed by hand so they also load in tests). */
@@ -45,6 +46,7 @@ export const migrations: Record<string, Migration> = {
   '0018_profile_details': m0018,
   '0019_phase2': m0019,
   '0020_phase3_bookings': m0020,
+  '0021_vault_reset': m0021,
 };
 
 export function createKysely(pool: Pool): Kysely<Database> {

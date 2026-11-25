@@ -324,6 +324,7 @@ key and is encrypted in 1 MB chunks (AES-256-GCM) before upload. The server cann
 | `POST /v1/vault/setup` | `{ lockedKey, kdf: { name: argon2id, salt, memoryKiB, iterations, parallelism }, checkValue }` | 204 |
 | `GET /v1/vault/recovery` | — | `{ lockedKey, kdf, checkValue }` (404 = no vault yet) |
 | `GET /v1/vault/usage` | — | `{ usedBytes, limitBytes, items }` |
+| `POST /v1/vault/reset` | `{ confirm: "RESET" }` | `{ deleted, keptLocked, lockedUntil }`. Forgotten password: deletes the locked key, the incidents and every item no longer protected; protected items are hidden at once and deleted by the hourly cleanup when `deleteLockedUntil` passes. Writes `reset` in the access history. Then `POST /v1/vault/setup` starts a new vault |
 | `POST /v1/vault/items/upload` | `{ itemId, sizeBytes }` (≤ 200 MB) | upload link |
 | `POST /v1/vault/items` | `{ id, kind, incidentId?, sosId?, lockedFileKey, lockedDetails, sha256, capturedAt, sizeBytes }` | `EvidenceItem` |
 | `GET /v1/vault/items` | — | `EvidenceItem[]` |

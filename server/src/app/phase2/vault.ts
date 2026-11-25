@@ -20,10 +20,12 @@ import {
   UpdateEvidenceRequest,
   UpdateIncidentRequest,
   VaultKey,
+  VaultResetRequest,
   type AccessLogEntry,
   type EvidenceItem,
   type Incident,
   type UploadLink,
+  type VaultResetResult,
   type VaultUsage,
 } from '@sarthi/shared';
 import { sql, type Selectable } from 'kysely';
@@ -108,6 +110,76 @@ export class VaultService {
       kdf: row.kdf as VaultKey['kdf'],
       checkValue: row.check_value,
     };
+  }
+
+  /**
+   * Forgotten password: start again. The old evidence can never be opened without the old
+   * password (nobody else has the key), so it is deleted with its incidents and the locked key.
+   * Items still protected from deletion are not deleted now: they are marked, hidden, and deleted
+   * by the hourly cleanup once their protection ends. The access history is kept.
+   */
+  async reset(userId: string): Promise<VaultResetResult> {
+    const now = new Date();
+    const { files, deleted, kept } = await this.database.db.transaction().execute(async (trx) => {
+      const items = await trx
+        .selectFrom('evidence_items')
+        .select(['id', 'storage_key', 'delete_locked_until'])
+        .where('user_id', '=', userId)
+        .where('orphaned_at', 'is', null)
+        .execute();
+      const locked = items.filter((i) => new Date(i.delete_locked_until) > now);
+      const free = items.filter((i) => new Date(i.delete_locked_until) <= now);
+      if (free.length > 0) {
+        await trx
+          .deleteFrom('evidence_items')
+          .where(
+            'id',
+            'in',
+            free.map((i) => i.id),
+          )
+          .execute();
+      }
+      if (locked.length > 0) {
+        await trx
+          .updateTable('evidence_items')
+          .set({ orphaned_at: now, incident_id: null, hidden: true })
+          .where(
+            'id',
+            'in',
+            locked.map((i) => i.id),
+          )
+          .execute();
+      }
+      // Incident titles were locked with the old key too.
+      await trx.deleteFrom('evidence_incidents').where('user_id', '=', userId).execute();
+      await trx.deleteFrom('vault_keys').where('user_id', '=', userId).execute();
+      await trx
+        .insertInto('evidence_access_log')
+        .values({
+          user_id: userId,
+          item_id: null,
+          incident_id: null,
+          action: 'reset',
+          device: null,
+          at: now,
+        })
+        .execute();
+      return {
+        files: free.map((i) => i.storage_key).filter((k): k is string => k !== null),
+        deleted: free.length,
+        kept: locked,
+      };
+    });
+    // The files go after the database change: a file left behind is harmless (unreadable and
+    // unlisted); a listed item without its file would not be.
+    for (const key of files) {
+      await this.storage.delete(key).catch(() => undefined);
+    }
+    const last = kept.reduce<Date | null>((max, i) => {
+      const d = new Date(i.delete_locked_until);
+      return max === null || d > max ? d : max;
+    }, null);
+    return { deleted, keptLocked: kept.length, lockedUntil: last ? last.toISOString() : null };
   }
 
   // ---- Items ----------------------------------------------------------------------------------
@@ -198,6 +270,7 @@ export class VaultService {
       .selectFrom('evidence_items')
       .selectAll()
       .where('user_id', '=', userId)
+      .where('orphaned_at', 'is', null) // from a reset vault: can never be opened
       .orderBy('captured_at', 'desc')
       .limit(5000)
       .execute();
@@ -259,6 +332,7 @@ export class VaultService {
         sql<string>`count(*)`.as('items'),
       ])
       .where('user_id', '=', userId)
+      .where('orphaned_at', 'is', null)
       .executeTakeFirstOrThrow();
     const limitMb = await this.plans.evidenceLimitMb(userId);
     return {
@@ -449,7 +523,9 @@ export class VaultService {
 
   private async ownItem(userId: string, id: string) {
     const item = await this.itemRow(id);
-    if (!item || item.user_id !== userId) throw appError.notFound('Item not found.');
+    // An item from a reset vault is gone for the user (it waits only for its protection to end).
+    if (!item || item.user_id !== userId || item.orphaned_at)
+      throw appError.notFound('Item not found.');
     return item;
   }
 
@@ -498,6 +574,13 @@ export class VaultController {
   @Get('recovery')
   recovery(@Req() req: AppRequest): Promise<VaultKey> {
     return this.vault.recovery(req.user!.id);
+  }
+
+  @Post('reset')
+  @HttpCode(200)
+  reset(@Req() req: AppRequest, @Body() body: unknown): Promise<VaultResetResult> {
+    parseAppBody(VaultResetRequest, body); // { confirm: "RESET" }
+    return this.vault.reset(req.user!.id);
   }
 
   @Get('usage')

@@ -332,6 +332,18 @@ extension Phase2Api on ApiClient {
     }
   }
 
+  /// Forgotten password: deletes the old (unopenable) evidence and the locked key, so a new vault
+  /// can be set up. Returns how many items were deleted and how many stay locked (hidden) until
+  /// their protection ends.
+  Future<({int deleted, int keptLocked, DateTime? lockedUntil})> vaultReset() async {
+    final j = _obj(await send('POST', '/v1/vault/reset', body: {'confirm': 'RESET'}));
+    return (
+      deleted: (j['deleted'] as num).toInt(),
+      keptLocked: (j['keptLocked'] as num).toInt(),
+      lockedUntil: j['lockedUntil'] == null ? null : DateTime.parse(j['lockedUntil'] as String).toLocal(),
+    );
+  }
+
   Future<VaultUsage> vaultUsage() async {
     final j = _obj(await send('GET', '/v1/vault/usage'));
     return VaultUsage((j['usedBytes'] as num).toInt(), (j['limitBytes'] as num).toInt(), (j['items'] as num).toInt());

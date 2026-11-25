@@ -15,6 +15,7 @@ import type {
 } from '@sarthi/shared';
 import { sql } from 'kysely';
 import { LiveService } from '../src/app/live/live.service';
+import { CleanupService } from '../src/app/timers/cleanup.service';
 import { buildTimeline } from '../src/app/phase2/daily-location';
 import { evidenceKey } from '../src/app/phase2/vault';
 import { StorageService } from '../src/storage/storage.module';
@@ -475,6 +476,74 @@ describe('Evidence vault (features 12–21)', () => {
     const item = (await addFile('photo')).body as EvidenceItem;
     await api().delete(`/v1/vault/items/${item.id}`).set(bearer(token)).expect(204);
     expect(await storage.info(evidenceKey(userId, item.id))).toBeNull();
+  });
+
+  it('reset (forgotten password): deletes what it can, hides protected items, starts a new vault', async () => {
+    // One item without protection, one protected for the usual days.
+    await ctx.db
+      .insertInto('settings')
+      .values({ key: 'evidence.delete_lock_days', value: JSON.stringify(0) })
+      .execute();
+    await setup().expect(204);
+    const free = (await addFile('photo')).body as EvidenceItem;
+    await ctx.db.deleteFrom('settings').where('key', '=', 'evidence.delete_lock_days').execute();
+    const incidentId = randomUUID();
+    await api()
+      .post('/v1/vault/incidents')
+      .set(bearer(token))
+      .send({ id: incidentId, kind: 'harassment', lockedDetails: B64 })
+      .expect(200);
+    const locked = (await addFile('audio', incidentId)).body as EvidenceItem;
+    keys.push(evidenceKey(userId, locked.id));
+
+    // Typing RESET is required.
+    await api().post('/v1/vault/reset').set(bearer(token)).send({ confirm: 'yes' }).expect(400);
+
+    const reset = await api()
+      .post('/v1/vault/reset')
+      .set(bearer(token))
+      .send({ confirm: 'RESET' })
+      .expect(200);
+    expect(reset.body).toMatchObject({ deleted: 1, keptLocked: 1 });
+    expect(new Date(reset.body.lockedUntil as string).getTime()).toBeGreaterThan(Date.now());
+
+    // The unprotected file is gone; the protected one stays (unreadable) but the user sees nothing.
+    expect(await storage.info(evidenceKey(userId, free.id))).toBeNull();
+    expect(await storage.info(evidenceKey(userId, locked.id))).not.toBeNull();
+    expect((await api().get('/v1/vault/items').set(bearer(token)).expect(200)).body).toEqual([]);
+    expect((await api().get('/v1/vault/incidents').set(bearer(token)).expect(200)).body).toEqual(
+      [],
+    );
+    expect(
+      ((await api().get('/v1/vault/usage').set(bearer(token)).expect(200)).body as VaultUsage)
+        .items,
+    ).toBe(0);
+    await api().get(`/v1/vault/items/${locked.id}/download`).set(bearer(token)).expect(404);
+    await api().get('/v1/vault/recovery').set(bearer(token)).expect(404);
+
+    // The reset is in the access history, and a new vault can be set up at once.
+    const log = (await api().get('/v1/vault/access-log').set(bearer(token)).expect(200)).body as {
+      action: string;
+    }[];
+    expect(log.map((l) => l.action)).toContain('reset');
+    await setup().expect(204);
+    expect((await api().get('/v1/vault/items').set(bearer(token)).expect(200)).body).toEqual([]);
+
+    // When the protection ends, the hourly cleanup deletes the old item and its file.
+    await ctx.db
+      .updateTable('evidence_items')
+      .set({ delete_locked_until: new Date(Date.now() - 1000) })
+      .where('id', '=', locked.id)
+      .execute();
+    await ctx.app.get(CleanupService).run();
+    expect(
+      await ctx.db
+        .selectFrom('evidence_items')
+        .select('id')
+        .where('id', '=', locked.id)
+        .executeTakeFirst(),
+    ).toBeUndefined();
+    expect(await storage.info(evidenceKey(userId, locked.id))).toBeNull();
   });
 });
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../api/api_client.dart';
+import '../../api/phase2_api.dart';
 import '../../state/app_state.dart';
 import '../../state/vault_session.dart';
 import '../../theme.dart';
@@ -43,19 +44,93 @@ class _PasswordFieldState extends State<PasswordField> {
 }
 
 /// Asks for the Mere Saboot password (e.g. before sharing evidence). Null if cancelled.
-Future<String?> askVaultPassword(BuildContext context, {String title = 'Enter your Mere Saboot password'}) {
-  final c = TextEditingController();
-  return showDialog<String>(
-    context: context,
-    builder: (d) => AlertDialog(
-      title: Text(title),
-      content: PasswordField(controller: c, label: 'Password', autofocus: true, onSubmitted: (v) => Navigator.pop(d, v)),
+Future<String?> askVaultPassword(BuildContext context, {String title = 'Enter your Mere Saboot password'}) =>
+    showDialog<String>(context: context, builder: (_) => _PasswordDialog(title: title));
+
+// The dialogs own their text fields: they are thrown away only when the dialog has fully closed
+// (disposing them as soon as the dialog returned broke its closing animation).
+
+class _PasswordDialog extends StatefulWidget {
+  const _PasswordDialog({required this.title});
+  final String title;
+
+  @override
+  State<_PasswordDialog> createState() => _PasswordDialogState();
+}
+
+class _PasswordDialogState extends State<_PasswordDialog> {
+  final _c = TextEditingController();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.title),
+        content: PasswordField(controller: _c, label: 'Password', autofocus: true, onSubmitted: (v) => Navigator.pop(context, v)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, _c.text), child: const Text('OK')),
+        ],
+      );
+}
+
+/// "Reset Mere Saboot?" with evidence in it: the user must type RESET (any case).
+class _ResetConfirmDialog extends StatefulWidget {
+  const _ResetConfirmDialog({required this.items});
+  final int items;
+
+  @override
+  State<_ResetConfirmDialog> createState() => _ResetConfirmDialogState();
+}
+
+class _ResetConfirmDialogState extends State<_ResetConfirmDialog> {
+  final _typed = TextEditingController();
+
+  @override
+  void dispose() {
+    _typed.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.items;
+    // Any case: the phone keyboard may not type capitals.
+    final ok = _typed.text.trim().toUpperCase() == 'RESET';
+    return AlertDialog(
+      title: const Text('Reset Mere Saboot?'),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            'Your $n item${n == 1 ? '' : 's'} will be deleted for good. They cannot be opened without the old '
+            'password, not even by us. Items protected from deletion stay locked and hidden, and are deleted when '
+            'their protection ends.\n\nType RESET to confirm.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('reset-confirm'),
+            controller: _typed,
+            autofocus: true,
+            textCapitalization: TextCapitalization.characters,
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(hintText: 'RESET'),
+          ),
+        ]),
+      ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(d, c.text), child: const Text('OK')),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.red),
+          onPressed: ok ? () => Navigator.pop(context, true) : null,
+          child: const Text('Reset'),
+        ),
       ],
-    ),
-  ).whenComplete(c.dispose);
+    );
+  }
 }
 
 /// Asks again before export, share or delete: fingerprint if it is on, else the password.
@@ -206,29 +281,77 @@ class _VaultUnlockViewState extends State<VaultUnlockView> {
     }
   }
 
+  /// "Forgot password?": with the fingerprint on, open with it and set a new password (evidence
+  /// kept). Otherwise (or by choice) reset: the old evidence is deleted and a new vault starts.
   Future<void> _forgot() async {
-    var empty = false;
+    var items = 0;
     try {
-      empty = await _vault.canStartOver();
+      items = (await AppScope.read(context).api.vaultUsage()).items;
     } catch (_) {}
     if (!mounted) return;
-    final start = await showDialog<bool>(
+    final choice = await showDialog<String>(
       context: context,
       builder: (d) => AlertDialog(
         title: const Text('Forgot your password?'),
-        content: Text(empty
-            ? 'The password cannot be reset: nobody else can open your vault. Your vault has no evidence yet, '
-                'so you can start a new one with a new password.'
-            : 'The password cannot be reset: nobody else can open your vault, not even Sarthi Rakshak. '
-                'Without it, the evidence in it cannot be opened. Try the passwords you usually use.'),
+        content: Text([
+          'The password cannot be recovered: nobody else can open your vault, not even Sarthi Rakshak.',
+          if (_fingerprint)
+            'Fingerprint opening is on for this phone: open with your fingerprint and set a new password. '
+                'Your evidence stays.',
+          if (items > 0)
+            'Or reset Mere Saboot: you can use it again with a new password, but the evidence in it now is deleted.'
+          else
+            'Your vault has no evidence yet, so you can reset it and set a new password.',
+        ].join('\n\n')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(d, false), child: Text(empty ? 'Cancel' : 'OK')),
-          if (empty) FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Start a new vault')),
+          TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+          TextButton(
+            key: const Key('vault-reset'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            onPressed: () => Navigator.pop(d, 'reset'),
+            child: const Text('Reset Mere Saboot'),
+          ),
+          if (_fingerprint)
+            FilledButton(onPressed: () => Navigator.pop(d, 'fingerprint'), child: const Text('Use fingerprint')),
         ],
       ),
     );
-    if (start == true) widget.onStartOver();
+    if (!mounted || choice == null) return;
+    if (choice == 'fingerprint') return _fingerprintThenNewPassword();
+    if (items > 0 && !await _confirmReset(items)) return;
+    try {
+      final r = await _vault.reset();
+      if (!mounted) return;
+      showInfo(
+        context,
+        r.keptLocked > 0
+            ? 'Mere Saboot was reset. ${r.keptLocked} protected item${r.keptLocked == 1 ? '' : 's'} will be deleted when the protection ends. Set a new password.'
+            : 'Mere Saboot was reset. Set a new password.',
+      );
+      widget.onStartOver();
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not reset Mere Saboot. Please try again.');
+    }
   }
+
+  /// Opens with the fingerprint, then goes straight to "set a new password" (no old one needed).
+  Future<void> _fingerprintThenNewPassword() async {
+    try {
+      if (!await _vault.unlockWithFingerprint()) return;
+      await widget.onOpened();
+      if (mounted) await Navigator.push(context, MaterialPageRoute(builder: (_) => const VaultPasswordScreen()));
+    } on VaultProblem catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Fingerprint did not work.');
+    }
+  }
+
+  /// The user must type RESET: this deletes evidence for good.
+  Future<bool> _confirmReset(int items) async =>
+      await showDialog<bool>(context: context, builder: (_) => _ResetConfirmDialog(items: items)) == true;
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.fromLTRB(20, 24, 20, 24), children: [
@@ -297,7 +420,8 @@ class _VaultPasswordScreenState extends State<VaultPasswordScreen> {
     }
     setState(() => _error = null);
     try {
-      await _vault.changePassword(_current.text, _password.text);
+      // Opened with the fingerprint: no old password needed (forgotten password, evidence kept).
+      await _vault.changePassword(_vault.openedWithFingerprint ? null : _current.text, _password.text);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -351,8 +475,21 @@ class _VaultPasswordScreenState extends State<VaultPasswordScreen> {
             ),
           const SizedBox(height: 12),
           const SectionLabel('Change password'),
-          PasswordField(controller: _current, label: 'Current password'),
-          const SizedBox(height: 12),
+          if (_vault.openedWithFingerprint)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 12),
+              child: NoticeBox(
+                key: Key('no-old-password'),
+                text: 'You opened Mere Saboot with your fingerprint, so you can set a new password without the old one.',
+                icon: Icons.fingerprint,
+                color: AppColors.green,
+                background: AppColors.greenSoft,
+              ),
+            )
+          else ...[
+            PasswordField(controller: _current, label: 'Current password'),
+            const SizedBox(height: 12),
+          ],
           PasswordField(controller: _password, label: 'New password'),
           const SizedBox(height: 12),
           PasswordField(controller: _again, label: 'Type the new password again', onSubmitted: (_) => _change()),

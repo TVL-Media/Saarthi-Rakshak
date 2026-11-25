@@ -403,6 +403,8 @@ export interface EvidenceItemsTable {
   delete_locked_until: Date | string;
   hidden: Generated<boolean>;
   uploaded: Generated<boolean>;
+  /** Set when the vault was reset while this item was still protected: it can never be opened again, is hidden, and is deleted once the protection ends. */
+  orphaned_at: Date | null;
   created_at: CreatedAt;
   updated_at: Timestamp;
 }

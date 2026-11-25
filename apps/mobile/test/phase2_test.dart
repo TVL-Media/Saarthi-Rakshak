@@ -442,24 +442,121 @@ void main() {
     expect(await phone(3).vault.state(), 'locked'); // with evidence: its old phrase is still needed
   });
 
-  testWidgets('Mere Saboot: "Forgot password" offers a new vault only while it has no evidence', (tester) async {
+  /// The vault's server: [items] pieces of evidence; reset answers like the real server.
+  AppState vaultState(int items) {
+    final api = ApiClient(
+      baseUrl: 'http://server',
+      client: MockClient((req) async {
+        serverCalls.add(req);
+        if (req.url.path == '/v1/vault/usage') {
+          return http.Response(jsonEncode({'usedBytes': 0, 'limitBytes': 1, 'items': items}), 200);
+        }
+        if (req.url.path == '/v1/vault/reset') {
+          return http.Response(jsonEncode({'deleted': items, 'keptLocked': 0, 'lockedUntil': null}), 200);
+        }
+        return answer(req);
+      }),
+    )..token = 't';
+    return AppState(api: api)
+      ..me = Me.fromJson(fixtures.me)
+      ..stage = Stage.home;
+  }
+
+  Future<bool> openForgot(WidgetTester tester, AppState state) async {
     final tmp = Directory.systemTemp.createTempSync('forgot');
     addTearDown(() => tmp.deleteSync(recursive: true));
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (c) async => tmp.path);
     var started = false;
-    await tester.pumpWidget(host(makeState(), Scaffold(body: VaultUnlockView(onOpened: () async {}, onStartOver: () => started = true))));
+    await tester.pumpWidget(host(state, Scaffold(body: VaultUnlockView(onOpened: () async {}, onStartOver: () => started = true))));
     await tester.pumpAndSettle();
     expect(find.text('Enter your password'), findsOneWidget);
     expect(find.byKey(const Key('vault-fingerprint')), findsNothing); // not turned on for this phone
     await tester.tap(find.text('Forgot password?'));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await tester.pumpAndSettle();
-    expect(find.textContaining('cannot be reset'), findsOneWidget);
-    await tester.tap(find.text('Start a new vault'));
+    expect(find.textContaining('cannot be recovered'), findsOneWidget);
+    return started;
+  }
+
+  testWidgets('Mere Saboot: "Forgot password" on an empty vault resets it at once and starts a new one', (tester) async {
+    var started = false;
+    final tmp = Directory.systemTemp.createTempSync('forgot');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (c) async => tmp.path);
+    await tester.pumpWidget(host(vaultState(0), Scaffold(body: VaultUnlockView(onOpened: () async {}, onStartOver: () => started = true))));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Forgot password?'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('vault-reset')));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('reset-confirm')), findsNothing); // nothing to lose: no typing
+    expect(lastBody('POST', '/v1/vault/reset'), {'confirm': 'RESET'});
     expect(started, isTrue);
   });
+
+  testWidgets('Mere Saboot: resetting a vault with evidence needs RESET typed; Cancel deletes nothing', (tester) async {
+    final state = vaultState(3);
+    await openForgot(tester, state);
+    expect(find.textContaining('evidence in it now is deleted'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('vault-reset')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Your 3 items will be deleted for good'), findsOneWidget);
+    FilledButton reset() => tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Reset'));
+    expect(reset().onPressed, isNull); // not until RESET is typed
+    await tester.enterText(find.byKey(const Key('reset-confirm')), 'reset');
+    await tester.pump();
+    expect(reset().onPressed, isNotNull);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(serverCalls.where((r) => r.url.path == '/v1/vault/reset'), isEmpty);
+
+    await tester.tap(find.text('Forgot password?'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('vault-reset')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('reset-confirm')), 'RESET');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Reset'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pumpAndSettle();
+    expect(lastBody('POST', '/v1/vault/reset'), {'confirm': 'RESET'});
+    expect(find.textContaining('Mere Saboot was reset'), findsOneWidget);
+  });
+
+  test('Mere Saboot: opened with the fingerprint, a new password needs no old one; otherwise it does', () async {
+    SharedPreferences.setMockInitialValues({});
+    passwordEngine();
+    final state = makeState();
+    await state.vault.setup('old secret');
+    // With the password: the old one is still needed.
+    await expectLater(state.vault.changePassword(null, 'new'), throwsA(isA<VaultProblem>()));
+
+    // With the fingerprint (the Keystore gives the key): no old password needed.
+    state.vault.lock();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('sarthi/engine'), (call) async {
+      final args = (call.arguments as Map?) ?? const {};
+      return switch (call.method) {
+        'vaultUnlock' => base64Encode(List.filled(32, 7)),
+        'vaultEncrypt' => 'L${args['plain']}',
+        'vaultDecrypt' => (args['locked'] as String).substring(1),
+        'sha256Bytes' => args['data'],
+        _ => null,
+      };
+    });
+    expect(await state.vault.unlockWithFingerprint(), isTrue);
+    expect(state.vault.openedWithFingerprint, isTrue);
+    await state.vault.changePassword(null, 'brand new');
+    state.vault.lock();
+    await expectLater(state.vault.unlockWithPassword('old secret'), throwsA(isA<VaultProblem>()));
+    await state.vault.unlockWithPassword('brand new');
+    expect(state.vault.openedWithFingerprint, isFalse);
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   testWidgets('Voice SOS: the button downloads the model if needed, listens and counts the phrase', (tester) async {
     var hasModel = false;
