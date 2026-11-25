@@ -17,6 +17,7 @@ import '../../widgets/common.dart';
 import '../../widgets/format.dart';
 import 'report_pdf.dart';
 import 'vault_screen.dart';
+import 'vault_setup_screen.dart';
 
 /// A list row for one evidence item (details are decrypted on the phone).
 class EvidenceRow extends StatefulWidget {
@@ -97,7 +98,7 @@ class _EvidenceItemScreenState extends State<EvidenceItemScreen> {
   }
 
   Future<void> _share() async {
-    if (!await _vault.confirm('Confirm to share this evidence')) return;
+    if (!await confirmVault(context, 'Confirm to share this evidence')) return;
     try {
       final path = await _vault.openFile(_item);
       await _vault.log('shared', itemId: _item.id, incidentId: _item.incidentId);
@@ -110,7 +111,7 @@ class _EvidenceItemScreenState extends State<EvidenceItemScreen> {
   }
 
   Future<void> _save() async {
-    if (!await _vault.confirm('Confirm to save a copy to Downloads')) return;
+    if (!await confirmVault(context, 'Confirm to save a copy to Downloads')) return;
     try {
       final path = await _vault.openFile(_item);
       final d = _d ?? ItemDetails();
@@ -169,7 +170,7 @@ class _EvidenceItemScreenState extends State<EvidenceItemScreen> {
       return;
     }
     if (!await confirm(context, 'Delete this evidence?', 'It will be deleted for good. This cannot be undone.', yes: 'Delete', danger: true)) return;
-    if (!await _vault.confirm('Confirm to delete evidence')) return;
+    if (!mounted || !await confirmVault(context, 'Confirm to delete evidence')) return;
     try {
       await _state.api.deleteEvidence(_item.id);
       await _vault.log('deleted', itemId: _item.id, incidentId: _item.incidentId);
@@ -611,7 +612,7 @@ class _IncidentScreenState extends State<IncidentScreen> {
   /// Builds the incident report (PDF), keeps a copy in the vault, then shares or saves it.
   Future<void> _report() async {
     final vault = _state.vault;
-    if (!await vault.confirm('Confirm to make a report')) return;
+    if (!await confirmVault(context, 'Confirm to make a report')) return;
     if (!mounted) return;
     final choice = await showModalBottomSheet<String>(
       context: context,

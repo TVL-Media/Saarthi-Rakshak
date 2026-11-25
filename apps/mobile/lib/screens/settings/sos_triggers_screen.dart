@@ -175,7 +175,11 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
   bool? _hasModel;
   bool _downloading = false;
   int _heard = 0; // times the phrase was heard in setup (3 needed)
+  bool _preparing = false; // loading the voice model: the microphone is not on yet
   bool _listening = false;
+
+  /// How long one setup try listens.
+  static const _listenSeconds = 10;
   String? _error;
 
   @override
@@ -242,8 +246,17 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
       if (_hasModel != true) return;
     }
     if (!mounted) return;
-    setState(() => _listening = true);
-    final status = await _state.engine.voiceTest(_lang, _phrase.text.trim(), seconds: 8).catchError((_) => 'error');
+    // Only say "say it now" once the model is loaded and the microphone can start at once;
+    // words said while it was still loading were lost before. (A failure here is reported by
+    // voiceTest below.)
+    setState(() => _preparing = true);
+    await _state.engine.voicePrepare(_lang).catchError((_) => false);
+    if (!mounted) return;
+    setState(() {
+      _preparing = false;
+      _listening = true;
+    });
+    final status = await _state.engine.voiceTest(_lang, _phrase.text.trim(), seconds: _listenSeconds).catchError((_) => 'error');
     if (!mounted) return;
     setState(() {
       _listening = false;
@@ -256,7 +269,7 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
             '${status.substring(8)}. Use 2 to 5 common ${_lang == 'hi' ? 'Hindi' : 'English'} words.';
       } else {
         _error = switch (status) {
-          'not_heard' => 'Did not hear the phrase. Say it clearly, at a normal volume, within 8 seconds.',
+          'not_heard' => 'Did not hear the phrase. Say all the words clearly, at a normal volume, within $_listenSeconds seconds.',
           'no_mic' => 'Allow the microphone for Voice SOS.',
           'no_model' => 'The voice model is missing or damaged. Download it again.',
           _ => 'Listening could not start. Close other apps using the microphone and try again.',
@@ -363,18 +376,21 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
               width: double.infinity,
               child: FilledButton.icon(
                 key: const Key('voice-listen'),
-                onPressed: _listening || _downloading ? null : _listen,
+                onPressed: _preparing || _listening || _downloading ? null : _listen,
                 icon: Icon(_listening ? Icons.hearing : Icons.mic),
-                label: Text(_listening
-                    ? 'Listening… say it now'
-                    : (_heard >= 3 ? 'Test again' : (ready ? 'Tap, then say your phrase' : 'Download and say your phrase'))),
+                label: Text(_preparing
+                    ? 'Getting ready… wait'
+                    : _listening
+                        ? 'Listening… say it now'
+                        : (_heard >= 3 ? 'Test again' : (ready ? 'Tap, then say your phrase' : 'Download and say your phrase'))),
               ),
             ),
-            if (_listening) ...[
+            if (_preparing || _listening) ...[
               const SizedBox(height: 12),
               const LinearProgressIndicator(color: AppColors.red),
               const SizedBox(height: 6),
-              const Text('Listening for 8 seconds', style: TextStyle(color: AppColors.muted, fontSize: 13)),
+              Text(_preparing ? 'Starting the microphone. Do not speak yet.' : 'Listening for $_listenSeconds seconds',
+                  key: const Key('voice-status'), style: const TextStyle(color: AppColors.muted, fontSize: 13)),
             ],
           ]),
         ),
@@ -385,13 +401,63 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
           ),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, key: const Key('voice-error'), style: const TextStyle(color: AppColors.red))),
         const SizedBox(height: 16),
-        const NoticeBox(text: 'Voice SOS listens only while a journey is on. It may not work in a very noisy place, so keep the SOS button handy.'),
+        const NoticeBox(
+          key: Key('voice-requirements'),
+          text: 'Voice SOS needs:\n'
+              '• The microphone allowed for Sarthi Rakshak.\n'
+              '• The voice model downloaded once (about 40 MB). After that it works offline.\n'
+              '• A journey on: it listens only during a journey, also with the screen off or the app in the background.\n'
+              'Use 2 to 5 common words you would not say by mistake. It may miss the phrase in a very noisy place, so keep the SOS button handy.',
+        ),
       ]),
     );
   }
 }
 
 /// Discreet mode (feature 5).
+/// Discreet mode: show or hide the rounded box behind the "Quick help" widget's symbol.
+class _WidgetTileSwitch extends StatefulWidget {
+  const _WidgetTileSwitch();
+
+  @override
+  State<_WidgetTileSwitch> createState() => _WidgetTileSwitchState();
+}
+
+class _WidgetTileSwitchState extends State<_WidgetTileSwitch> {
+  late final _engine = AppScope.read(context).engine;
+  bool _on = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _engine.widgetTile().then((on) {
+      if (mounted) setState(() => _on = on);
+    }).catchError((_) {});
+  }
+
+  Future<void> _set(bool on) async {
+    setState(() => _on = on); // moves at once; widgets on the home screen follow
+    try {
+      await _engine.setWidgetTile(on);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _on = !on);
+      showInfo(context, 'Could not change the widget. Please try again.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+        key: const Key('widget-tile'),
+        isThreeLine: true,
+        secondary: const IconTile(Icons.crop_square, size: 40),
+        title: const Text('Box behind the widget', style: TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: const Text('Off: only the symbol and "Quick help" on your wallpaper'),
+        value: _on,
+        onChanged: _set,
+      );
+}
+
 class DiscreetModeScreen extends StatelessWidget {
   const DiscreetModeScreen({super.key});
 
@@ -417,21 +483,16 @@ class DiscreetModeScreen extends StatelessWidget {
               if (context.mounted && !ok) showInfo(context, 'Long-press your home screen → Widgets → Sarthi Rakshak.');
             },
           ),
-          MenuRow(
-            icon: Icons.add_to_home_screen,
-            title: 'Add a shortcut',
-            subtitle: 'An icon called "Quick help"',
-            onTap: () async {
-              final ok = await state.engine.pinShortcut().catchError((_) => false);
-              if (context.mounted && !ok) showInfo(context, 'Long-press the Sarthi Rakshak icon and drag "Quick help" to your home screen.');
-            },
-          ),
+          // One way only: the plain widget. The old "Add a shortcut" did the same thing but showed
+          // the app's own logo, which is less discreet.
+          const _WidgetTileSwitch(),
         ]),
         AppCard(
           padding: EdgeInsets.zero,
           child: Column(children: [
             SwitchListTile(
               secondary: const IconTile(Icons.volume_off_outlined, size: 40),
+              isThreeLine: true, // the description wraps: a two-line row cut the title off
               title: const Text('Quiet countdown', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('No sound and a dark screen when an SOS starts'),
               value: t.quietCountdown,
@@ -440,6 +501,7 @@ class DiscreetModeScreen extends StatelessWidget {
             const Divider(height: 1, indent: 72, color: Color(0xFFF0ECE7)),
             SwitchListTile(
               secondary: const IconTile(Icons.notifications_active_outlined, size: 40),
+              isThreeLine: true,
               title: const Text('SOS in notification', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('Start an SOS from the journey notification, without opening the app'),
               value: t.journeySosButton,

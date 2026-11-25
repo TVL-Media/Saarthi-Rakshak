@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sarthi_rakshak/api/api_client.dart';
+import 'package:sarthi_rakshak/api/models.dart';
 
 const me = {
   'id': '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
@@ -18,6 +20,23 @@ const me = {
 };
 
 void main() {
+  test('a file upload with no connection says so (it used to fail with no message)', () async {
+    final tmp = await Directory.systemTemp.createTemp('upload');
+    addTearDown(() => tmp.delete(recursive: true));
+    final file = File('${tmp.path}/id.jpg')..writeAsBytesSync(List.filled(10, 1));
+    final api = ApiClient(
+      baseUrl: 'http://server/',
+      client: MockClient.streaming((req, body) async {
+        await body.drain<void>();
+        throw http.ClientException('Connection refused');
+      }),
+    );
+    await expectLater(
+      api.uploadFile(UploadLink('k', 'http://storage/put', const {}), file.path),
+      throwsA(isA<ApiException>().having((e) => e.message, 'message', 'No internet connection. Please try again.')),
+    );
+  });
+
   test('login sends the Firebase token and reads our session', () async {
     late http.Request sent;
     final api = ApiClient(

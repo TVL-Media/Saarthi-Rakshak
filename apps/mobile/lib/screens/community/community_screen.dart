@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -35,6 +36,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
   List<CommunityPost>? _posts;
   String? _error;
 
+  /// Reports this user sent (newest first), shown under the report button with their status.
+  List<CommunityPost> _mine = const [];
+
   @override
   void initState() {
     super.initState();
@@ -44,7 +48,18 @@ class _CommunityScreenState extends State<CommunityScreen> {
     _load();
   }
 
+  Future<void> _loadMine() async {
+    try {
+      final m = await _state.api.myCommunityReports();
+      m.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      if (mounted) setState(() => _mine = m);
+    } catch (_) {
+      // The posts list shows the connection problem; this list just stays as it was.
+    }
+  }
+
   Future<void> _load() async {
+    unawaited(_loadMine());
     try {
       final p = await _state.api.communityPosts(_area);
       if (mounted) {
@@ -106,8 +121,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final posts = _posts;
     return Scaffold(
       appBar: AppBar(
+        // No history icon: the reports you sent are listed on this page ("See all" opens the rest).
         title: const Text('Community safety'),
-        actions: [IconButton(tooltip: 'My reports', icon: const Icon(Icons.history), onPressed: () => _go(const MyReportsScreen()))],
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -129,6 +144,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
             icon: const Icon(Icons.add),
             label: const Text('Report a safety issue'),
           ),
+          if (_mine.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Row(children: [
+              const Expanded(child: SectionLabel('Reports you sent')),
+              if (_mine.length > 3)
+                TextButton(onPressed: () => _go(const MyReportsScreen()), child: Text('See all ${_mine.length}')),
+            ]),
+            for (final p in _mine.take(3)) Padding(padding: const EdgeInsets.only(bottom: 10), child: _SentReport(post: p)),
+            const SizedBox(height: 4),
+            const SectionLabel('In your area'),
+          ],
           const SizedBox(height: 16),
           if (_error != null) NoticeBox(text: _error!, icon: Icons.error_outline, color: AppColors.red, background: AppColors.redSoft),
           if (posts == null && _error == null) const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())),
@@ -158,6 +184,32 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 }
 
+/// One report the user sent, small: what, where, when, and its status.
+class _SentReport extends StatelessWidget {
+  const _SentReport({required this.post});
+  final CommunityPost post;
+
+  @override
+  Widget build(BuildContext context) {
+    final cat = postCategories[post.category] ?? postCategories['other']!;
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      child: Row(children: [
+        IconTile(cat.$2, size: 32),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(post.body.isEmpty ? cat.$1 : post.body, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text('${post.area} · sent ${ago(post.createdAt)}', style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        PostCard.statusPill(post.status ?? 'pending'),
+      ]),
+    );
+  }
+}
+
 class PostCard extends StatelessWidget {
   const PostCard({super.key, required this.post, this.onFlag});
   final CommunityPost post;
@@ -178,7 +230,7 @@ class PostCard extends StatelessWidget {
             ]),
           ),
           if (post.official) const StatusPill('Official', color: AppColors.green),
-          if (post.status != null) _statusPill(post.status!),
+          if (post.status != null) statusPill(post.status!),
           if (onFlag != null && !post.official)
             IconButton(tooltip: 'Report this post', icon: const Icon(Icons.flag_outlined, color: AppColors.muted, size: 20), onPressed: onFlag),
         ]),
@@ -199,9 +251,9 @@ class PostCard extends StatelessWidget {
     );
   }
 
-  Widget _statusPill(String s) => switch (s) {
+  static Widget statusPill(String s) => switch (s) {
         'published' => const StatusPill('Published', color: AppColors.green),
-        'pending' => const StatusPill('Being checked', color: AppColors.amber),
+        'pending' => const StatusPill('Sent · being checked', color: AppColors.amber),
         'rejected' => const StatusPill('Not published', color: AppColors.red),
         _ => const StatusPill('Removed', color: AppColors.muted),
       };
@@ -293,6 +345,7 @@ class _CommunityReportScreenState extends State<CommunityReportScreen> {
       return;
     }
     final state = AppScope.read(context);
+    setState(() => _error = null);
     try {
       String? photoKey;
       if (_photo != null) {
@@ -301,25 +354,38 @@ class _CommunityReportScreenState extends State<CommunityReportScreen> {
           setState(() => _error = 'The photo is too large. Take it again.');
           return;
         }
+        if (mounted) setState(() => _progress = 'Uploading the photo…');
         final link = await state.api.communityPhotoLink(size);
         await state.api.uploadFile(link, _photo!.path);
         photoKey = link.key;
       }
+      if (mounted) setState(() => _progress = 'Sending your report…');
       await state.api.communityReport({
-        'id': const Uuid().v4(),
+        'id': _id,
         'category': _category,
         'area': _area,
         'body': _body.text.trim(),
         'photoKey': ?photoKey,
       });
       if (mounted) {
-        showInfo(context, 'Thanks. Your report will appear after our team checks it.');
+        showInfo(context, 'Report sent. It will appear after our team checks it.');
         Navigator.pop(context);
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = 'Your report was not sent. ${e.message}');
+    } catch (_) {
+      // Never fail silently (a photo upload problem used to leave the button spinning).
+      if (mounted) setState(() => _error = 'Your report was not sent. Please try again.');
+    } finally {
+      if (mounted) setState(() => _progress = null);
     }
   }
+
+  /// The same id on every try, so trying again never sends the report twice.
+  final _id = const Uuid().v4();
+
+  /// What is happening while sending (the photo first, then the report).
+  String? _progress;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -377,6 +443,11 @@ class _CommunityReportScreenState extends State<CommunityReportScreen> {
           if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: AppColors.red))),
           const SizedBox(height: 20),
           BusyButton(label: 'Send report', onPressed: _send),
+          if (_progress != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(_progress!, key: const Key('report-progress'), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+            ),
         ]),
       );
 }

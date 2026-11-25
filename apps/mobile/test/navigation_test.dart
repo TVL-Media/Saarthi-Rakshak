@@ -233,7 +233,7 @@ void main() {
 
     await start(t, const CommunityScreen());
     await opens(t, find.byKey(const Key('community-report')), CommunityReportScreen, back: CommunityScreen);
-    await opens(t, find.byTooltip('My reports'), MyReportsScreen, back: CommunityScreen);
+    expect(find.byIcon(Icons.history), findsNothing); // no history icon in the top bar
 
     await start(t, const RakshakScreen());
     await opens(t, find.byKey(const Key('rakshak-apply')), RakshakFormScreen, back: RakshakScreen);
@@ -251,7 +251,7 @@ void main() {
     await settle(t);
     await opens(t, find.text('Recording.m4a'), EvidenceItemScreen, back: VaultScreen);
     await opens(t, find.text('Access history'), AccessHistoryScreen, back: VaultScreen);
-    await opens(t, find.text('Recovery phrase'), NewPhraseScreen, back: VaultScreen);
+    await opens(t, find.text('Password'), VaultPasswordScreen, back: VaultScreen);
   });
 
   testWidgets('Notifications about reports, Rakshak and plans open their page', (t) async {

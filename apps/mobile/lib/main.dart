@@ -8,6 +8,7 @@ import 'config.dart';
 import 'screens/auth/consent_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/profile_screen.dart';
+import 'screens/fakecall/fake_call_screen.dart';
 import 'screens/guardians/guardians_screen.dart';
 import 'screens/home/shell.dart';
 import 'screens/journey/checkin_screen.dart';
@@ -129,6 +130,9 @@ class _RootState extends State<_Root> {
         ));
       case 'checkin':
         state.checkinAlert.value = action;
+      case 'fakecall':
+        // A scheduled fake call came due (app on screen, or its call notification was tapped).
+        openFakeCall(ctx, (action['caller'] as String?) ?? 'Mom', answered: action['answered'] == 'true');
     }
   }
 

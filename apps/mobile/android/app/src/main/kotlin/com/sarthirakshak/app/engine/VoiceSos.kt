@@ -9,7 +9,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.ZipInputStream
 import org.json.JSONArray
-import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener
@@ -91,27 +90,21 @@ object VoiceSos {
     }
 
     /** The phrase in lower case, for the grammar and matching. */
-    fun normalise(phrase: String) = phrase.trim().lowercase().replace(Regex("[^\\p{L}\\p{M}\\p{N} ]"), "").replace(Regex("\\s+"), " ")
+    fun normalise(phrase: String) = VoiceMatch.normalise(phrase)
 
     private fun grammar(phrase: String) = JSONArray().put(normalise(phrase)).put("[unk]").toString()
 
     /**
-     * The recognizer only knows the phrase (plus "[unk]" for any other sound), so any result made
-     * only of the phrase's own words is the phrase. Words the model does not know are left out by
-     * Vosk, so the result can be shorter than the typed phrase: comparing whole strings would then
-     * never match.
+     * The phrase words the model knows: Vosk leaves unknown words out of its results, so only
+     * these can be heard. All of them must come, in order (see [VoiceMatch]).
      */
-    private fun matches(json: String, phrase: String): Boolean {
-        val text = try {
-            JSONObject(json).optString("text", "")
-        } catch (e: Exception) {
-            ""
-        }
-        if (text.isBlank() || text.contains("[unk]")) return false
-        val heard = normalise(text).split(' ').filter { it.isNotEmpty() }
-        val wanted = normalise(phrase).split(' ').filter { it.isNotEmpty() }.toSet()
-        return heard.isNotEmpty() && heard.all { it in wanted }
+    private fun wantedWords(model: Model, phrase: String): List<String> {
+        val unknown = unknownWords(model, phrase).toSet()
+        return VoiceMatch.words(phrase).filter { it !in unknown }
     }
+
+    /** Restarts the journey listening after a setup test used the microphone (null: none). */
+    private var resumeJourney: (() -> Unit)? = null
 
     /** vosk_model_find_word is in libvosk but not in the Java wrapper: called through JNA. */
     private interface VoskWords : com.sun.jna.Library {
@@ -143,21 +136,40 @@ object VoiceSos {
         }
     }
 
-    /** Starts listening (journey only). Returns false if the model or microphone is missing. */
+    /** Starts listening during a journey. Returns false if the model or microphone is missing. */
     fun start(context: Context, lang: String, phrase: String, onHeard: () -> Unit, onStopped: (String) -> Unit): Boolean {
         stop()
+        val ok = listen(context, lang, phrase, onHeard, onStopped)
+        // Kept so a setup test (which needs the microphone) can hand it back afterwards.
+        if (ok) resumeJourney = { listen(context, lang, phrase, onHeard, onStopped) }
+        return ok
+    }
+
+    private fun listen(context: Context, lang: String, phrase: String, onHeard: () -> Unit, onStopped: (String) -> Unit): Boolean {
+        stopListening()
         if (!micAllowed(context) || !hasModel(context, lang) || phrase.isBlank()) return false
         return try {
-            val recognizer = Recognizer(loadModel(context, lang), 16000.0f, grammar(phrase))
+            val model = synchronized(this) { loadModel(context, lang) }
+            val wanted = wantedWords(model, phrase).ifEmpty { VoiceMatch.words(phrase) }
+            val recognizer = Recognizer(model, 16000.0f, grammar(phrase))
+            // One SOS per utterance: a phrase seen in a partial result and again in the final
+            // result must not open the countdown twice.
+            var firedThisUtterance = false
+            fun check(hypothesis: String?, endOfUtterance: Boolean) {
+                val match = hypothesis != null && VoiceMatch.heard(VoiceMatch.textOf(hypothesis), wanted)
+                if (match && !firedThisUtterance) {
+                    firedThisUtterance = true
+                    onHeard()
+                }
+                if (endOfUtterance) firedThisUtterance = false
+            }
             service = SpeechService(recognizer, 16000.0f).also {
                 it.startListening(object : RecognitionListener {
-                    override fun onPartialResult(hypothesis: String?) {}
-                    override fun onResult(hypothesis: String?) {
-                        if (hypothesis != null && matches(hypothesis, phrase)) onHeard()
-                    }
-                    override fun onFinalResult(hypothesis: String?) {
-                        if (hypothesis != null && matches(hypothesis, phrase)) onHeard()
-                    }
+                    // Checked while the user is still speaking: no need to wait for a pause,
+                    // which may come late (or never) in a noisy place.
+                    override fun onPartialResult(hypothesis: String?) = check(hypothesis, endOfUtterance = false)
+                    override fun onResult(hypothesis: String?) = check(hypothesis, endOfUtterance = true)
+                    override fun onFinalResult(hypothesis: String?) = check(hypothesis, endOfUtterance = true)
                     override fun onError(exception: Exception?) {
                         Log.w(TAG, "Voice SOS stopped", exception)
                         onStopped("error")
@@ -172,10 +184,31 @@ object VoiceSos {
         }
     }
 
+    /** Stops listening for the journey (journey ended, SOS started or Voice SOS turned off). */
     fun stop() {
+        resumeJourney = null
+        stopListening()
+    }
+
+    private fun stopListening() {
         service?.stop()
         service?.shutdown()
         service = null
+    }
+
+    /**
+     * Loads the voice model ahead of a setup test, so the microphone is on as soon as the screen
+     * says "say it now". Call on a background thread. False if the model is missing or damaged.
+     */
+    fun prepare(context: Context, lang: String): Boolean {
+        if (!hasModel(context, lang)) return false
+        return try {
+            synchronized(this) { loadModel(context, lang) }
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Voice model could not load", e)
+            false
+        }
     }
 
     val listening get() = service != null
@@ -191,7 +224,9 @@ object VoiceSos {
             main.post {
                 if (!finished) {
                     finished = true
-                    stop()
+                    stopListening()
+                    // A journey was listening before the test: give it the microphone back.
+                    resumeJourney?.let { resume -> resume() }
                     done(status)
                 }
             }
@@ -215,7 +250,7 @@ object VoiceSos {
             if (unknown.isNotEmpty() && words.size - unknown.size < 2) return@Thread finish("unknown:" + unknown.joinToString(" "))
             main.post {
                 if (finished) return@post
-                val ok = start(context, lang, phrase, onHeard = { finish("heard") }, onStopped = { finish("error") })
+                val ok = listen(context, lang, phrase, onHeard = { finish("heard") }, onStopped = { finish("error") })
                 if (!ok) finish("error") else main.postDelayed({ finish("not_heard") }, seconds * 1000L)
             }
         }.start()

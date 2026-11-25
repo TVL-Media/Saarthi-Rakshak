@@ -44,20 +44,20 @@ class MapsService {
 
   Future<List<PlaceResult>> search(String text, {double? nearLat, double? nearLng}) async {
     if (text.trim().length < 2) return const [];
-    if (!available) return _deviceSearch(text);
+    if (!available) return _deviceSearch(text, nearLat: nearLat, nearLng: nearLng);
     try {
       return await _googleSearch(text, nearLat: nearLat, nearLng: nearLng);
     } catch (e) {
       // Google refused or failed (e.g. the API is not enabled for the key, or no internet to
       // Google): the phone's own geocoder still finds the place.
       if (!_device) rethrow;
-      return _deviceSearch(text);
+      return _deviceSearch(text, nearLat: nearLat, nearLng: nearLng);
     }
   }
 
-  Future<List<PlaceResult>> _deviceSearch(String text) async {
+  Future<List<PlaceResult>> _deviceSearch(String text, {double? nearLat, double? nearLng}) async {
     if (!_device) return const [];
-    final found = await _engine.geocodeSearch(text.trim());
+    final found = await _engine.geocodeSearch(text.trim(), nearLat: nearLat, nearLng: nearLng);
     return [
       for (final m in found)
         PlaceResult(

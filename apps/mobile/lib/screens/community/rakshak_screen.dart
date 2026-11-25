@@ -227,12 +227,16 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
     setState(() => _error = null);
     try {
       final keys = <String, String>{};
+      var n = 0;
       for (final e in _docs.entries) {
+        n++;
+        if (mounted) setState(() => _progress = 'Uploading photo $n of ${_docs.length}…');
         final size = await File(e.value.path).length();
         final link = await _state.api.rakshakDocLink(e.key, size);
         await _state.api.uploadFile(link, e.value.path);
         keys[e.key] = link.key;
       }
+      if (mounted) setState(() => _progress = 'Sending your application…');
       await _state.api.rakshakApply({
         'fullName': _name.text.trim(),
         'dateOfBirth': DateFormat('yyyy-MM-dd').format(_dob!),
@@ -249,9 +253,17 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
         Navigator.pop(context);
       }
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _error = 'Your application was not sent. ${e.message}');
+    } catch (_) {
+      // Any other failure (e.g. a photo that cannot be read): never fail silently.
+      if (mounted) setState(() => _error = 'Your application was not sent. Please try again.');
+    } finally {
+      if (mounted) setState(() => _progress = null);
     }
   }
+
+  /// What is happening while sending (photos first, then the form).
+  String? _progress;
 
   Widget _docTile(String key, String label, IconData icon) {
     final f = _docs[key];
@@ -344,9 +356,15 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
             onChanged: (v) => setState(() => _agree = v ?? false),
             title: const Text('I agree to identity and background checks, and confirm the details are true.', style: TextStyle(fontSize: 14.5)),
           ),
-          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: AppColors.red))),
+          if (_error != null)
+            Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, key: const Key('rakshak-error'), style: const TextStyle(color: AppColors.red))),
           const SizedBox(height: 16),
           BusyButton(label: 'Send application', onPressed: _submit),
+          if (_progress != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(_progress!, key: const Key('rakshak-progress'), textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted)),
+            ),
         ]),
       );
 }

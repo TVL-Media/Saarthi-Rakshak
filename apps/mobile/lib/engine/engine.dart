@@ -192,6 +192,11 @@ class SafetyEngine {
 
   /// Listens up to [seconds] for the phrase. Answers `heard`, `not_heard`, `no_mic`, `no_model`,
   /// `no_phrase`, `unknown:<words>` (the model does not know enough of the words) or `error`.
+  /// Loads the voice model before a test, so the microphone is on when the screen says "say it
+  /// now" (loading takes a few seconds the first time). False if the model is missing or damaged.
+  Future<bool> voicePrepare(String lang) async =>
+      (await _ch.invokeMethod<bool>('voicePrepare', {'lang': lang})) ?? false;
+
   Future<String> voiceTest(String lang, String phrase, {int seconds = 10}) async =>
       (await _ch.invokeMethod<String>('voiceTest', {'lang': lang, 'phrase': phrase, 'seconds': seconds})) ?? 'error';
 
@@ -234,7 +239,12 @@ class SafetyEngine {
   Future<String?> exportClip(String id) => _ch.invokeMethod<String>('exportClip', {'id': id});
   Future<int> freeBytes() async => (await _ch.invokeMethod<int>('freeBytes')) ?? 0;
   Future<bool> pinWidget() async => (await _ch.invokeMethod<bool>('pinWidget')) ?? false;
-  Future<bool> pinShortcut() async => (await _ch.invokeMethod<bool>('pinShortcut')) ?? false;
+
+  /// The "Quick help" widget shows its rounded box behind the symbol (on unless turned off).
+  Future<bool> widgetTile() async => (await _ch.invokeMethod<bool>('widgetTile')) ?? true;
+
+  /// Shows or hides the widget's box; widgets already on the home screen change at once.
+  Future<void> setWidgetTile(bool on) => _ch.invokeMethod('setWidgetTile', {'on': on});
   Future<void> playFile(String path) => _ch.invokeMethod('playFile', {'path': path});
   Future<bool> openFile(String path, String mime) async =>
       (await _ch.invokeMethod<bool>('openFile', {'path': path, 'mime': mime})) ?? false;
@@ -281,12 +291,24 @@ class SafetyEngine {
 
   Future<void> stopRingtone() => _ch.invokeMethod('stopRingtone');
 
+  /// Fake call after [delaySeconds], also when the app is in the background (native, so Android
+  /// does not freeze the wait). Opens the call screen, or rings with a call notification.
+  Future<void> scheduleFakeCall(String caller, int delaySeconds) =>
+      _ch.invokeMethod('scheduleFakeCall', {'caller': caller, 'delaySeconds': delaySeconds});
+
+  /// Stops a waiting or ringing fake call (its notification and ringtone).
+  Future<void> cancelFakeCall() => _ch.invokeMethod('cancelFakeCall');
+
   /// A strong buzz (e.g. each second of the SOS countdown).
   Future<void> vibrate(int ms) => _ch.invokeMethod('vibrate', {'ms': ms});
 
   /// Places matching [query] (India) from the phone's own geocoder — no Google key needed.
-  Future<List<Map<dynamic, dynamic>>> geocodeSearch(String query) async =>
-      ((await _ch.invokeMethod<List<dynamic>>('geocodeSearch', {'query': query})) ?? const [])
+  Future<List<Map<dynamic, dynamic>>> geocodeSearch(String query, {double? nearLat, double? nearLng}) async =>
+      ((await _ch.invokeMethod<List<dynamic>>('geocodeSearch', {
+            'query': query,
+            if (nearLat != null && nearLng != null) ...{'nearLat': nearLat, 'nearLng': nearLng},
+          })) ??
+          const [])
           .cast<Map<dynamic, dynamic>>();
 
   /// The place at a position ({name, address, area}), or null.

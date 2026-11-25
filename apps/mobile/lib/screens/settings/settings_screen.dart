@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -249,28 +251,82 @@ class _PlaceFormState extends State<_PlaceForm> {
   bool _searched = false;
   bool _locating = false;
 
+  /// Search-as-you-type: waits for a short pause in typing, then searches.
+  Timer? _typing;
+  static const _typingPause = Duration(milliseconds: 500);
+  static const _minLetters = 3;
+
+  /// Only the newest search may show its results (an older, slower one is ignored).
+  int _searchNo = 0;
+
+  /// Where the phone last was (no prompt, no waiting): places near it are listed first.
+  Position? _near;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastKnownPlace();
+  }
+
+  Future<void> _lastKnownPlace() async {
+    try {
+      final p = await Geolocator.checkPermission();
+      if (p != LocationPermission.always && p != LocationPermission.whileInUse) return;
+      _near = await Geolocator.getLastKnownPosition();
+    } catch (_) {
+      // Searched across India instead.
+    }
+  }
+
+  /// A result was tapped: it is the chosen place (the keyboard closes so "Save" is in view).
+  void _pick(PlaceResult r) {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _picked = r;
+      _error = null;
+    });
+  }
+
   @override
   void dispose() {
+    _typing?.cancel();
     _name.dispose();
     _search.dispose();
     super.dispose();
   }
 
-  Future<void> _find() async {
+  void _onTyping(String text) {
+    _typing?.cancel();
+    if (text.trim().length < _minLetters) {
+      _searchNo++; // a search still running for the old text is not shown
+      setState(() {
+        _results = const [];
+        _searched = false;
+        _searching = false;
+      });
+      return;
+    }
+    _typing = Timer(_typingPause, () => _find(fromTyping: true));
+  }
+
+  /// [fromTyping]: started by typing (the keyboard stays open); otherwise the arrow or Search key.
+  Future<void> _find({bool fromTyping = false}) async {
+    _typing?.cancel();
     final text = _search.text.trim();
     if (text.length < 2) return setState(() => _error = 'Type at least 2 letters of the place or address.');
-    FocusScope.of(context).unfocus();
+    if (!fromTyping) FocusScope.of(context).unfocus();
+    final no = ++_searchNo;
     setState(() {
       _searching = true;
       _error = null;
     });
     try {
-      final r = await _maps.search(text);
-      if (mounted) setState(() => _results = r);
+      final r = await _maps.search(text, nearLat: _near?.latitude, nearLng: _near?.longitude);
+      if (mounted && no == _searchNo) setState(() => _results = r);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Search isn’t working. Check your internet.');
+      if (mounted && no == _searchNo) setState(() => _error = 'Search isn’t working. Check your internet.');
     } finally {
-      if (mounted) {
+      if (mounted && no == _searchNo) {
         setState(() {
           _searching = false;
           _searched = true;
@@ -333,29 +389,39 @@ class _PlaceFormState extends State<_PlaceForm> {
                 key: const Key('place-search'),
                 controller: _search,
                 textInputAction: TextInputAction.search,
+                // One icon: places are listed while typing, so there is no arrow button (the
+                // keyboard's Search key still searches at once).
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search),
                   hintText: 'Search area, place or address',
                   suffixIcon: _searching
                       ? const Padding(padding: EdgeInsets.all(14), child: CircularProgressIndicator(strokeWidth: 2))
-                      : IconButton(key: const Key('place-search-go'), icon: const Icon(Icons.arrow_forward), onPressed: _find),
+                      : null,
                 ),
+                onChanged: _onTyping,
                 onSubmitted: (_) => _find(),
               ),
             if (_searched && _results.isEmpty && !_searching)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Text('No places found. Try the area and city, e.g. “Sector 18, Noida”.',
+                child: Text('No places found. Try the area and city, e.g. “Sector 18, Noida”, or use your current location when you are there.',
                     style: TextStyle(color: AppColors.muted)),
+              ),
+            if (_results.isNotEmpty && _picked == null)
+              const Padding(
+                padding: EdgeInsets.only(top: 8, left: 4),
+                child: Text('Tap the right place:', style: TextStyle(color: AppColors.muted, fontSize: 13)),
               ),
             for (final r in _results.take(5))
               ListTile(
+                key: ValueKey('place-${r.lat},${r.lng}'),
                 leading: Icon(_picked == r ? Icons.check_circle : Icons.place_outlined,
                     color: _picked == r ? AppColors.green : AppColors.muted),
                 title: Text(r.name),
                 subtitle: Text(r.address, maxLines: 2, overflow: TextOverflow.ellipsis),
                 selected: _picked == r,
-                onTap: () => setState(() => _picked = r),
+                selectedColor: AppColors.green,
+                onTap: () => _pick(r),
               ),
             TextButton.icon(
               onPressed: _locating ? null : _useHere,
@@ -364,7 +430,9 @@ class _PlaceFormState extends State<_PlaceForm> {
                   : const Icon(Icons.my_location),
               label: const Text('Use my current location'),
             ),
-            if (_picked != null) Text('Selected: ${_picked!.address}', style: const TextStyle(color: AppColors.green)),
+            if (_picked != null)
+              Text('Selected: ${_picked!.address}',
+                  key: const Key('place-selected'), style: const TextStyle(color: AppColors.green, fontWeight: FontWeight.w600)),
             if (_error != null) Text(_error!, style: const TextStyle(color: AppColors.red)),
             const SizedBox(height: 12),
             BusyButton(label: 'Save', onPressed: _save),

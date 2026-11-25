@@ -22,6 +22,7 @@ import android.provider.Settings
 import com.sarthirakshak.app.engine.Alerts
 import com.sarthirakshak.app.engine.Crypto
 import com.sarthirakshak.app.engine.EngineBus
+import com.sarthirakshak.app.engine.FakeCallService
 import com.sarthirakshak.app.engine.LocalClips
 import com.sarthirakshak.app.engine.Outbox
 import com.sarthirakshak.app.engine.SafetyService
@@ -35,9 +36,6 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.IntentFilter
 import android.content.ContentValues
-import android.content.pm.ShortcutInfo
-import android.content.pm.ShortcutManager
-import android.graphics.drawable.Icon
 import android.os.Environment
 import android.os.StatFs
 import android.hardware.Sensor
@@ -74,6 +72,7 @@ class MainActivity : FlutterFragmentActivity() {
         // The moment the screen goes off, the app must not stay allowed over the lock screen.
         ContextCompat.registerReceiver(this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED)
         Alerts.channels(this)
+        refreshDiscreetWidgets()
         handleIntent(intent)
         // Carry on with an SOS or journey that was running (e.g. after the app was closed).
         try {
@@ -92,6 +91,9 @@ class MainActivity : FlutterFragmentActivity() {
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = showOverLockScreen(false)
     }
+
+    /** Redraws "Quick help" widgets already on the home screen (e.g. after an app update changed their look). */
+    private fun refreshDiscreetWidgets() = DiscreetWidgetProvider.refresh(this)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -133,12 +135,12 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
-        // Only an SOS or a check-in alert may appear without unlocking the phone.
-        showOverLockScreen(action == "sos" || action == "checkin")
+        // Only an SOS, a check-in alert or the fake-call ring may appear without unlocking the phone.
+        showOverLockScreen(action == "sos" || action == "checkin" || action == "fakecall")
         val data = HashMap<String, Any?>()
         data["action"] = action
         intent.getStringExtra(EXTRA_TRIGGER)?.let { data["trigger"] = it }
-        for (key in listOf("checkinId", "reason", "journeyId", "quiet", "seconds", "heightM")) {
+        for (key in listOf("checkinId", "reason", "journeyId", "quiet", "seconds", "heightM", "caller", "answered")) {
             intent.getStringExtra(key)?.let { data[key] = it }
         }
         intent.removeExtra(EXTRA_ACTION)
@@ -290,10 +292,18 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "geocodeSearch" -> {
                         val query = call.argument<String>("query") ?: ""
+                        val nearLat = call.argument<Double>("nearLat")
+                        val nearLng = call.argument<Double>("nearLng")
                         geocode(result) { g ->
-                            // Within India only (bounding box), best matches first.
+                            // Near the user first (about 50 km around), so "PG near Federal Bank"
+                            // finds the one in their city, not a same-named place far away.
                             @Suppress("DEPRECATION")
-                            g.getFromLocationName(query, 6, 6.5, 68.0, 37.5, 97.5).orEmpty().map { a -> addressMap(a) }
+                            val near = if (nearLat != null && nearLng != null) {
+                                g.getFromLocationName(query, 6, nearLat - 0.45, nearLng - 0.45, nearLat + 0.45, nearLng + 0.45).orEmpty()
+                            } else emptyList()
+                            // Then within India (bounding box), best matches first.
+                            @Suppress("DEPRECATION")
+                            near.ifEmpty { g.getFromLocationName(query, 6, 6.5, 68.0, 37.5, 97.5).orEmpty() }.map { a -> addressMap(a) }
                         }
                     }
                     "geocodeReverse" -> {
@@ -311,6 +321,14 @@ class MainActivity : FlutterFragmentActivity() {
                     "stopRingtone" -> {
                         ringtone?.stop()
                         ringtone = null
+                        result.success(null)
+                    }
+                    "scheduleFakeCall" -> {
+                        FakeCallService.schedule(this, call.argument<String>("caller") ?: "Mom", call.argument<Int>("delaySeconds") ?: 5)
+                        result.success(null)
+                    }
+                    "cancelFakeCall" -> {
+                        FakeCallService.cancel(this)
                         result.success(null)
                     }
                     "pickContact" -> {
@@ -433,6 +451,13 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }.start()
             }
+            "voicePrepare" -> {
+                val lang = call.argument<String>("lang") ?: "en"
+                Thread {
+                    val ok = VoiceSos.prepare(this, lang)
+                    runOnUiThread { result.success(ok) }
+                }.start()
+            }
             "voiceTest" -> {
                 VoiceSos.test(
                     this,
@@ -515,27 +540,15 @@ class MainActivity : FlutterFragmentActivity() {
             "vaultDecrypt" -> result.success(Base64.encodeToString(Vault.decryptBytes(call.argument<String>("key")!!, call.argument<String>("locked")!!), Base64.NO_WRAP))
             "sha256Bytes" -> result.success(Vault.sha256(Base64.decode(call.argument<String>("data")!!, Base64.NO_WRAP).inputStream()))
             "freeBytes" -> result.success(StatFs(filesDir.absolutePath).availableBytes)
+            "widgetTile" -> result.success(DiscreetWidgetProvider.showTile(this))
+            "setWidgetTile" -> {
+                DiscreetWidgetProvider.setShowTile(this, call.argument<Boolean>("on") ?: true)
+                result.success(null)
+            }
             "pinWidget" -> {
                 val mgr = getSystemService(AppWidgetManager::class.java)
                 val ok = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mgr.isRequestPinAppWidgetSupported &&
                     mgr.requestPinAppWidget(ComponentName(this, DiscreetWidgetProvider::class.java), null, null)
-                result.success(ok)
-            }
-            "pinShortcut" -> {
-                val sm = getSystemService(ShortcutManager::class.java)
-                val ok = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && sm.isRequestPinShortcutSupported &&
-                    sm.requestPinShortcut(
-                        ShortcutInfo.Builder(this, "quick_help")
-                            .setShortLabel("Quick help")
-                            .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
-                            .setIntent(Intent(this, MainActivity::class.java).apply {
-                                action = Intent.ACTION_VIEW
-                                putExtra(EXTRA_ACTION, "sos")
-                                putExtra(EXTRA_TRIGGER, "discreet")
-                            })
-                            .build(),
-                        null,
-                    )
                 result.success(ok)
             }
             "playFile" -> {
@@ -710,6 +723,16 @@ class MainActivity : FlutterFragmentActivity() {
         File(cacheDir, "play.m4a").delete()
     }
 
+    override fun onResume() {
+        super.onResume()
+        visible = true
+    }
+
+    override fun onPause() {
+        visible = false
+        super.onPause()
+    }
+
     override fun onDestroy() {
         try {
             unregisterReceiver(screenOffReceiver)
@@ -724,6 +747,10 @@ class MainActivity : FlutterFragmentActivity() {
     companion object {
         const val EXTRA_ACTION = "sarthi_action"
         const val EXTRA_TRIGGER = "sarthi_trigger"
+
+        /** The app's screens are on screen (resumed); a fake call then opens directly. */
+        @Volatile
+        var visible = false
         private const val PICK_CONTACT = 4711
     }
 }

@@ -10,6 +10,7 @@ import 'package:sarthi_rakshak/api/maps_service.dart';
 import 'package:sarthi_rakshak/api/models.dart';
 import 'package:sarthi_rakshak/engine/engine.dart';
 import 'package:sarthi_rakshak/screens/journey/start_journey_screen.dart';
+import 'package:sarthi_rakshak/screens/settings/settings_screen.dart';
 import 'package:sarthi_rakshak/screens/sos/recordings_screen.dart';
 import 'package:sarthi_rakshak/screens/sos/sos_active_screen.dart';
 import 'package:sarthi_rakshak/state/app_state.dart';
@@ -240,6 +241,36 @@ void main() {
     expect(e.audioRecorded(now.add(const Duration(seconds: 1))), const Duration(seconds: 103));
     final stopped = EngineState({'recording': false, 'audioSavedSeconds': 90, 'audioClipSince': 0});
     expect(stopped.audioRecorded(now), const Duration(seconds: 90));
+  });
+
+  testWidgets('Saved places: places are listed while typing, without pressing the arrow', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(host(makeState(), const SavedPlacesScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Home'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('place-search')), 'se');
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(engineCalls.where((c) => c.method == 'geocodeSearch'), isEmpty); // 2 letters: not yet
+
+    await tester.enterText(find.byKey(const Key('place-search')), 'sector 1');
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.enterText(find.byKey(const Key('place-search')), 'sector 18');
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+    // One search, for the last text only (typing in between did not start extra searches).
+    final searches = engineCalls.where((c) => c.method == 'geocodeSearch').toList();
+    expect(searches.map((c) => (c.arguments as Map)['query']), ['sector 18']);
+    expect(find.text('Sector 18, Noida, Uttar Pradesh'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_forward), findsNothing); // one icon only (search), no arrow
+
+    // Tapping a result chooses it, clearly.
+    await tester.tap(find.text('Sector 18, Noida, Uttar Pradesh'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('place-selected')), findsOneWidget);
+    expect(find.byIcon(Icons.check_circle), findsOneWidget);
   });
 
   testWidgets('Journey without a Google key: the phone\'s geocoder finds the destination', (tester) async {

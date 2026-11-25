@@ -18,23 +18,29 @@ class FakeCallScreen extends StatefulWidget {
 class _FakeCallScreenState extends State<FakeCallScreen> {
   final _caller = TextEditingController(text: 'Mom');
   int _delay = 5;
-  Timer? _timer;
 
   @override
   void dispose() {
-    _timer?.cancel();
     _caller.dispose();
     super.dispose();
   }
 
   void _start() {
     final name = _caller.text.trim().isEmpty ? 'Mom' : _caller.text.trim();
-    showInfo(context, _delay == 0 ? 'Calling…' : 'Your phone will ring in $_delay seconds.');
-    _timer?.cancel();
-    _timer = Timer(Duration(seconds: _delay), () {
-      if (!mounted) return;
-      Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => IncomingCallScreen(caller: name)));
-    });
+    if (_delay == 0) {
+      showInfo(context, 'Calling…');
+      openFakeCall(context, name);
+      return;
+    }
+    // The wait runs in the native engine: it still rings after the user leaves the app.
+    AppScope.read(context).engine.scheduleFakeCall(name, _delay).then(
+          (_) {
+            if (mounted) showInfo(context, 'Your phone will ring in $_delay seconds. You can leave the app.');
+          },
+          onError: (_) {
+            if (mounted) showInfo(context, 'Could not start the fake call. Please try again.');
+          },
+        );
   }
 
   @override
@@ -116,10 +122,20 @@ class _FakeCallScreenState extends State<FakeCallScreen> {
   }
 }
 
+/// Opens the ringing call screen (from the Fake Call screen, or a fake call notification).
+Future<void> openFakeCall(BuildContext context, String caller, {bool answered = false}) =>
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => IncomingCallScreen(caller: caller, answered: answered),
+    ));
+
 /// Full-screen ringing call; Answer shows a call in progress.
 class IncomingCallScreen extends StatefulWidget {
-  const IncomingCallScreen({super.key, required this.caller});
+  const IncomingCallScreen({super.key, required this.caller, this.answered = false});
   final String caller;
+
+  /// Opened with Answer on the call notification: starts as a call in progress, no ringing.
+  final bool answered;
 
   @override
   State<IncomingCallScreen> createState() => _IncomingCallScreenState();
@@ -137,7 +153,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   void initState() {
     super.initState();
-    _engine.startRingtone().catchError((_) {});
+    // A scheduled call rang with a notification: this screen takes over from it.
+    _engine.cancelFakeCall().catchError((_) {});
+    if (widget.answered) {
+      _answered = true; // no setState in initState
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() => _seconds++));
+    } else {
+      _engine.startRingtone().catchError((_) {});
+    }
   }
 
   @override
