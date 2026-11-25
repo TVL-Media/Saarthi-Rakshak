@@ -138,7 +138,7 @@ object Alerts {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return builder(context, CH_PROTECTION)
-            .setSmallIcon(R.drawable.ic_sos)
+            .setSmallIcon(R.drawable.ic_call) // a plain phone: no SOS shield on a fake call
             .setContentTitle("Fake call scheduled")
             .setContentText("Your phone will ring soon.")
             .setOngoing(true)
@@ -157,7 +157,7 @@ object Alerts {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val b = builder(context, CH_FAKE_CALL)
-            .setSmallIcon(R.drawable.ic_sos)
+            .setSmallIcon(R.drawable.ic_call) // shown as the badge on the caller picture
             .setContentTitle(caller)
             .setContentText("Incoming call")
             .setCategory(Notification.CATEGORY_CALL)
