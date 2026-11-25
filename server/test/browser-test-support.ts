@@ -653,3 +653,27 @@ export async function createBookingForTest(): Promise<string> {
   });
   return id;
 }
+
+/** A "Report a problem" ticket from the app (test database only, wiped after the run). */
+export async function createSupportTicketForTest(): Promise<string> {
+  const id = randomUUID();
+  await withTestDatabase(async (db) => {
+    const user = await db
+      .insertInto('users')
+      .values({ phone: '+919812344521', name: 'Priya Sharma' })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('support_tickets')
+      .values({
+        id,
+        user_id: user.id,
+        category: 'otp',
+        message: 'The OTP never arrives on my phone.',
+        app_version: '1.1.5 (13)',
+        device_model: 'CPH2381',
+      })
+      .execute();
+  });
+  return id;
+}

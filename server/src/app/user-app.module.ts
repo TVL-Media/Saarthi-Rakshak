@@ -53,6 +53,7 @@ import { RakshakController, RakshakService } from './phase2/rakshak';
 import { SosExtrasController, SosPhotosService, SosTriggersService } from './phase2/sos-extras';
 import { VaultController, VaultService } from './phase2/vault';
 import { AdminPhase3Controller, AdminPhase3Service } from './phase3/admin-phase3';
+import { AdminSupportController, AdminSupportService } from './support/admin-support';
 import { BookingsController, BookingsService } from './phase3/bookings';
 
 /** Everything the Android app and the guardian pages call: /v1/... and /g/... */
@@ -81,6 +82,7 @@ import { BookingsController, BookingsService } from './phase3/bookings';
     AdminPhase2Controller,
     BookingsController,
     AdminPhase3Controller,
+    AdminSupportController,
   ],
   providers: [
     {
@@ -111,6 +113,7 @@ import { BookingsController, BookingsService } from './phase3/bookings';
     AdminPhase2Service,
     BookingsService,
     AdminPhase3Service,
+    AdminSupportService,
     { provide: JobHandlers, useFactory: () => new JobHandlers() },
     {
       provide: JobQueue,

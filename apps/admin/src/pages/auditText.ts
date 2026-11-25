@@ -62,6 +62,8 @@ const PAGES: Record<string, string> = {
   '/admin/bookings': 'Bookings',
   '/admin/bookings/rakshaks': 'Approved Rakshaks (for a booking)',
   '/admin/bookings/:id': 'Booking',
+  '/admin/support-tickets': 'Support Tickets',
+  '/admin/support-tickets/:id': 'Support ticket',
 };
 
 const BOOKING_ACTIONS: Record<string, string> = {
@@ -69,6 +71,8 @@ const BOOKING_ACTIONS: Record<string, string> = {
   'POST /admin/bookings/:id/assign': 'Bookings · assigned a Rakshak',
   'POST /admin/bookings/:id/status': 'Bookings · changed the progress of a booking',
   'POST /admin/bookings/:id/cancel': 'Bookings · cancelled a booking',
+  'POST /admin/support-tickets/:id/assign': 'Support Tickets · assigned or unassigned a ticket',
+  'POST /admin/support-tickets/:id/status': 'Support Tickets · changed the status of a ticket',
 };
 
 function pageName(route: string): string {
