@@ -623,3 +623,33 @@ export async function endSessionsForTest(email: string, how: 'idle' | 'ended'): 
 export function authenticatorCode(base32Secret: string, stepsAhead = 0): string {
   return totpCode(base32Decode(base32Secret), timeStep(Date.now()) + stepsAhead);
 }
+
+/** One booking from a made-up user (temporary record, test database only). Returns its id. */
+export async function createBookingForTest(): Promise<string> {
+  const id = randomUUID();
+  await withTestDatabase(async (db) => {
+    const user = await db
+      .insertInto('users')
+      .values({ phone: '+919812344521', name: 'Priya Sharma' })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    await db
+      .insertInto('bookings')
+      .values({
+        id,
+        user_id: user.id,
+        service_type: 'home_guard',
+        window_start: new Date(Date.now() + 3_600_000),
+        window_end: new Date(Date.now() + 3 * 3_600_000),
+        place: sql<string>`ST_SetSRID(ST_MakePoint(77.3219, 28.5707), 4326)::geography`,
+        place_label: 'Sector 18',
+        notes: 'Ring the bell twice',
+      })
+      .execute();
+    await db
+      .insertInto('booking_events')
+      .values({ booking_id: id, status: 'requested', actor: 'user', admin_id: null, note: null })
+      .execute();
+  });
+  return id;
+}

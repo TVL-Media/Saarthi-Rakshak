@@ -7,6 +7,7 @@ import { DashboardBody } from './DashboardPage';
 import { HistoryBody } from './HistoryPage';
 import { LiveBody } from './LivePage';
 import { CommunityBody, Phase2Stats, PlansBody, RakshakBody } from './Phase2Pages';
+import { BookingsBody } from './Phase3Pages';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
@@ -111,6 +112,13 @@ export const MAIN_SCREENS: Screen[] = [
     title: 'Community moderation',
     sub: 'Approve, edit or reject safety reports before anyone sees them',
     body: CommunityBody,
+  },
+  {
+    path: '/bookings',
+    menu: 'Bookings',
+    title: 'Bookings',
+    sub: 'Book a Rakshak · quote, assign and follow each booking',
+    body: BookingsBody,
   },
   { path: '/reports', menu: 'Reports', title: 'Reports', sub: 'Pilot numbers', body: Reports },
 ];

@@ -487,6 +487,61 @@ export interface SubscriptionsTable {
   updated_at: Timestamp;
 }
 
+export type BookingStatus =
+  | 'requested'
+  | 'quoted'
+  | 'confirmed'
+  | 'assigned'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled';
+
+export interface BookingServicesTable {
+  id: string;
+  name: string;
+  description: string;
+  position: number;
+  active: Generated<boolean>;
+}
+
+export interface BookingsTable {
+  /** Made on the phone, so repeating the request returns the same booking. */
+  id: string;
+  user_id: string;
+  service_type: string;
+  window_start: Date | string;
+  window_end: Date | string;
+  place: Geography;
+  place_label: string | null;
+  notes: string | null;
+  status: Generated<BookingStatus>;
+  quote_amount_paise: number | null;
+  quote_note: string | null;
+  quote_expires_at: Date | null;
+  rakshak_user_id: string | null;
+  cancel_reason: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface BookingEventsTable {
+  id: Generated<string>;
+  booking_id: string;
+  status: string;
+  actor: 'user' | 'rakshak' | 'admin' | 'system';
+  admin_id: string | null;
+  note: string | null;
+  created_at: CreatedAt;
+}
+
+export interface RakshakPresenceTable {
+  user_id: string;
+  location: Geography;
+  accuracy_m: number | null;
+  online: Generated<boolean>;
+  updated_at: Timestamp;
+}
+
 export interface Database {
   users: UsersTable;
   devices: DevicesTable;
@@ -520,4 +575,8 @@ export interface Database {
   rakshak_applications: RakshakApplicationsTable;
   plans: PlansTable;
   subscriptions: SubscriptionsTable;
+  booking_services: BookingServicesTable;
+  bookings: BookingsTable;
+  booking_events: BookingEventsTable;
+  rakshak_presence: RakshakPresenceTable;
 }

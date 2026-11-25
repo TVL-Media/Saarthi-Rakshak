@@ -188,6 +188,19 @@ export const DEFAULT_SETTINGS = {
     min: 0,
     max: 1,
   },
+  // ---- Phase 3 (customer side) ----
+  'feature.nearby': {
+    value: 0,
+    description: 'Rakshaks Near Me: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.bookings': {
+    value: 0,
+    description: 'Book a Rakshak and My Bookings: 1 = on, 0 = off for everyone (staged release switch)',
+    min: 0,
+    max: 1,
+  },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof DEFAULT_SETTINGS;

@@ -224,6 +224,20 @@ export const FIELDS: {
     hint: 'Switch the feature off for everyone (staged release)',
     applies: 'Phase 2 · applies on each phone the next time the app opens.',
   },
+  {
+    key: 'feature.nearby',
+    label: 'Rakshaks Near Me',
+    unit: '1 on · 0 off',
+    hint: 'Off until Rakshaks can go online (Rakshak app, later). Switch on to show it in the app',
+    applies: 'Phase 3 · applies on each phone the next time the app opens.',
+  },
+  {
+    key: 'feature.bookings',
+    label: 'Book a Rakshak and My Bookings',
+    unit: '1 on · 0 off',
+    hint: 'Switch on to show booking in the app. Bookings then appear under Bookings',
+    applies: 'Phase 3 · applies on each phone the next time the app opens.',
+  },
 ];
 
 const SETTINGS_KEY = ['settings'] as const;

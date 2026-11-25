@@ -59,6 +59,16 @@ const PAGES: Record<string, string> = {
   '/admin/plans': 'Plans',
   '/admin/subscriptions': 'Subscriptions',
   '/admin/phase2/stats': 'Phase 2 counts (Reports)',
+  '/admin/bookings': 'Bookings',
+  '/admin/bookings/rakshaks': 'Approved Rakshaks (for a booking)',
+  '/admin/bookings/:id': 'Booking',
+};
+
+const BOOKING_ACTIONS: Record<string, string> = {
+  'POST /admin/bookings/:id/quote': 'Bookings · sent a quote',
+  'POST /admin/bookings/:id/assign': 'Bookings · assigned a Rakshak',
+  'POST /admin/bookings/:id/status': 'Bookings · changed the progress of a booking',
+  'POST /admin/bookings/:id/cancel': 'Bookings · cancelled a booking',
 };
 
 function pageName(route: string): string {
@@ -86,6 +96,7 @@ export function describe(entry: AuditEntry): string {
   const details = (entry.details ?? {}) as Record<string, unknown>;
 
   if (entry.action.startsWith('GET ')) return `${pageName(entry.action.slice(4))} page`;
+  if (BOOKING_ACTIONS[entry.action]) return BOOKING_ACTIONS[entry.action];
   switch (entry.action) {
     case 'auth.access_denied':
       return `Tried to open ${pageName((entry.reason ?? '').replace(/^GET /, ''))} (not allowed)`;

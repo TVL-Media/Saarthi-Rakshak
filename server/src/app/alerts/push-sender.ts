@@ -11,7 +11,8 @@ export type PushType =
   | 'checkin_no_reply'
   | 'community_status'
   | 'rakshak_status'
-  | 'plan_status';
+  | 'plan_status'
+  | 'booking_status';
 
 export interface PushMessage {
   type: PushType;

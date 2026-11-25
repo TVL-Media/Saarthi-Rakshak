@@ -1,9 +1,12 @@
 # Phase 3 app API (customer side)
 
-What the Flutter app (`apps/mobile`, version 1.1.8) already calls for Phase 3. **The server does not have these
-yet.** Until it does, every screen shows "Not available yet" (the app treats HTTP 404 and 501 on these calls
-as "not built"), never an error and never made-up data. When the server adds them with the shapes below, the
-screens work without an app change. If the server needs a different shape, change
+What the Flutter app (`apps/mobile`, version 1.1.8+) calls for Phase 3. **The server now has these**
+(`server/src/app/phase3/bookings.ts`, migration `0020_phase3_bookings`), switched **off** by default: while
+`feature.nearby` / `feature.bookings` are 0 (Settings in the admin panel) every call answers 404 and the
+screens show "Not available yet" (the app treats HTTP 404 and 501 as "not built"), never an error and never
+made-up data. Bookings are worked from the admin panel (**Bookings** screen: quote, assign a Rakshak, started,
+completed, cancel with a reason). "Near me" stays empty until the Rakshak app writes positions to
+`rakshak_presence` (not built yet). The shapes below are what the server returns. If the server needs a different shape, change
 `apps/mobile/lib/api/phase3_api.dart` (one file) and the tests in `apps/mobile/test/phase3_test.dart`.
 
 Same rules as `docs/app-api.md`: `Authorization: Bearer <session token>`, errors are `{ "error", "message" }`.
