@@ -75,6 +75,7 @@ const toApp = (r: {
   status: RakshakApplication['status'];
   reason: string | null;
   area: string;
+  areas: string[];
   created_at: Date;
   decided_at: Date | null;
 }): RakshakApplication => ({
@@ -82,6 +83,7 @@ const toApp = (r: {
   status: r.status,
   reason: r.status === 'rejected' ? r.reason : null,
   area: r.area,
+  areas: r.areas,
   createdAt: new Date(r.created_at).toISOString(),
   decidedAt: r.decided_at?.toISOString() ?? null,
 });
@@ -125,6 +127,8 @@ export class RakshakService {
         throw appError.invalidInput(`documents.${name}: Must be a JPEG photo of at most 3 MB.`);
       }
     }
+    // Up to 5 areas; an app from before multi-area sends only `area`. The first is the main one.
+    const areas = input.areas ?? [input.area];
     const row = await this.database.db
       .insertInto('rakshak_applications')
       .values({
@@ -135,13 +139,14 @@ export class RakshakService {
           address: input.address,
           motivation: input.motivation,
         }),
-        area: input.area,
+        area: areas[0],
+        areas,
         id_type: input.idType,
         id_last4: input.idLast4,
         documents: JSON.stringify(input.documents),
         consent_at: new Date(),
       })
-      .returning(['id', 'status', 'reason', 'area', 'created_at', 'decided_at'])
+      .returning(['id', 'status', 'reason', 'area', 'areas', 'created_at', 'decided_at'])
       .executeTakeFirstOrThrow();
     return toApp(row);
   }
@@ -175,7 +180,7 @@ export class RakshakService {
   private current(userId: string) {
     return this.database.db
       .selectFrom('rakshak_applications')
-      .select(['id', 'status', 'reason', 'area', 'created_at', 'decided_at'])
+      .select(['id', 'status', 'reason', 'area', 'areas', 'created_at', 'decided_at'])
       .where('user_id', '=', userId)
       .orderBy('created_at', 'desc')
       .executeTakeFirst();

@@ -220,7 +220,7 @@ export class AdminPhase2Service {
   async applications(status: string) {
     const rows = await this.database.db
       .selectFrom('rakshak_applications')
-      .select(['id', 'area', 'id_type', 'status', 'created_at', 'decided_at'])
+      .select(['id', 'areas', 'id_type', 'status', 'created_at', 'decided_at'])
       .where('status', '=', status as 'under_review')
       .orderBy('created_at', status === 'under_review' ? 'asc' : 'desc')
       .limit(200)
@@ -228,7 +228,8 @@ export class AdminPhase2Service {
     return {
       items: rows.map((r) => ({
         id: r.id,
-        area: r.area,
+        // Every area (up to 5), shown as one line: "Sector 6, Sector 18".
+        area: r.areas.join(', '),
         idType: r.id_type,
         status: r.status,
         createdAt: r.created_at.toISOString(),
@@ -245,7 +246,7 @@ export class AdminPhase2Service {
       .select([
         'a.id',
         'a.locked_details',
-        'a.area',
+        'a.areas',
         'a.id_type',
         'a.id_last4',
         'a.documents',
@@ -270,7 +271,7 @@ export class AdminPhase2Service {
       ...details,
       // Phone numbers are partly hidden in the admin panel.
       phone: r.phone ? maskPhone(r.phone) : null,
-      area: r.area,
+      area: r.areas.join(', '),
       idType: r.id_type,
       idLast4: r.id_last4,
       documents: links,
@@ -465,7 +466,7 @@ export class AdminPhase2Service {
       .execute();
     const rakshak = await db
       .selectFrom('rakshak_applications')
-      .select(['status', 'area', 'created_at'])
+      .select(['status', 'areas', 'created_at'])
       .where('user_id', '=', userId)
       .orderBy('created_at', 'desc')
       .executeTakeFirst();
@@ -511,7 +512,7 @@ export class AdminPhase2Service {
       rakshak: rakshak
         ? {
             status: rakshak.status,
-            area: rakshak.area,
+            area: rakshak.areas.join(', '),
             appliedAt: new Date(rakshak.created_at).toISOString(),
           }
         : null,

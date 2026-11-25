@@ -447,7 +447,10 @@ export interface RakshakApplicationsTable {
   id: Generated<string>;
   user_id: string | null;
   locked_details: string;
+  /** The main area (always areas[1]). */
   area: string;
+  /** Every area where the Rakshak helps, 1 to 5 (migration 0022); filled from `area` if left out. */
+  areas: Generated<string[]>;
   id_type: 'aadhaar' | 'pan' | 'driving_licence' | 'voter_id' | 'passport';
   id_last4: string;
   documents: ColumnType<unknown, string | undefined, string>;

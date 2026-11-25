@@ -139,7 +139,7 @@ export class AdminPhase3Service {
       .selectFrom('rakshak_applications as a')
       .innerJoin('users as u', 'u.id', 'a.user_id')
       .leftJoin('rakshak_presence as p', 'p.user_id', 'a.user_id')
-      .select(['u.id', 'u.name', 'a.area', 'p.online'])
+      .select(['u.id', 'u.name', 'a.areas', 'p.online'])
       .where('a.status', '=', 'approved')
       .where('u.status', '=', 'active')
       .orderBy('u.name')
@@ -148,7 +148,7 @@ export class AdminPhase3Service {
       items: rows.map((r) => ({
         userId: r.id,
         firstName: firstName(r.name),
-        area: r.area,
+        area: r.areas.join(', '),
         online: r.online === true,
       })),
     };

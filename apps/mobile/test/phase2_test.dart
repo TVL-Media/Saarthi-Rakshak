@@ -9,7 +9,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:sarthi_rakshak/api/api_client.dart';
 import 'package:sarthi_rakshak/api/models.dart';
+import 'package:sarthi_rakshak/api/phase2_api.dart';
 import 'package:sarthi_rakshak/screens/community/community_screen.dart';
+import 'package:sarthi_rakshak/screens/community/rakshak_screen.dart';
 import 'package:sarthi_rakshak/screens/daily/daily_location_screen.dart';
 import 'package:sarthi_rakshak/screens/settings/plans_screen.dart';
 import 'package:sarthi_rakshak/screens/settings/sos_triggers_screen.dart';
@@ -274,6 +276,43 @@ void main() {
     expect(find.text('Enter your password'), findsOneWidget);
     expect(find.text('Mere Saboot is locked.'), findsOneWidget);
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('Rakshak form: add several areas (no repeats), remove one; up to 5', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(host(makeState(), const RakshakFormScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Area you will help in'), findsOneWidget);
+
+    Future<void> add(String area) async {
+      await tester.tap(find.byKey(const Key('add-area')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(area).last);
+      await tester.pumpAndSettle();
+    }
+
+    await add('Sector 18');
+    await add('Sector 62');
+    expect(find.byKey(const ValueKey('area-Sector 18')), findsOneWidget);
+    expect(find.byKey(const ValueKey('area-Sector 62')), findsOneWidget);
+    expect(find.text('Add another area'), findsOneWidget);
+    expect(find.text('2 of $maxRakshakAreas'), findsOneWidget);
+
+    await add('Sector 18'); // already there
+    expect(find.text('Sector 18 is already added.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('area-Sector 18')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Remove Sector 18'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('area-Sector 18')), findsNothing);
+    expect(find.text('1 of $maxRakshakAreas'), findsOneWidget);
+  });
+
+  test('Rakshak application: every area is read; a server with one area still works', () {
+    final base = {'id': 'x', 'status': 'approved', 'reason': null, 'createdAt': '2026-11-25T10:00:00Z', 'decidedAt': null};
+    expect(RakshakApplication.fromJson({...base, 'area': 'Sector 6', 'areas': ['Sector 6', 'Sector 18']}).areas, ['Sector 6', 'Sector 18']);
+    expect(RakshakApplication.fromJson({...base, 'area': 'Sector 6'}).areas, ['Sector 6']);
+  });
 
   testWidgets('Community: reports you sent are listed under the button with their status', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 1400));

@@ -71,7 +71,7 @@ class _RakshakScreenState extends State<RakshakScreen> {
               });
             }
             final (label, color, text) = switch (app.status) {
-              'approved' => ('Approved', AppColors.green, 'You are a verified Rakshak for ${app.area}. Thank you for keeping people safe.'),
+              'approved' => ('Approved', AppColors.green, 'You are a verified Rakshak for ${app.areas.join(', ')}. Thank you for keeping people safe.'),
               _ => ('Under review', AppColors.amber, 'We are checking your documents. This usually takes a few days. We will notify you.'),
             };
             return ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
@@ -80,7 +80,7 @@ class _RakshakScreenState extends State<RakshakScreen> {
                   Row(children: [
                     const IconTile(Icons.shield_outlined, size: 44),
                     const SizedBox(width: 12),
-                    Expanded(child: Text(app.area, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700))),
+                    Expanded(child: Text(app.areas.join(', '), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700))),
                     StatusPill(label, color: color),
                   ]),
                   const SizedBox(height: 12),
@@ -167,7 +167,8 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
   final _last4 = TextEditingController();
   final _why = TextEditingController();
   late DateTime? _dob = DateTime.tryParse(_state.me?.dateOfBirth ?? '');
-  String? _area;
+  /// Areas where this Rakshak can help: 1 to [maxRakshakAreas], no repeats (the first is the main one).
+  final List<String> _chosenAreas = [];
   String _idType = 'aadhaar';
   final Map<String, XFile> _docs = {};
   bool _agree = false;
@@ -180,6 +181,19 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
     _state.api.communityAreas().then((a) {
       if (mounted) setState(() => _areas = a);
     }).catchError((_) {});
+  }
+
+  Future<void> _addArea() async {
+    final a = (await pickArea(context, _areas))?.trim();
+    if (a == null || a.isEmpty || !mounted) return;
+    if (_chosenAreas.any((x) => x.toLowerCase() == a.toLowerCase())) {
+      showInfo(context, '$a is already added.');
+      return;
+    }
+    setState(() {
+      _chosenAreas.add(a);
+      _error = null;
+    });
   }
 
   @override
@@ -215,7 +229,7 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
     if (_name.text.trim().length < 2) problem = 'Enter your full name.';
     if (problem == null && !_adult) problem = 'You must be 18 or older.';
     if (problem == null && _address.text.trim().length < 10) problem = 'Enter your full address.';
-    if (problem == null && _area == null) problem = 'Choose your area.';
+    if (problem == null && _chosenAreas.isEmpty) problem = 'Choose at least one area.';
     if (problem == null && !RegExp(r'^[0-9A-Za-z]{4}$').hasMatch(_last4.text.trim())) problem = 'Enter the last 4 characters of your ID number.';
     if (problem == null && _why.text.trim().length < 20) problem = 'Tell us a little more about why you want to help (at least 20 characters).';
     if (problem == null && _docs.length < 3) problem = 'Add both sides of your ID and a selfie.';
@@ -241,7 +255,8 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
         'fullName': _name.text.trim(),
         'dateOfBirth': DateFormat('yyyy-MM-dd').format(_dob!),
         'address': _address.text.trim(),
-        'area': _area,
+        'area': _chosenAreas.first,
+        'areas': _chosenAreas,
         'idType': _idType,
         'idLast4': _last4.text.trim().toUpperCase(),
         'motivation': _why.text.trim(),
@@ -310,19 +325,38 @@ class _RakshakFormScreenState extends State<RakshakFormScreen> {
           ),
           const SizedBox(height: 16),
           TextField(controller: _address, maxLength: 300, maxLines: 2, decoration: const InputDecoration(labelText: 'Address')),
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: MenuRow(
-              icon: Icons.place_outlined,
-              accent: true,
-              title: _area ?? 'Area you will help in',
-              subtitle: _area == null ? 'Sector or area in Noida' : null,
-              onTap: () async {
-                final a = await pickArea(context, _areas);
-                if (a != null && a.isNotEmpty) setState(() => _area = a);
-              },
+          const SectionLabel('Areas you will help in'),
+          if (_chosenAreas.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final a in _chosenAreas)
+                  InputChip(
+                    key: ValueKey('area-$a'),
+                    avatar: const Icon(Icons.place_outlined, size: 18, color: AppColors.red),
+                    label: Text(a),
+                    onDeleted: () => setState(() => _chosenAreas.remove(a)),
+                    deleteButtonTooltipMessage: 'Remove $a',
+                  ),
+              ]),
             ),
-          ),
+          if (_chosenAreas.length < maxRakshakAreas)
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: MenuRow(
+                key: const Key('add-area'),
+                icon: _chosenAreas.isEmpty ? Icons.place_outlined : Icons.add,
+                accent: true,
+                title: _chosenAreas.isEmpty ? 'Area you will help in' : 'Add another area',
+                subtitle: _chosenAreas.isEmpty
+                    ? 'Sector or area in Noida. You can add up to $maxRakshakAreas.'
+                    : '${_chosenAreas.length} of $maxRakshakAreas',
+                onTap: _addArea,
+              ),
+            )
+          else
+            const Text('You can help in up to $maxRakshakAreas areas. Remove one to add another.',
+                style: TextStyle(color: AppColors.muted, fontSize: 13)),
           const SizedBox(height: 16),
           const SectionLabel('Your ID'),
           Wrap(spacing: 8, runSpacing: 8, children: [

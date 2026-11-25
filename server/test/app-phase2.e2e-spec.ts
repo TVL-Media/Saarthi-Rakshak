@@ -661,6 +661,44 @@ describe('Rakshak sign-up (feature 24)', () => {
       (await api().get('/v1/rakshak/application').set(bearer(token)).expect(200)).body.application,
     ).toBeNull();
   });
+
+  it('helps in up to 5 areas (no repeats); an older app sending one area still works', async () => {
+    // An app from before multi-area: one area becomes a one-area list.
+    expect(res(await apply(await form()))).toMatchObject({
+      area: 'Sector 62',
+      areas: ['Sector 62'],
+    });
+    await api().delete('/v1/rakshak/application').set(bearer(token)).expect(204);
+
+    const six = ['Sector 6', 'Sector 18', 'Sector 62', 'Sector 49', 'Sector 76', 'Sector 93'];
+    await apply({ ...(await form()), area: six[0], areas: six }).then((r) =>
+      expect(r.status).toBe(400),
+    );
+    await apply({ ...(await form()), area: 'Sector 6', areas: ['Sector 6', 'sector 6'] }).then(
+      (r) => expect(r.status).toBe(400),
+    );
+
+    const five = six.slice(0, 5);
+    const ok = await apply({ ...(await form()), area: five[0], areas: five });
+    expect(res(ok)).toMatchObject({ area: 'Sector 6', areas: five });
+    const got = (await api().get('/v1/rakshak/application').set(bearer(token)).expect(200))
+      .body as { application: { areas: string[] } };
+    expect(got.application.areas).toEqual(five);
+
+    // The admin panel shows every area on one line.
+    const row = await ctx.db
+      .selectFrom('rakshak_applications')
+      .select(['area', 'areas'])
+      .executeTakeFirstOrThrow();
+    expect(row).toEqual({ area: 'Sector 6', areas: five });
+  });
+
+  const apply = (body: object) =>
+    api().post('/v1/rakshak/application').set(bearer(token)).send(body);
+  const res = (r: { status: number; body: Record<string, unknown> }) => {
+    expect(r.status).toBe(200);
+    return r.body;
+  };
 });
 
 describe('Plans (feature 25)', () => {

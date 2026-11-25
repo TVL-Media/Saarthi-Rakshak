@@ -400,12 +400,28 @@ export const RakshakDocumentUploadRequest = z.object({
     .max(MAX_SOS_PHOTO_BYTES * 3),
 });
 
+/** How many areas a Rakshak can help in. */
+export const MAX_RAKSHAK_AREAS = 5;
+
 /** POST /v1/rakshak/application */
 export const RakshakApplicationRequest = z.object({
   fullName: z.string().trim().min(2).max(80),
   dateOfBirth: z.iso.date({ error: 'Must be a date (YYYY-MM-DD)' }),
   address: z.string().trim().min(10).max(300),
+  /** The first (main) area. Apps before multi-area send only this. */
   area: AreaName,
+  /**
+   * Every area where the Rakshak can help, 1 to 5, no repeats (the first is the main one). When
+   * left out, the Rakshak helps in `area` only.
+   */
+  areas: z
+    .array(AreaName)
+    .min(1)
+    .max(MAX_RAKSHAK_AREAS, { error: `Choose at most ${MAX_RAKSHAK_AREAS} areas` })
+    .refine((a) => new Set(a.map((x) => x.toLowerCase())).size === a.length, {
+      error: 'Each area only once',
+    })
+    .optional(),
   idType: IdType,
   /** Only the last 4 characters of the ID number are kept (never a full Aadhaar number). */
   idLast4: z
@@ -423,7 +439,10 @@ export const RakshakApplication = z.object({
   id: Id,
   status: z.enum(['under_review', 'approved', 'rejected', 'withdrawn']),
   reason: z.string().nullable(),
+  /** The main area (the first of `areas`). */
   area: z.string(),
+  /** Every area where the Rakshak helps (1 to 5). */
+  areas: z.array(z.string()),
   createdAt: DateTime,
   decidedAt: DateTime.nullable(),
 });

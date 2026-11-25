@@ -229,12 +229,17 @@ class CommunityPost {
   final String? reason;
 }
 
+/// How many areas a Rakshak can help in (same as MAX_RAKSHAK_AREAS on the server).
+const maxRakshakAreas = 5;
+
 class RakshakApplication {
   RakshakApplication.fromJson(Map<String, dynamic> j)
       : id = j['id'] as String,
         status = j['status'] as String,
         reason = j['reason'] as String?,
         area = j['area'] as String,
+        // A server from before multi-area sends only "area".
+        areas = ((j['areas'] as List?)?.cast<String>()) ?? [j['area'] as String],
         createdAt = _date(j['createdAt'])!,
         decidedAt = _date(j['decidedAt']);
   final String id;
@@ -242,7 +247,12 @@ class RakshakApplication {
   /// under_review / approved / rejected / withdrawn
   final String status;
   final String? reason;
+
+  /// The main area (the first of [areas]).
   final String area;
+
+  /// Every area where the Rakshak helps (1 to 5).
+  final List<String> areas;
   final DateTime createdAt;
   final DateTime? decidedAt;
 }

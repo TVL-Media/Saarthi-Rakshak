@@ -352,7 +352,7 @@ key and is encrypted in 1 MB chunks (AES-256-GCM) before upload. The server cann
 | `GET /v1/community/my-reports` | — | `MyCommunityReport[]` |
 | `POST /v1/community/posts/:id/flag` | `{ reason }` | 204 (3 flags send the post back to review) |
 | `POST /v1/rakshak/document-upload` | `{ document: idFront/idBack/selfie, sizeBytes }` | upload link |
-| `POST /v1/rakshak/application` | `{ fullName, dateOfBirth (18+), address, area, idType, idLast4, motivation, documents, agreeToChecks: true }` | `RakshakApplication` |
+| `POST /v1/rakshak/application` | `{ fullName, dateOfBirth (18+), address, area, areas?, idType, idLast4, motivation, documents, agreeToChecks: true }` — `areas`: 1 to 5 areas, no repeats, the first is the main one (= `area`); left out = `[area]` | `RakshakApplication` (with `area` and `areas`) |
 | `GET /v1/rakshak/application` · `DELETE` (withdraw) | — | `{ application }` · 204 |
 
 - Only the last 4 characters of the ID are kept; personal details are encrypted on the server. Documents are deleted

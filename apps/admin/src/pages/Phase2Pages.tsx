@@ -449,7 +449,7 @@ export function RakshakBody() {
                 key: 'c',
                 render: (_: unknown, r: AppRow) => formatTimeShort(r.createdAt),
               },
-              { title: 'Area', dataIndex: 'area', key: 'a' },
+              { title: 'Areas', dataIndex: 'area', key: 'a' },
               {
                 title: 'ID type',
                 key: 'i',
@@ -538,7 +538,7 @@ function ApplicationDrawer({ id, onClose }: { id: string; onClose: () => void })
             <Descriptions.Item label="Date of birth">{a.dateOfBirth}</Descriptions.Item>
             <Descriptions.Item label="Phone">{a.phone ?? '—'}</Descriptions.Item>
             <Descriptions.Item label="Address">{a.address}</Descriptions.Item>
-            <Descriptions.Item label="Area">{a.area}</Descriptions.Item>
+            <Descriptions.Item label="Areas">{a.area}</Descriptions.Item>
             <Descriptions.Item label="ID">
               {ID_TYPE[a.idType]} ending {a.idLast4}
             </Descriptions.Item>
