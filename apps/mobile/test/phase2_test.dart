@@ -20,6 +20,7 @@ import 'package:sarthi_rakshak/screens/vault/vault_setup_screen.dart';
 import 'package:sarthi_rakshak/state/app_state.dart';
 import 'package:sarthi_rakshak/state/vault_session.dart';
 import 'package:sarthi_rakshak/theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client_test.dart' as fixtures;
 
@@ -57,6 +58,24 @@ http.Response answer(http.Request req) {
   if (p == '/v1/vault/items' || p == '/v1/vault/incidents') return http.Response('[]', 200);
   if (p == '/v1/vault/usage') return http.Response(jsonEncode({'usedBytes': 0, 'limitBytes': 50 * 1024 * 1024 * 1024, 'items': 0}), 200);
   if (p == '/v1/community/areas') return http.Response(jsonEncode({'areas': ['Sector 18', 'Sector 62']}), 200);
+  if (p == '/v1/community/my-reports') {
+    return http.Response(
+      jsonEncode([
+        {
+          'id': '22222222-2222-4222-8222-222222222222',
+          'category': 'road',
+          'area': 'Sector 3',
+          'body': 'Big pothole at the crossing',
+          'photoUrl': null,
+          'official': false,
+          'createdAt': '2026-11-24T11:42:07Z',
+          'status': 'pending',
+          'reason': null,
+        },
+      ]),
+      200,
+    );
+  }
   if (p == '/v1/community/posts') {
     return http.Response(
       jsonEncode([
@@ -126,6 +145,7 @@ void main() {
     engineCalls.clear();
     serverCalls.clear();
     VaultSession.testAuth = (_) async => true;
+    SharedPreferences.setMockInitialValues({});
     final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(const MethodChannel('sarthi/engine'), (call) async {
       engineCalls.add(call);
@@ -207,47 +227,28 @@ void main() {
     expect(state.daily.enabled, isTrue);
     expect(dailyConsentVersion, '2026-11'); // must match DAILY_CONSENT_VERSION on the server
   });
-
-  testWidgets('Mere Saboot: set up with 12 words, 3 checked; a wrong word is refused', (tester) async {
+  testWidgets('Mere Saboot: set a password (typed twice); the key is sent locked with it, fingerprint kept', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 1800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(host(makeState(), const VaultScreen()));
     await tester.pumpAndSettle();
     expect(find.text(vaultTagline), findsOneWidget);
-    await tester.tap(find.text('Show my 12 words'));
-    await tester.pumpAndSettle();
+    expect(find.text('Set a password'), findsOneWidget);
+    expect(find.textContaining('12 words'), findsNothing); // no recovery phrase any more
 
-    // Read the words from the grid: "N." followed by the word.
-    final texts = tester
-        .widgetList<Text>(find.descendant(of: find.byType(PhraseGrid), matching: find.byType(Text)))
-        .map((t) => t.data!)
-        .toList();
-    final words = <int, String>{};
-    for (var i = 0; i < texts.length - 1; i++) {
-      final m = RegExp(r'^(\d+)\.$').firstMatch(texts[i]);
-      if (m != null) words[int.parse(m.group(1)!)] = texts[i + 1];
-    }
-    expect(words.length, 12);
-
-    await tester.tap(find.text('I have written them down'));
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'abc');
+    await tester.enterText(fields.at(1), 'abd');
+    await tester.tap(find.text('Set password'));
     await tester.pumpAndSettle();
-    int asked(int k) {
-      final field = tester.widget<TextField>(find.byKey(Key('check-word-$k')));
-      return int.parse(field.decoration!.labelText!.replaceAll('Word ', ''));
-    }
-
-    await tester.enterText(find.byKey(const Key('check-word-0')), 'wrong');
-    await tester.enterText(find.byKey(const Key('check-word-1')), words[asked(1)]!);
-    await tester.enterText(find.byKey(const Key('check-word-2')), words[asked(2)]!);
-    await tester.tap(find.text('Set up my vault'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('is not right'), findsOneWidget);
+    expect(find.text('The two passwords are not the same.'), findsOneWidget);
     expect(serverCalls.where((r) => r.url.path == '/v1/vault/setup'), isEmpty);
 
-    await tester.enterText(find.byKey(const Key('check-word-0')), words[asked(0)]!);
+    // Any password is accepted, even a short one (owner's decision).
+    await tester.enterText(fields.at(1), 'abc');
     // Argon2id runs for real (a few seconds), outside the test's fake clock.
     await tester.runAsync(() async {
-      await tester.tap(find.text('Set up my vault'));
+      await tester.tap(find.text('Set password'));
       for (var i = 0; i < 60 && !serverCalls.any((r) => r.url.path == '/v1/vault/usage'); i++) {
         await Future<void>.delayed(const Duration(milliseconds: 500));
       }
@@ -255,16 +256,34 @@ void main() {
     await tester.pumpAndSettle();
     final setup = lastBody('POST', '/v1/vault/setup');
     expect((setup['kdf'] as Map)['name'], 'argon2id');
-    // The vault key is locked with a key made from the phrase (Argon2id), not sent as it is.
+    expect((setup['kdf'] as Map)['secret'], 'password');
+    // The vault key is locked with a key made from the password (Argon2id), not sent as it is.
     final vaultKey = base64Encode(List.filled(32, 7));
     final lock = engineCalls.firstWhere((c) => c.method == 'vaultEncrypt');
     expect((lock.arguments as Map)['plain'], vaultKey);
     expect((lock.arguments as Map)['key'], isNot(vaultKey));
     expect(setup['lockedKey'], 'L$vaultKey'); // what the fake engine returned for that lock
     expect(setup.containsKey('key'), isFalse);
-    expect(engineCalls.any((c) => c.method == 'vaultStore'), isTrue);
+    expect(engineCalls.any((c) => c.method == 'vaultStore'), isTrue); // "Also open with fingerprint"
     expect(find.text('Add evidence'.toUpperCase()), findsOneWidget);
+
+    // Lock: the page stays and changes to the password screen (it used to close at once).
+    await tester.tap(find.byTooltip('Lock'));
+    await tester.pumpAndSettle();
+    expect(find.byType(VaultScreen), findsOneWidget);
+    expect(find.text('Enter your password'), findsOneWidget);
+    expect(find.text('Mere Saboot is locked.'), findsOneWidget);
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('Community: reports you sent are listed under the button with their status', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(host(makeState(), const CommunityScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Reports you sent'.toUpperCase()), findsOneWidget);
+    expect(find.text('Big pothole at the crossing'), findsOneWidget);
+    expect(find.text('Sent · being checked'), findsOneWidget);
+  });
 
   testWidgets('Community: posts load and a post can be reported', (tester) async {
     await tester.pumpWidget(host(makeState(), const CommunityScreen()));
@@ -346,88 +365,100 @@ void main() {
     expect(state.vault.isUploading(id), isTrue);
   });
 
-  /// The 12 words shown in the grid, by number.
-  Map<int, String> shownWords(WidgetTester tester) {
-    final texts = tester
-        .widgetList<Text>(find.descendant(of: find.byType(PhraseGrid), matching: find.byType(Text)))
-        .map((t) => t.data!)
-        .toList();
-    final words = <int, String>{};
-    for (var i = 0; i < texts.length - 1; i++) {
-      final m = RegExp(r'^(\d+)\.$').firstMatch(texts[i]);
-      if (m != null) words[int.parse(m.group(1)!)] = texts[i + 1];
-    }
-    return words;
+  /// A fake engine whose "hash" depends on its input, so a wrong password gives a different check.
+  void passwordEngine() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('sarthi/engine'), (call) async {
+      engineCalls.add(call);
+      final args = (call.arguments as Map?) ?? const {};
+      return switch (call.method) {
+        'vaultNewKey' => base64Encode(List.filled(32, 7)),
+        'vaultEncrypt' => 'L${args['plain']}',
+        'vaultDecrypt' => (args['locked'] as String).substring(1),
+        'sha256Bytes' => args['data'],
+        'vaultExists' => false,
+        _ => null,
+      };
+    });
   }
 
-  testWidgets('New recovery phrase: a clear "saved" message before going back to Mere Saboot', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(400, 1800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final tmp = Directory.systemTemp.createTempSync('phrase');
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (c) async => tmp.path);
-    final state = makeState();
-    await tester.runAsync(() => state.vault.unlock());
-    expect(state.vault.isOpen, isTrue);
-    await tester.pumpWidget(host(
-      state,
-      Builder(
-        builder: (c) => TextButton(
-          onPressed: () => Navigator.push(c, MaterialPageRoute(builder: (_) => const NewPhraseScreen())),
-          child: const Text('vault page'),
-        ),
-      ),
-    ));
-    await tester.tap(find.text('vault page'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Show my 12 words'));
-    await tester.pumpAndSettle();
-    final words = shownWords(tester);
-    await tester.tap(find.text('I have written them down'));
-    await tester.pumpAndSettle();
-    for (var k = 0; k < 3; k++) {
-      final n = int.parse(tester.widget<TextField>(find.byKey(Key('check-word-$k'))).decoration!.labelText!.replaceAll('Word ', ''));
-      await tester.enterText(find.byKey(Key('check-word-$k')), words[n]!);
-    }
-    await tester.runAsync(() async {
-      await tester.tap(find.text('Save new phrase'));
-      for (var i = 0; i < 60 && !serverCalls.any((r) => r.url.path == '/v1/vault/setup'); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-      }
-    });
-    // The button keeps its spinner behind the dialog, so pump a few frames instead of settling.
-    for (var i = 0; i < 5; i++) {
-      await tester.pump(const Duration(milliseconds: 200));
-    }
-    expect(find.text('New recovery phrase saved'), findsOneWidget);
-    expect(find.byType(NewPhraseScreen), findsOneWidget); // still here until OK
-    await tester.tap(find.text('OK'));
-    // The save ran outside the fake clock (Argon2id above), so its last step does too.
-    for (var i = 0; i < 5; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
-      await tester.pump(const Duration(milliseconds: 300));
-    }
-    expect(find.text('New recovery phrase saved'), findsNothing);
-    expect(find.byType(NewPhraseScreen), findsNothing);
-    expect(find.text('vault page'), findsOneWidget);
+  test('Mere Saboot: the password opens the vault (also on a new phone); a wrong one is refused', () async {
+    SharedPreferences.setMockInitialValues({});
+    passwordEngine();
+    final first = makeState();
+    await first.vault.setup('my secret');
+    var latest = lastBody('POST', '/v1/vault/setup');
+
+    // A new phone: nothing saved here, the locked key comes from the server.
+    SharedPreferences.setMockInitialValues({});
+    final api = ApiClient(
+      baseUrl: 'http://server',
+      client: MockClient((req) async {
+        serverCalls.add(req);
+        // The server keeps the latest locked key (a password change replaces it).
+        if (req.url.path == '/v1/vault/setup') latest = jsonDecode(req.body) as Map<String, Object?>;
+        if (req.url.path == '/v1/vault/recovery') return http.Response(jsonEncode(latest), 200);
+        return answer(req);
+      }),
+    )..token = 't';
+    final phone = AppState(api: api)..me = Me.fromJson(fixtures.me);
+    expect(await phone.vault.state(), 'locked');
+    await expectLater(phone.vault.unlockWithPassword('wrong'), throwsA(isA<VaultProblem>()));
+    expect(phone.vault.isOpen, isFalse);
+    await phone.vault.unlockWithPassword('my secret');
+    expect(phone.vault.isOpen, isTrue);
+
+    // Change password: the current one must be right; then only the new one opens it.
+    await expectLater(phone.vault.changePassword('wrong', 'new'), throwsA(isA<VaultProblem>()));
+    await phone.vault.changePassword('my secret', 'new');
+    phone.vault.lock();
+    await expectLater(phone.vault.unlockWithPassword('my secret'), throwsA(isA<VaultProblem>()));
+    await phone.vault.unlockWithPassword('new');
+    expect(phone.vault.isOpen, isTrue);
   }, timeout: const Timeout(Duration(minutes: 2)));
 
-  testWidgets('Restore: counts the words and says exactly what is wrong', (tester) async {
-    await tester.pumpWidget(host(makeState(), Scaffold(body: VaultRestoreView(onDone: () async {}))));
+  test('Mere Saboot: an empty vault from the 12-word days goes straight to "Set a password"', () async {
+    final tmp = Directory.systemTemp.createTempSync('legacy');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (c) async => tmp.path);
+    MockClient server(int items) => MockClient((req) async {
+          if (req.url.path == '/v1/vault/recovery') {
+            return http.Response(
+                jsonEncode({
+                  'lockedKey': 'Lx',
+                  'kdf': {'name': 'argon2id', 'salt': 'AAAA', 'memoryKiB': 8, 'iterations': 1, 'parallelism': 1},
+                  'checkValue': 'c',
+                }),
+                200);
+          }
+          if (req.url.path == '/v1/vault/usage') return http.Response(jsonEncode({'usedBytes': 0, 'limitBytes': 1, 'items': items}), 200);
+          return answer(req);
+        });
+    AppState phone(int items) =>
+        AppState(api: ApiClient(baseUrl: 'http://server', client: server(items))..token = 't')..me = Me.fromJson(fixtures.me);
+    expect(await phone(0).vault.state(), 'setup');
+    SharedPreferences.setMockInitialValues({});
+    expect(await phone(3).vault.state(), 'locked'); // with evidence: its old phrase is still needed
+  });
+
+  testWidgets('Mere Saboot: "Forgot password" offers a new vault only while it has no evidence', (tester) async {
+    final tmp = Directory.systemTemp.createTempSync('forgot');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('plugins.flutter.io/path_provider'), (c) async => tmp.path);
+    var started = false;
+    await tester.pumpWidget(host(makeState(), Scaffold(body: VaultUnlockView(onOpened: () async {}, onStartOver: () => started = true))));
     await tester.pumpAndSettle();
-    expect(find.text('0 of 12 words'), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('restore-words')), '1. Apple, river\n3. stone');
-    await tester.pump();
-    expect(find.text('3 of 12 words'), findsOneWidget);
-    await tester.tap(find.text('Restore'));
+    expect(find.text('Enter your password'), findsOneWidget);
+    expect(find.byKey(const Key('vault-fingerprint')), findsNothing); // not turned on for this phone
+    await tester.tap(find.text('Forgot password?'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await tester.pumpAndSettle();
-    expect(find.text('You entered 3 words. Enter all 12, in order.'), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('restore-words')), List.filled(12, 'zzz').join(' '));
-    await tester.tap(find.text('Restore'));
+    expect(find.textContaining('cannot be reset'), findsOneWidget);
+    await tester.tap(find.text('Start a new vault'));
     await tester.pumpAndSettle();
-    expect(find.text('One or more words are not right. Check the spelling and the order.'), findsOneWidget);
-    // Typed with numbers and commas = the same phrase (the same key as before).
-    expect(VaultSession.normalisePhrase('1. Apple,  RIVER\n2. stone'), 'apple river stone');
+    expect(started, isTrue);
   });
 
   testWidgets('Voice SOS: the button downloads the model if needed, listens and counts the phrase', (tester) async {
@@ -466,6 +497,21 @@ void main() {
     await tester.tap(find.byKey(const Key('voice-listen')));
     await tester.pumpAndSettle();
     expect(find.textContaining('does not know: sarthi'), findsOneWidget);
+  });
+
+  testWidgets('Discreet mode: the widget box is on by default and can be turned off; no shortcut option', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(host(makeState(), const DiscreetModeScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Add a shortcut'), findsNothing);
+    final box = find.byKey(const Key('widget-tile'));
+    expect(tester.widget<SwitchListTile>(box).value, isTrue);
+    await tester.tap(box);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(box).value, isFalse);
+    final call = engineCalls.lastWhere((c) => c.method == 'setWidgetTile');
+    expect(call.arguments, {'on': false});
   });
 
   testWidgets('Switches move at once on a slow server, and go back if the server refuses', (tester) async {

@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:bip39/bip39.dart' as bip39;
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../api/api_client.dart';
@@ -84,16 +84,18 @@ class PendingUpload {
 }
 
 /// The evidence vault while it is open. No backdoor:
-/// - the vault key lives on this phone, locked by fingerprint / face / phone PIN (Android Keystore),
-///   and in memory only while the vault is open (it locks after 2 minutes away);
-/// - the server keeps the vault key only locked with the 12-word recovery phrase (Argon2id);
+/// - the vault opens with the user's password (Argon2id); fingerprint opening can be added, which
+///   keeps the vault key on this phone in the Android Keystore;
+/// - the server keeps the vault key only locked with the password: it cannot open the vault, and
+///   nobody can reset the password (a forgotten password = evidence that cannot be opened);
+/// - the key is in memory only while the vault is open (it locks after 2 minutes away);
 /// - every file has its own key and is encrypted before it leaves the phone.
 class VaultSession extends ChangeNotifier {
   VaultSession(this._app);
   final AppState _app;
   static const _uuid = Uuid();
 
-  /// Argon2id settings for the recovery phrase (a few seconds on a phone, slow for guessing).
+  /// Argon2id settings for the password (a few seconds on a phone, slow for guessing).
   static const _kdf = {'memoryKiB': 19456, 'iterations': 2, 'parallelism': 1};
 
   String? _key;
@@ -141,37 +143,62 @@ class VaultSession extends ChangeNotifier {
       return await _app.engine.vaultAuth(reason);
     } on PlatformException catch (e) {
       if (e.code == 'no_lock') {
-        throw VaultProblem('Set a screen lock (PIN, pattern, fingerprint or face) on this phone first. The vault needs it.');
+        throw VaultProblem('Set a screen lock with a fingerprint on this phone first.');
       }
       return false;
     }
   }
 
-  /// Asks for fingerprint / face / PIN again (before export or share).
-  Future<bool> confirm(String reason) async {
-    final ok = await _authenticate(reason);
+  /// Fingerprint opening is set up on this phone (the vault key is kept in the Keystore).
+  Future<bool> fingerprintOn() async {
+    try {
+      return await _app.engine.vaultExists();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Asks again before export, share or delete: fingerprint if it is on, otherwise the password
+  /// ([askPassword] shows the password box; null or empty = cancelled).
+  Future<bool> confirm(String reason, {Future<String?> Function()? askPassword}) async {
+    var ok = false;
+    if (await fingerprintOn()) {
+      try {
+        ok = await _authenticate(reason);
+      } on VaultProblem {
+        ok = false;
+      }
+    }
+    if (!ok && askPassword != null) {
+      final password = await askPassword();
+      if (password == null || password.isEmpty) return false;
+      ok = await checkPassword(password);
+      if (!ok) throw VaultProblem(wrongPassword);
+    }
     if (ok) touch();
     return ok;
   }
 
-  /// What the vault needs: `open`, `setup` (no vault yet) or `restore` (vault exists, not on this phone).
+  /// What the vault needs: `open`, `setup` (no vault yet) or `locked` (password or fingerprint).
   Future<String> state() async {
     if (isOpen) return 'open';
-    if (await _app.engine.vaultExists()) return 'locked';
-    final server = await _app.api.vaultRecovery();
-    return server == null ? 'setup' : 'restore';
+    if (await fingerprintOn()) return 'locked';
+    final saved = await _savedRecord();
+    final rec = saved ?? await _app.api.vaultRecovery();
+    if (rec == null) return 'setup';
+    // A vault from before passwords (12-word phrase) with nothing in it: just set a password.
+    if (rec.kdf['secret'] != 'password' && await canStartOver().catchError((_) => false)) return 'setup';
+    if (saved == null) await _saveRecord(rec);
+    return 'locked';
   }
 
-  /// Opens the vault with fingerprint / face / PIN. False if cancelled.
-  Future<bool> unlock() async {
+  /// Opens the vault with the fingerprint (only if it was turned on on this phone).
+  Future<bool> unlockWithFingerprint() async {
     if (!await _authenticate('Open Mere Saboot')) return false;
     try {
       final key = await _app.engine.vaultUnlock();
-      if (key == null) throw VaultProblem('This phone no longer has your vault key. Restore it with your recovery phrase.');
-      _key = key;
-      _lastUsed = DateTime.now();
-      notifyListeners();
-      unawaited(retryUploads());
+      if (key == null) throw VaultProblem('Fingerprint is not set up on this phone. Use your password.');
+      _opened(key);
       return true;
     } on PlatformException catch (e) {
       if (e.code == 'auth_needed') throw VaultProblem(_authAgain);
@@ -179,9 +206,72 @@ class VaultSession extends ChangeNotifier {
     }
   }
 
-  static const _authAgain = 'Please unlock with your fingerprint or phone PIN / pattern and try again.';
+  /// Opens the vault with the password (also on a new phone: the locked key comes from the server).
+  Future<void> unlockWithPassword(String password) async {
+    var rec = await _record();
+    var kek = await _kek(password, rec.kdf);
+    if (await _check(kek) != rec.checkValue) {
+      // The password may have been changed on another phone: try the server's copy once.
+      final server = await _app.api.vaultRecovery().catchError((_) => null);
+      if (server == null || server.checkValue == rec.checkValue) throw VaultProblem(wrongPassword);
+      await _saveRecord(server);
+      rec = server;
+      kek = await _kek(password, rec.kdf);
+      if (await _check(kek) != rec.checkValue) throw VaultProblem(wrongPassword);
+    }
+    _opened(base64Encode(await _app.engine.vaultDecrypt(base64Encode(kek), rec.lockedKey)));
+  }
 
-  /// Keeps the vault key on this phone (needs the unlock just done).
+  /// Older name, kept for screens that open the vault without asking (fingerprint only).
+  Future<bool> unlock() => unlockWithFingerprint();
+
+  void _opened(String key) {
+    _key = key;
+    _lastUsed = DateTime.now();
+    notifyListeners();
+    unawaited(retryUploads());
+  }
+
+  static const wrongPassword = 'Wrong password. Try again.';
+  static const _authAgain = 'Please unlock with your fingerprint and try again.';
+
+  /// True if [password] is this vault's password.
+  Future<bool> checkPassword(String password) async {
+    final rec = await _record();
+    return await _check(await _kek(password, rec.kdf)) == rec.checkValue;
+  }
+
+  // The password-locked vault key, kept on this phone too, so the password also works offline.
+  String get _recordKey => 'vault_record_${_app.me?.id ?? 'none'}';
+
+  Future<VaultKeyRecord?> _savedRecord() async {
+    try {
+      final s = (await SharedPreferences.getInstance()).getString(_recordKey);
+      if (s == null) return null;
+      final j = jsonDecode(s) as Map<String, dynamic>;
+      return VaultKeyRecord(j['lockedKey'] as String, j['kdf'] as Map<String, dynamic>, j['checkValue'] as String);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _saveRecord(VaultKeyRecord r) async {
+    try {
+      await (await SharedPreferences.getInstance())
+          .setString(_recordKey, jsonEncode({'lockedKey': r.lockedKey, 'kdf': r.kdf, 'checkValue': r.checkValue}));
+    } catch (_) {}
+  }
+
+  Future<VaultKeyRecord> _record() async {
+    final saved = await _savedRecord();
+    if (saved != null) return saved;
+    final server = await _app.api.vaultRecovery();
+    if (server == null) throw VaultProblem('No vault was found for your account.');
+    await _saveRecord(server);
+    return server;
+  }
+
+  /// Keeps the vault key on this phone for fingerprint opening (needs the unlock just done).
   Future<void> _storeKey(String key) async {
     try {
       await _app.engine.vaultStore(key);
@@ -191,69 +281,87 @@ class VaultSession extends ChangeNotifier {
     }
   }
 
-  /// A new 12-word recovery phrase.
-  String newPhrase() => bip39.generateMnemonic();
+  /// Turns fingerprint opening on (vault open) or off. False if the fingerprint was cancelled.
+  Future<bool> setFingerprint(bool on) async {
+    if (!on) {
+      await _app.engine.vaultForget();
+      notifyListeners();
+      return true;
+    }
+    final key = _need();
+    if (!await _authenticate('Open Mere Saboot with your fingerprint')) return false;
+    await _storeKey(key);
+    notifyListeners();
+    return true;
+  }
 
-  /// Lower case, one space between words. Numbers, commas, dots and new lines typed or pasted with
-  /// the words are ignored ("1. apple, 2. river" = "apple river"); the 12 words themselves are
-  /// letters only, so a correctly typed phrase gives exactly the same key as before.
+  /// The secret Argon2id is run on. Vaults made with the old 12-word phrase ("secret" missing)
+  /// keep their old rule, so that phrase still opens them when typed as the password.
+  static List<int> _secret(String password, Map<String, dynamic> kdf) =>
+      utf8.encode(kdf['secret'] == 'password' ? password : normalisePhrase(password));
+
+  /// Lower case, one space between words (old 12-word phrase vaults only).
   static String normalisePhrase(String phrase) =>
       phrase.toLowerCase().split(RegExp(r'[^a-z]+')).where((w) => w.isNotEmpty).join(' ');
 
-  static int wordCount(String phrase) => normalisePhrase(phrase).split(' ').where((w) => w.isNotEmpty).length;
-
-  bool validPhrase(String phrase) => bip39.validateMnemonic(normalisePhrase(phrase));
-
-  Future<List<int>> _kek(String phrase, List<int> salt, Map<String, dynamic> kdf) async {
+  Future<List<int>> _kek(String password, Map<String, dynamic> kdf) async {
     final algorithm = Argon2id(
       memory: (kdf['memoryKiB'] as num).toInt(),
       iterations: (kdf['iterations'] as num).toInt(),
       parallelism: (kdf['parallelism'] as num).toInt(),
       hashLength: 32,
     );
-    final key = await algorithm.deriveKey(secretKey: SecretKey(utf8.encode(normalisePhrase(phrase))), nonce: salt);
+    final key = await algorithm.deriveKey(
+      secretKey: SecretKey(_secret(password, kdf)),
+      nonce: base64Decode(kdf['salt'] as String),
+    );
     return key.extractBytes();
   }
 
   Future<String> _check(List<int> kek) async => _app.engine.sha256([...kek, ...utf8.encode('sarthi-vault-check-v1')]);
 
-  /// First use: makes the vault key, keeps it on this phone and a phrase-locked copy on the server.
-  Future<void> setup(String phrase) async {
-    if (!await _authenticate('Set up Mere Saboot')) throw VaultProblem('Unlock was cancelled.');
+  /// Locks [key] with [password] and sends that copy to the server (and keeps it on this phone).
+  Future<void> _lockWithPassword(String key, String password) async {
+    final salt = List<int>.generate(16, (_) => Random.secure().nextInt(256));
+    final kdf = {'name': 'argon2id', 'secret': 'password', 'salt': base64Encode(salt), ..._kdf};
+    final kek = await _kek(password, kdf);
+    final locked = await _app.engine.vaultEncrypt(base64Encode(kek), base64Decode(key));
+    final check = await _check(kek);
+    await _app.api.vaultSetup(locked, kdf, check);
+    await _saveRecord(VaultKeyRecord(locked, kdf, check));
+  }
+
+  /// First use (or a fresh start): makes the vault key and locks it with [password]. With
+  /// [fingerprint], the key is also kept on this phone for fingerprint opening (skipped if the
+  /// phone has no fingerprint / screen lock or the prompt is cancelled).
+  Future<void> setup(String password, {bool fingerprint = false}) async {
+    if (password.isEmpty) throw VaultProblem('Enter a password.');
     final key = await _app.engine.vaultNewKey();
-    final salt = List<int>.generate(16, (_) => Random.secure().nextInt(256));
-    final kek = await _kek(phrase, salt, _kdf);
-    final locked = await _app.engine.vaultEncrypt(base64Encode(kek), base64Decode(key));
-    final kdf = {'name': 'argon2id', 'salt': base64Encode(salt), ..._kdf};
-    await _app.api.vaultSetup(locked, kdf, await _check(kek));
-    await _storeKey(key);
-    _key = key;
-    _lastUsed = DateTime.now();
-    notifyListeners();
+    await _lockWithPassword(key, password);
+    await _app.engine.vaultForget().catchError((_) {}); // an old vault's fingerprint key
+    if (fingerprint) {
+      try {
+        if (await _authenticate('Open Mere Saboot with your fingerprint')) await _storeKey(key);
+      } on VaultProblem {
+        // No fingerprint on this phone: the password alone opens the vault.
+      }
+    }
+    _opened(key);
   }
 
-  /// New phone (or new screen lock): rebuilds the vault key from the recovery phrase.
-  Future<void> restore(String phrase) async {
-    final rec = await _app.api.vaultRecovery();
-    if (rec == null) throw VaultProblem('No vault was found for your account.');
-    final kek = await _kek(phrase, base64Decode(rec.kdf['salt'] as String), rec.kdf);
-    if (await _check(kek) != rec.checkValue) throw VaultProblem("Those words don't match. Check what you wrote down.");
-    final key = base64Encode(await _app.engine.vaultDecrypt(base64Encode(kek), rec.lockedKey));
-    if (!await _authenticate('Restore Mere Saboot')) throw VaultProblem('Unlock was cancelled.');
-    await _storeKey(key);
-    _key = key;
-    _lastUsed = DateTime.now();
-    notifyListeners();
-    unawaited(retryUploads());
-  }
-
-  /// "Show my recovery phrase" is not possible (it is never stored); a new one can be made.
-  Future<void> changePhrase(String phrase) async {
+  /// A new password for the open vault (the vault key and the evidence stay the same).
+  Future<void> changePassword(String current, String password) async {
     final key = _need();
-    final salt = List<int>.generate(16, (_) => Random.secure().nextInt(256));
-    final kek = await _kek(phrase, salt, _kdf);
-    final locked = await _app.engine.vaultEncrypt(base64Encode(kek), base64Decode(key));
-    await _app.api.vaultSetup(locked, {'name': 'argon2id', 'salt': base64Encode(salt), ..._kdf}, await _check(kek));
+    if (password.isEmpty) throw VaultProblem('Enter a new password.');
+    if (!await checkPassword(current)) throw VaultProblem('Your current password is wrong.');
+    await _lockWithPassword(key, password);
+  }
+
+  /// "Forgot password": a new vault can only replace one with no evidence in it (nobody can open
+  /// the old evidence without the password, and it is never deleted this way).
+  Future<bool> canStartOver() async {
+    final usage = await _app.api.vaultUsage();
+    return usage.items == 0 && (await pending()).isEmpty;
   }
 
   String _need() {

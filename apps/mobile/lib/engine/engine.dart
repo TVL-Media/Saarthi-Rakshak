@@ -239,7 +239,12 @@ class SafetyEngine {
   Future<String?> exportClip(String id) => _ch.invokeMethod<String>('exportClip', {'id': id});
   Future<int> freeBytes() async => (await _ch.invokeMethod<int>('freeBytes')) ?? 0;
   Future<bool> pinWidget() async => (await _ch.invokeMethod<bool>('pinWidget')) ?? false;
-  Future<bool> pinShortcut() async => (await _ch.invokeMethod<bool>('pinShortcut')) ?? false;
+
+  /// The "Quick help" widget shows its rounded box behind the symbol (on unless turned off).
+  Future<bool> widgetTile() async => (await _ch.invokeMethod<bool>('widgetTile')) ?? true;
+
+  /// Shows or hides the widget's box; widgets already on the home screen change at once.
+  Future<void> setWidgetTile(bool on) => _ch.invokeMethod('setWidgetTile', {'on': on});
   Future<void> playFile(String path) => _ch.invokeMethod('playFile', {'path': path});
   Future<bool> openFile(String path, String mime) async =>
       (await _ch.invokeMethod<bool>('openFile', {'path': path, 'mime': mime})) ?? false;
@@ -298,8 +303,12 @@ class SafetyEngine {
   Future<void> vibrate(int ms) => _ch.invokeMethod('vibrate', {'ms': ms});
 
   /// Places matching [query] (India) from the phone's own geocoder — no Google key needed.
-  Future<List<Map<dynamic, dynamic>>> geocodeSearch(String query) async =>
-      ((await _ch.invokeMethod<List<dynamic>>('geocodeSearch', {'query': query})) ?? const [])
+  Future<List<Map<dynamic, dynamic>>> geocodeSearch(String query, {double? nearLat, double? nearLng}) async =>
+      ((await _ch.invokeMethod<List<dynamic>>('geocodeSearch', {
+            'query': query,
+            if (nearLat != null && nearLng != null) ...{'nearLat': nearLat, 'nearLng': nearLng},
+          })) ??
+          const [])
           .cast<Map<dynamic, dynamic>>();
 
   /// The place at a position ({name, address, area}), or null.

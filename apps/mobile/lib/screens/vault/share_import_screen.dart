@@ -8,6 +8,7 @@ import '../../state/vault_session.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
 import 'vault_screen.dart';
+import 'vault_setup_screen.dart';
 
 /// A file shared to Sarthi Rakshak from another app (copied into the app's cache by Android code).
 class SharedFile {
@@ -69,14 +70,25 @@ class _ShareImportScreenState extends State<ShareImportScreen> {
     }
   }
 
+  /// Fingerprint if it is on for this phone, otherwise (or if cancelled) the password.
+  Future<bool> _openLocked() async {
+    final vault = _state.vault;
+    if (await vault.fingerprintOn() && await vault.unlockWithFingerprint().catchError((_) => false)) return true;
+    if (!mounted) return false;
+    final password = await askVaultPassword(context);
+    if (password == null || password.isEmpty) return false;
+    await vault.unlockWithPassword(password); // a wrong password is shown as the error
+    return true;
+  }
+
   Future<void> _open() async {
     try {
       final mode = await _state.vault.state();
-      if (mode == 'locked' && !await _state.vault.unlock()) {
-        if (mounted) setState(() => _error = 'Open Mere Saboot with your fingerprint, face or PIN to save these files.');
+      if (mode == 'locked' && !await _openLocked()) {
+        if (mounted) setState(() => _error = 'Open Mere Saboot with your password or fingerprint to save these files.');
         return;
       }
-      if (mode == 'setup' || mode == 'restore') {
+      if (mode == 'setup') {
         if (mounted) setState(() => _error = 'Set up Mere Saboot first (Menu → Mere Saboot), then share again.');
         return;
       }

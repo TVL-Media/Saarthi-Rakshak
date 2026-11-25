@@ -33,9 +33,6 @@ import com.sarthirakshak.app.engine.VoiceSos
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.ContentValues
-import android.content.pm.ShortcutInfo
-import android.content.pm.ShortcutManager
-import android.graphics.drawable.Icon
 import android.os.Environment
 import android.os.StatFs
 import android.hardware.Sensor
@@ -69,6 +66,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Alerts.channels(this)
+        refreshDiscreetWidgets()
         handleIntent(intent)
         // Carry on with an SOS or journey that was running (e.g. after the app was closed).
         if (SafetyService.hasWork(this)) {
@@ -79,6 +77,9 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
     }
+
+    /** Redraws "Quick help" widgets already on the home screen (e.g. after an app update changed their look). */
+    private fun refreshDiscreetWidgets() = DiscreetWidgetProvider.refresh(this)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -244,10 +245,18 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     "geocodeSearch" -> {
                         val query = call.argument<String>("query") ?: ""
+                        val nearLat = call.argument<Double>("nearLat")
+                        val nearLng = call.argument<Double>("nearLng")
                         geocode(result) { g ->
-                            // Within India only (bounding box), best matches first.
+                            // Near the user first (about 50 km around), so "PG near Federal Bank"
+                            // finds the one in their city, not a same-named place far away.
                             @Suppress("DEPRECATION")
-                            g.getFromLocationName(query, 6, 6.5, 68.0, 37.5, 97.5).orEmpty().map { a -> addressMap(a) }
+                            val near = if (nearLat != null && nearLng != null) {
+                                g.getFromLocationName(query, 6, nearLat - 0.45, nearLng - 0.45, nearLat + 0.45, nearLng + 0.45).orEmpty()
+                            } else emptyList()
+                            // Then within India (bounding box), best matches first.
+                            @Suppress("DEPRECATION")
+                            near.ifEmpty { g.getFromLocationName(query, 6, 6.5, 68.0, 37.5, 97.5).orEmpty() }.map { a -> addressMap(a) }
                         }
                     }
                     "geocodeReverse" -> {
@@ -482,27 +491,15 @@ class MainActivity : FlutterFragmentActivity() {
             "vaultDecrypt" -> result.success(Base64.encodeToString(Vault.decryptBytes(call.argument<String>("key")!!, call.argument<String>("locked")!!), Base64.NO_WRAP))
             "sha256Bytes" -> result.success(Vault.sha256(Base64.decode(call.argument<String>("data")!!, Base64.NO_WRAP).inputStream()))
             "freeBytes" -> result.success(StatFs(filesDir.absolutePath).availableBytes)
+            "widgetTile" -> result.success(DiscreetWidgetProvider.showTile(this))
+            "setWidgetTile" -> {
+                DiscreetWidgetProvider.setShowTile(this, call.argument<Boolean>("on") ?: true)
+                result.success(null)
+            }
             "pinWidget" -> {
                 val mgr = getSystemService(AppWidgetManager::class.java)
                 val ok = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mgr.isRequestPinAppWidgetSupported &&
                     mgr.requestPinAppWidget(ComponentName(this, DiscreetWidgetProvider::class.java), null, null)
-                result.success(ok)
-            }
-            "pinShortcut" -> {
-                val sm = getSystemService(ShortcutManager::class.java)
-                val ok = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && sm.isRequestPinShortcutSupported &&
-                    sm.requestPinShortcut(
-                        ShortcutInfo.Builder(this, "quick_help")
-                            .setShortLabel("Quick help")
-                            .setIcon(Icon.createWithResource(this, R.mipmap.ic_launcher))
-                            .setIntent(Intent(this, MainActivity::class.java).apply {
-                                action = Intent.ACTION_VIEW
-                                putExtra(EXTRA_ACTION, "sos")
-                                putExtra(EXTRA_TRIGGER, "discreet")
-                            })
-                            .build(),
-                        null,
-                    )
                 result.success(ok)
             }
             "playFile" -> {

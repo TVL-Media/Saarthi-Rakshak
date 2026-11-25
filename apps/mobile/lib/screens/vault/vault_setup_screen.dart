@@ -1,7 +1,4 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../api/api_client.dart';
 import '../../state/app_state.dart';
@@ -10,39 +7,68 @@ import '../../theme.dart';
 import '../../widgets/common.dart';
 import 'vault_screen.dart';
 
-/// The 12 words in a numbered 2-column grid.
-class PhraseGrid extends StatelessWidget {
-  const PhraseGrid(this.words, {super.key});
-  final List<String> words;
+/// A password box with a show / hide eye.
+class PasswordField extends StatefulWidget {
+  const PasswordField({super.key, required this.controller, required this.label, this.onSubmitted, this.autofocus = false});
+  final TextEditingController controller;
+  final String label;
+  final ValueChanged<String>? onSubmitted;
+  final bool autofocus;
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        child: Column(children: [
-          for (var r = 0; r < words.length; r += 2)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
-              child: Row(children: [
-                for (final i in [r, r + 1])
-                  if (i < words.length)
-                    Expanded(
-                      child: Row(children: [
-                        SizedBox(width: 26, child: Text('${i + 1}.', style: const TextStyle(color: AppColors.muted))),
-                        Flexible(child: Text(words[i], style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700))),
-                      ]),
-                    ),
-              ]),
-            ),
-        ]),
+  State<PasswordField> createState() => _PasswordFieldState();
+}
+
+class _PasswordFieldState extends State<PasswordField> {
+  bool _show = false;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: widget.controller,
+        obscureText: !_show,
+        autocorrect: false,
+        enableSuggestions: false,
+        autofocus: widget.autofocus,
+        onSubmitted: widget.onSubmitted,
+        decoration: InputDecoration(
+          labelText: widget.label,
+          prefixIcon: const Icon(Icons.lock_outline),
+          suffixIcon: IconButton(
+            tooltip: _show ? 'Hide password' : 'Show password',
+            icon: Icon(_show ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+            onPressed: () => setState(() => _show = !_show),
+          ),
+        ),
       );
 }
 
-/// First use: shows a new 12-word recovery phrase, checks 3 of the words, then sets up the vault.
+/// Asks for the Mere Saboot password (e.g. before sharing evidence). Null if cancelled.
+Future<String?> askVaultPassword(BuildContext context, {String title = 'Enter your Mere Saboot password'}) {
+  final c = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (d) => AlertDialog(
+      title: Text(title),
+      content: PasswordField(controller: c, label: 'Password', autofocus: true, onSubmitted: (v) => Navigator.pop(d, v)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(d, c.text), child: const Text('OK')),
+      ],
+    ),
+  ).whenComplete(c.dispose);
+}
+
+/// Asks again before export, share or delete: fingerprint if it is on, else the password.
+Future<bool> confirmVault(BuildContext context, String reason) =>
+    AppScope.read(context).vault.confirm(reason, askPassword: () => askVaultPassword(context));
+
+/// First use (or a fresh start after a forgotten password on an empty vault): set a password.
 class VaultSetupView extends StatefulWidget {
-  const VaultSetupView({super.key, required this.onDone, this.changeOnly = false});
+  const VaultSetupView({super.key, required this.onDone, this.startOver = false});
   final Future<void> Function() onDone;
 
-  /// Only make a new phrase for an open vault (the vault key does not change).
-  final bool changeOnly;
+  /// Replaces a vault with no evidence whose password was forgotten.
+  final bool startOver;
 
   @override
   State<VaultSetupView> createState() => _VaultSetupViewState();
@@ -50,43 +76,30 @@ class VaultSetupView extends StatefulWidget {
 
 class _VaultSetupViewState extends State<VaultSetupView> {
   late final VaultSession _vault = AppScope.read(context).vault;
-  late List<String> _words;
-  int _step = 0; // 0 intro, 1 words, 2 check
-  late List<int> _ask;
-  final _answers = List.generate(3, (_) => TextEditingController());
+  final _password = TextEditingController();
+  final _again = TextEditingController();
+  bool _fingerprint = true;
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    _words = AppScope.read(context).vault.newPhrase().split(' ');
-    final r = Random.secure();
-    final idx = List.generate(_words.length, (i) => i)..shuffle(r);
-    _ask = idx.take(3).toList()..sort();
-  }
-
-  @override
   void dispose() {
-    for (final c in _answers) {
-      c.dispose();
-    }
+    _password.dispose();
+    _again.dispose();
     super.dispose();
   }
 
-  Future<void> _finish() async {
-    for (var k = 0; k < 3; k++) {
-      if (_answers[k].text.trim().toLowerCase() != _words[_ask[k]]) {
-        setState(() => _error = 'Word ${_ask[k] + 1} is not right. Check what you wrote down.');
-        return;
-      }
+  Future<void> _save() async {
+    if (_password.text.isEmpty) {
+      setState(() => _error = 'Enter a password.');
+      return;
+    }
+    if (_password.text != _again.text) {
+      setState(() => _error = 'The two passwords are not the same.');
+      return;
     }
     setState(() => _error = null);
     try {
-      if (widget.changeOnly) {
-        await _vault.changePhrase(_words.join(' '));
-      } else {
-        await _vault.setup(_words.join(' '));
-      }
+      await _vault.setup(_password.text, fingerprint: _fingerprint);
       await widget.onDone();
     } on VaultProblem catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -99,171 +112,255 @@ class _VaultSetupViewState extends State<VaultSetupView> {
 
   @override
   Widget build(BuildContext context) => ListView(padding: const EdgeInsets.fromLTRB(20, 16, 20, 32), children: [
-        if (!widget.changeOnly) ...[const VaultHero(), const SizedBox(height: 20)],
-        if (_step == 0) ...[
-          const ScreenTitle('Your recovery phrase', subtitle: 'Only you can open your vault. Not even Sarthi Rakshak can.'),
-          const SizedBox(height: 16),
-          const _Point(Icons.fingerprint, 'Every time, the vault opens with your fingerprint, face or phone PIN.'),
-          const _Point(Icons.key_outlined, 'You will get 12 words. If you lose this phone, they are the only way to get your evidence back.'),
-          const _Point(Icons.edit_note, 'Write them on paper and keep it safe. Do not screenshot or share them.'),
-          const SizedBox(height: 20),
-          FilledButton(onPressed: () => setState(() => _step = 1), child: const Text('Show my 12 words')),
-        ],
-        if (_step == 1) ...[
-          const ScreenTitle('Write these down', subtitle: 'In this order. You will need 3 of them on the next screen.'),
-          const SizedBox(height: 16),
-          PhraseGrid(_words),
-          const SizedBox(height: 14),
-          const NoticeBox(text: 'Anyone with these words and your account can open your vault. Never share them.'),
-          const SizedBox(height: 20),
-          FilledButton(onPressed: () => setState(() => _step = 2), child: const Text('I have written them down')),
-        ],
-        if (_step == 2) ...[
-          const ScreenTitle('Check your words'),
-          const SizedBox(height: 16),
-          for (var k = 0; k < 3; k++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: TextField(
-                key: Key('check-word-$k'),
-                controller: _answers[k],
-                autocorrect: false,
-                enableSuggestions: false,
-                inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[a-zA-Z]'))],
-                decoration: InputDecoration(labelText: 'Word ${_ask[k] + 1}'),
-              ),
-            ),
-          if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: AppColors.red))),
-          BusyButton(label: widget.changeOnly ? 'Save new phrase' : 'Set up my vault', onPressed: _finish),
-          const SizedBox(height: 8),
-          TextButton(onPressed: () => setState(() => _step = 1), child: const Text('Show the words again')),
-        ],
+        const VaultHero(),
+        const SizedBox(height: 20),
+        ScreenTitle(widget.startOver ? 'Start a new vault' : 'Set a password',
+            subtitle: 'You will enter it every time you open Mere Saboot.'),
+        const SizedBox(height: 16),
+        PasswordField(controller: _password, label: 'Password'),
+        const SizedBox(height: 12),
+        PasswordField(controller: _again, label: 'Type it again', onSubmitted: (_) => _save()),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          key: const Key('setup-fingerprint'),
+          contentPadding: EdgeInsets.zero,
+          value: _fingerprint,
+          onChanged: (v) => setState(() => _fingerprint = v),
+          title: const Text('Also open with fingerprint', style: TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: const Text('On this phone. The password always works too.'),
+        ),
+        if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, key: const Key('vault-error'), style: const TextStyle(color: AppColors.red))),
+        const SizedBox(height: 8),
+        BusyButton(label: widget.startOver ? 'Start new vault' : 'Set password', onPressed: _save),
+        const SizedBox(height: 14),
+        const NoticeBox(
+          text: 'Remember this password. If you forget it, nobody can open your evidence, not even Sarthi Rakshak. '
+              'A longer password is harder for others to guess.',
+        ),
       ]);
 }
 
-class _Point extends StatelessWidget {
-  const _Point(this.icon, this.text);
-  final IconData icon;
-  final String text;
+/// The vault is locked: password, or fingerprint if it is on for this phone.
+class VaultUnlockView extends StatefulWidget {
+  const VaultUnlockView({super.key, required this.onOpened, required this.onStartOver, this.autoFingerprint = true});
+  final Future<void> Function() onOpened;
+
+  /// Shows the fingerprint prompt at once (if fingerprint opening is on).
+  final bool autoFingerprint;
+
+  /// "Forgot password" on a vault with no evidence: set up a new one.
+  final VoidCallback onStartOver;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          IconTile(icon, size: 36),
-          const SizedBox(width: 12),
-          Expanded(child: Padding(padding: const EdgeInsets.only(top: 6), child: Text(text, style: const TextStyle(fontSize: 15, height: 1.4)))),
-        ]),
-      );
+  State<VaultUnlockView> createState() => _VaultUnlockViewState();
 }
 
-/// New phone / new screen lock: the 12 words bring the vault back.
-class VaultRestoreView extends StatefulWidget {
-  const VaultRestoreView({super.key, required this.onDone});
-  final Future<void> Function() onDone;
-
-  @override
-  State<VaultRestoreView> createState() => _VaultRestoreViewState();
-}
-
-class _VaultRestoreViewState extends State<VaultRestoreView> {
+class _VaultUnlockViewState extends State<VaultUnlockView> {
   late final VaultSession _vault = AppScope.read(context).vault;
-  final _words = TextEditingController();
+  final _password = TextEditingController();
+  bool _fingerprint = false;
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _vault.fingerprintOn().then((on) {
+      if (!mounted) return;
+      setState(() => _fingerprint = on);
+      if (on && widget.autoFingerprint) _useFingerprint(); // offered straight away, like before
+    });
+  }
+
+  @override
   void dispose() {
-    _words.dispose();
+    _password.dispose();
     super.dispose();
   }
 
-  Future<void> _restore() async {
-    final phrase = _words.text;
-    final count = VaultSession.wordCount(phrase);
-    if (count != 12) {
-      setState(() => _error = count == 0
-          ? 'Enter your 12 words, in order.'
-          : 'You entered $count word${count == 1 ? '' : 's'}. Enter all 12, in order.');
-      return;
-    }
-    if (!_vault.validPhrase(phrase)) {
-      setState(() => _error = 'One or more words are not right. Check the spelling and the order.');
+  Future<void> _open() async {
+    if (_password.text.isEmpty) {
+      setState(() => _error = 'Enter your password.');
       return;
     }
     setState(() => _error = null);
     try {
-      await _vault.restore(phrase);
-      await widget.onDone();
+      await _vault.unlockWithPassword(_password.text);
+      await widget.onOpened();
     } on VaultProblem catch (e) {
       if (mounted) setState(() => _error = e.message);
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Could not restore the vault. Please try again.');
+      if (mounted) setState(() => _error = 'Could not open the vault. Please try again.');
+    }
+  }
+
+  Future<void> _useFingerprint() async {
+    setState(() => _error = null);
+    try {
+      if (await _vault.unlockWithFingerprint()) await widget.onOpened();
+    } on VaultProblem catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Fingerprint did not work. Use your password.');
+    }
+  }
+
+  Future<void> _forgot() async {
+    var empty = false;
+    try {
+      empty = await _vault.canStartOver();
+    } catch (_) {}
+    if (!mounted) return;
+    final start = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Forgot your password?'),
+        content: Text(empty
+            ? 'The password cannot be reset: nobody else can open your vault. Your vault has no evidence yet, '
+                'so you can start a new one with a new password.'
+            : 'The password cannot be reset: nobody else can open your vault, not even Sarthi Rakshak. '
+                'Without it, the evidence in it cannot be opened. Try the passwords you usually use.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: Text(empty ? 'Cancel' : 'OK')),
+          if (empty) FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('Start a new vault')),
+        ],
+      ),
+    );
+    if (start == true) widget.onStartOver();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.fromLTRB(20, 24, 20, 24), children: [
+        const VaultHero(),
+        const SizedBox(height: 24),
+        const ScreenTitle('Enter your password'),
+        const SizedBox(height: 16),
+        PasswordField(controller: _password, label: 'Password', onSubmitted: (_) => _open()),
+        if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, key: const Key('vault-error'), style: const TextStyle(color: AppColors.red))),
+        const SizedBox(height: 20),
+        BusyButton(label: 'Open', icon: Icons.lock_open_outlined, onPressed: _open),
+        if (_fingerprint) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            key: const Key('vault-fingerprint'),
+            onPressed: _useFingerprint,
+            icon: const Icon(Icons.fingerprint),
+            label: const Text('Use fingerprint'),
+          ),
+        ],
+        const SizedBox(height: 8),
+        TextButton(onPressed: _forgot, child: const Text('Forgot password?')),
+      ]);
+}
+
+/// Mere Saboot → Password: change it, and turn fingerprint opening on or off. The vault must be open.
+class VaultPasswordScreen extends StatefulWidget {
+  const VaultPasswordScreen({super.key});
+
+  @override
+  State<VaultPasswordScreen> createState() => _VaultPasswordScreenState();
+}
+
+class _VaultPasswordScreenState extends State<VaultPasswordScreen> {
+  late final VaultSession _vault = AppScope.read(context).vault;
+  final _current = TextEditingController();
+  final _password = TextEditingController();
+  final _again = TextEditingController();
+  bool? _fingerprint;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _vault.fingerprintOn().then((on) {
+      if (mounted) setState(() => _fingerprint = on);
+    });
+  }
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _password.dispose();
+    _again.dispose();
+    super.dispose();
+  }
+
+  Future<void> _change() async {
+    if (_password.text.isEmpty) {
+      setState(() => _error = 'Enter a new password.');
+      return;
+    }
+    if (_password.text != _again.text) {
+      setState(() => _error = 'The two new passwords are not the same.');
+      return;
+    }
+    setState(() => _error = null);
+    try {
+      await _vault.changePassword(_current.text, _password.text);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (c) => AlertDialog(
+          icon: const Icon(Icons.check_circle_outline, color: AppColors.green, size: 40),
+          title: const Text('Password changed'),
+          content: const Text('Use the new password from now on. Your evidence is unchanged.'),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+              onPressed: () => Navigator.pop(c),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      if (mounted) Navigator.pop(context);
+    } on VaultProblem catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on ApiException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not change the password. Please try again.');
+    }
+  }
+
+  Future<void> _setFingerprint(bool on) async {
+    try {
+      final ok = await _vault.setFingerprint(on);
+      if (mounted && ok) setState(() => _fingerprint = on);
+    } on VaultProblem catch (e) {
+      if (mounted) showInfo(context, e.message);
+    } catch (_) {
+      if (mounted) showInfo(context, 'Could not change fingerprint opening. Please try again.');
     }
   }
 
   @override
-  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.fromLTRB(20, 16, 20, 32), children: [
-        const VaultHero(),
-        const SizedBox(height: 20),
-        const ScreenTitle('Restore your vault', subtitle: 'Enter the 12 words you wrote down when you set up Mere Saboot.'),
-        const SizedBox(height: 16),
-        TextField(
-          key: const Key('restore-words'),
-          controller: _words,
-          minLines: 3,
-          maxLines: 4,
-          autocorrect: false,
-          enableSuggestions: false,
-          onChanged: (_) => setState(() => _error = null),
-          decoration: const InputDecoration(hintText: 'word1 word2 word3 …'),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 6, right: 4),
-          child: Text('${VaultSession.wordCount(_words.text)} of 12 words',
-              key: const Key('restore-count'),
-              textAlign: TextAlign.end,
-              style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-        ),
-        if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, style: const TextStyle(color: AppColors.red))),
-        const SizedBox(height: 20),
-        BusyButton(label: 'Restore', onPressed: _restore),
-        const SizedBox(height: 14),
-        const NoticeBox(text: 'Without these words, evidence saved before cannot be opened. This is what keeps it private.'),
-      ]);
-}
-
-/// Makes a new recovery phrase (the old one stops working). The vault must be open.
-class NewPhraseScreen extends StatelessWidget {
-  const NewPhraseScreen({super.key});
-
-  @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Recovery phrase')),
-        body: VaultSetupView(
-          changeOnly: true,
-          onDone: () async {
-            // A clear answer before leaving: the user must know the new words are the ones that count.
-            await showDialog<void>(
-              context: context,
-              barrierDismissible: false,
-              builder: (c) => AlertDialog(
-                icon: const Icon(Icons.check_circle_outline, color: AppColors.green, size: 40),
-                title: const Text('New recovery phrase saved'),
-                content: const Text(
-                    'Keep the 12 new words safe. The old words no longer work. Your evidence is unchanged.'),
-                actions: [
-                  FilledButton(
-                    style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-                    onPressed: () => Navigator.pop(c),
-                    child: const Text('OK'),
-                  ),
-                ],
-              ),
-            );
-            if (context.mounted) Navigator.pop(context);
-          },
-        ),
+        appBar: AppBar(title: const Text('Password')),
+        body: ListView(padding: const EdgeInsets.fromLTRB(20, 16, 20, 32), children: [
+          if (_fingerprint != null)
+            SwitchListTile(
+              key: const Key('fingerprint-switch'),
+              contentPadding: EdgeInsets.zero,
+              value: _fingerprint!,
+              onChanged: _setFingerprint,
+              title: const Text('Open with fingerprint', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('On this phone. The password always works too.'),
+            ),
+          const SizedBox(height: 12),
+          const SectionLabel('Change password'),
+          PasswordField(controller: _current, label: 'Current password'),
+          const SizedBox(height: 12),
+          PasswordField(controller: _password, label: 'New password'),
+          const SizedBox(height: 12),
+          PasswordField(controller: _again, label: 'Type the new password again', onSubmitted: (_) => _change()),
+          if (_error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_error!, key: const Key('vault-error'), style: const TextStyle(color: AppColors.red))),
+          const SizedBox(height: 20),
+          BusyButton(label: 'Change password', onPressed: _change),
+          const SizedBox(height: 14),
+          const NoticeBox(text: 'If you forget your password, nobody can open your evidence, not even Sarthi Rakshak.'),
+        ]),
       );
 }

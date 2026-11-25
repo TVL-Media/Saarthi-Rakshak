@@ -127,15 +127,35 @@ class ApiClient {
     final file = File(path);
     final req = http.StreamedRequest('PUT', Uri.parse(link.uploadUrl))..headers.addAll(link.headers);
     req.contentLength = await file.length();
-    final sending = _http.send(req);
-    await file.openRead().pipe(req.sink);
-    final res = await sending.timeout(const Duration(minutes: 15));
+    final http.StreamedResponse res;
+    try {
+      // The answer is awaited from the start, so a refused connection is caught here even while
+      // the file is still being streamed (before, that error escaped and nothing was shown).
+      final sending = _http.send(req).timeout(const Duration(minutes: 15));
+      unawaited(file.openRead().pipe(req.sink).catchError((_) {}));
+      res = await sending;
+    } on Exception catch (e) {
+      // No connection to the file storage: say so (a plain network error showed nothing at all).
+      throw _networkError(e);
+    }
     if (res.statusCode >= 300) throw ApiException(res.statusCode, 'upload_failed', 'Upload failed. Please try again.');
   }
 
+  /// A network failure while sending or fetching a file, as a message for the user.
+  static ApiException _networkError(Exception e) => switch (e) {
+        ApiException() => e,
+        TimeoutException() => ApiException(0, 'offline', 'The upload is taking too long. Check your internet and try again.', timedOut: true),
+        _ => ApiException(0, 'offline', 'No internet connection. Please try again.'),
+      };
+
   /// Downloads a file to disk.
   Future<void> downloadFile(String url, String path) async {
-    final res = await _http.send(http.Request('GET', Uri.parse(url))).timeout(const Duration(minutes: 15));
+    final http.StreamedResponse res;
+    try {
+      res = await _http.send(http.Request('GET', Uri.parse(url))).timeout(const Duration(minutes: 15));
+    } on Exception catch (e) {
+      throw _networkError(e);
+    }
     if (res.statusCode == 404) {
       throw ApiException(404, 'file_missing', 'This file is no longer on the server, so it cannot be opened.');
     }

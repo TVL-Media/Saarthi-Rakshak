@@ -222,22 +222,21 @@ class _HomeScreenState extends State<HomeScreen> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(22),
                 onTap: () => _startJourney(),
-                child: const Padding(
-                  padding: EdgeInsets.fromLTRB(22, 20, 18, 20),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Expanded(
+                // One compact row, like the cards below it (the icon used to sit on its own line
+                // with a large gap under it).
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+                  child: Row(children: [
+                    IconTile(Icons.near_me_outlined, color: Colors.white, background: Colors.white.withValues(alpha: 0.18), size: 48),
+                    const SizedBox(width: 14),
+                    const Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Icon(Icons.near_me_outlined, color: Colors.white, size: 28),
-                        SizedBox(height: 30),
-                        Text('Start journey', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
+                        Text('Start journey', style: TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700)),
                         SizedBox(height: 2),
-                        Text('Your guardians can follow you live', style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 15)),
+                        Text('Your guardians can follow you live', style: TextStyle(color: Color(0xE6FFFFFF), fontSize: 14.5)),
                       ]),
                     ),
-                    Padding(
-                      padding: EdgeInsets.only(bottom: 10),
-                      child: Icon(Icons.chevron_right, color: Colors.white, size: 30),
-                    ),
+                    const Icon(Icons.chevron_right, color: Colors.white, size: 28),
                   ]),
                 ),
               ),

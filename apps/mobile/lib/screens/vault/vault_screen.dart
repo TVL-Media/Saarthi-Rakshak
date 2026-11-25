@@ -134,11 +134,8 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
       final mode = await _vault.state();
       if (!mounted) return;
       setState(() => _mode = mode);
-      if (mode == 'open') {
-        await _load();
-      } else if (mode == 'locked') {
-        await _unlock();
-      }
+      if (mode == 'open') await _load();
+      // 'locked': the unlock view asks for the password (or the fingerprint, if it is on).
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
@@ -146,26 +143,14 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _unlock() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final ok = await _vault.unlock();
-      if (!mounted) return;
-      if (ok) {
-        setState(() => _mode = 'open');
-        await _load();
-      }
-    } on VaultProblem catch (e) {
-      if (mounted) setState(() => _error = e.message);
-      if (e.message.contains('recovery phrase') && mounted) setState(() => _mode = 'restore');
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not open the vault. Please try again.');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+  /// Locked with the Lock button (not by time away).
+  bool _lockedByUser = false;
+
+  Future<void> _opened() async {
+    if (!mounted) return;
+    _lockedByUser = false;
+    setState(() => _mode = 'open');
+    await _load();
   }
 
   bool _loading = false;
@@ -292,20 +277,34 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
             IconButton(
               tooltip: 'Lock',
               icon: const Icon(Icons.lock_outline),
+              // Stays on this page: it changes to the password screen (leaving the page at once
+              // looked like a crash).
               onPressed: () {
+                _lockedByUser = true;
                 _vault.lock();
-                Navigator.maybePop(context);
+                showInfo(context, 'Mere Saboot is locked.');
               },
             ),
         ],
       ),
-      body: switch (mode) {
-        null => _error != null ? _errorView() : const Center(child: CircularProgressIndicator()),
-        'setup' => VaultSetupView(onDone: _start),
-        'restore' => VaultRestoreView(onDone: _start),
-        'locked' => _lockedView(),
-        _ => _openView(),
-      },
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        child: KeyedSubtree(
+          key: ValueKey(mode),
+          child: switch (mode) {
+            null => _error != null ? _errorView() : const Center(child: CircularProgressIndicator()),
+            'setup' => VaultSetupView(onDone: _start),
+            'startOver' => VaultSetupView(startOver: true, onDone: _start),
+            'locked' => VaultUnlockView(
+                // Just locked with the button: do not pop the fingerprint prompt up again at once.
+                autoFingerprint: !_lockedByUser,
+                onOpened: _opened,
+                onStartOver: () => setState(() => _mode = 'startOver'),
+              ),
+            _ => _openView(),
+          },
+        ),
+      ),
     );
   }
 
@@ -319,16 +318,6 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
           ]),
         ),
       );
-
-  Widget _lockedView() => ListView(padding: const EdgeInsets.fromLTRB(20, 24, 20, 24), children: [
-        const VaultHero(),
-        const SizedBox(height: 24),
-        if (_error != null) ...[
-          NoticeBox(text: _error!, icon: Icons.error_outline, color: AppColors.red, background: AppColors.redSoft),
-          const SizedBox(height: 16),
-        ],
-        BusyButton(label: 'Open with fingerprint, face or PIN', icon: Icons.fingerprint, onPressed: _busy ? null : _unlock),
-      ]);
 
   Widget _openView() {
     final loose = _items.where((i) => i.incidentId == null && !i.hidden).toList();
@@ -465,7 +454,7 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
               subtitle: '$hidden hidden',
               onTap: () => _open(HiddenItemsScreen(items: _items.where((i) => i.hidden).toList(), incidents: _incidents, incidentDetails: _incidentDetails)),
             ),
-          MenuRow(icon: Icons.key_outlined, title: 'Recovery phrase', subtitle: 'Make a new one if you lost it', onTap: () => _open(const NewPhraseScreen())),
+          MenuRow(icon: Icons.key_outlined, title: 'Password', subtitle: 'Change it, or open with fingerprint', onTap: () => _open(const VaultPasswordScreen())),
         ]),
       ]),
     );

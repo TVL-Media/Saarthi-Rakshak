@@ -415,6 +415,49 @@ class _VoiceSetupScreenState extends State<VoiceSetupScreen> {
 }
 
 /// Discreet mode (feature 5).
+/// Discreet mode: show or hide the rounded box behind the "Quick help" widget's symbol.
+class _WidgetTileSwitch extends StatefulWidget {
+  const _WidgetTileSwitch();
+
+  @override
+  State<_WidgetTileSwitch> createState() => _WidgetTileSwitchState();
+}
+
+class _WidgetTileSwitchState extends State<_WidgetTileSwitch> {
+  late final _engine = AppScope.read(context).engine;
+  bool _on = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _engine.widgetTile().then((on) {
+      if (mounted) setState(() => _on = on);
+    }).catchError((_) {});
+  }
+
+  Future<void> _set(bool on) async {
+    setState(() => _on = on); // moves at once; widgets on the home screen follow
+    try {
+      await _engine.setWidgetTile(on);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _on = !on);
+      showInfo(context, 'Could not change the widget. Please try again.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+        key: const Key('widget-tile'),
+        isThreeLine: true,
+        secondary: const IconTile(Icons.crop_square, size: 40),
+        title: const Text('Box behind the widget', style: TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: const Text('Off: only the symbol and "Quick help" on your wallpaper'),
+        value: _on,
+        onChanged: _set,
+      );
+}
+
 class DiscreetModeScreen extends StatelessWidget {
   const DiscreetModeScreen({super.key});
 
@@ -440,21 +483,16 @@ class DiscreetModeScreen extends StatelessWidget {
               if (context.mounted && !ok) showInfo(context, 'Long-press your home screen → Widgets → Sarthi Rakshak.');
             },
           ),
-          MenuRow(
-            icon: Icons.add_to_home_screen,
-            title: 'Add a shortcut',
-            subtitle: 'An icon called "Quick help"',
-            onTap: () async {
-              final ok = await state.engine.pinShortcut().catchError((_) => false);
-              if (context.mounted && !ok) showInfo(context, 'Long-press the Sarthi Rakshak icon and drag "Quick help" to your home screen.');
-            },
-          ),
+          // One way only: the plain widget. The old "Add a shortcut" did the same thing but showed
+          // the app's own logo, which is less discreet.
+          const _WidgetTileSwitch(),
         ]),
         AppCard(
           padding: EdgeInsets.zero,
           child: Column(children: [
             SwitchListTile(
               secondary: const IconTile(Icons.volume_off_outlined, size: 40),
+              isThreeLine: true, // the description wraps: a two-line row cut the title off
               title: const Text('Quiet countdown', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('No sound and a dark screen when an SOS starts'),
               value: t.quietCountdown,
@@ -463,6 +501,7 @@ class DiscreetModeScreen extends StatelessWidget {
             const Divider(height: 1, indent: 72, color: Color(0xFFF0ECE7)),
             SwitchListTile(
               secondary: const IconTile(Icons.notifications_active_outlined, size: 40),
+              isThreeLine: true,
               title: const Text('SOS in notification', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('Start an SOS from the journey notification, without opening the app'),
               value: t.journeySosButton,
