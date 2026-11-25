@@ -1,3 +1,20 @@
+import {
+  AlertOutlined,
+  BarChartOutlined,
+  BellOutlined,
+  CalendarOutlined,
+  CommentOutlined,
+  CreditCardOutlined,
+  CustomerServiceOutlined,
+  DashboardOutlined,
+  FileSearchOutlined,
+  HistoryOutlined,
+  MenuOutlined,
+  SafetyOutlined,
+  SettingOutlined,
+  TeamOutlined,
+  UsergroupAddOutlined,
+} from '@ant-design/icons';
 import { Avatar, Button, Drawer, Layout, Menu, Tag, type MenuProps } from 'antd';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
@@ -7,6 +24,24 @@ import { useResetSession } from '../auth/session';
 import { MAIN_SCREENS, SUPER_ADMIN_SCREENS } from '../pages/screens';
 
 const NARROW = '(max-width: 860px)';
+
+/** A small icon per menu item (looks only; the routes are unchanged). */
+const MENU_ICON: Record<string, ReactNode> = {
+  '/': <DashboardOutlined />,
+  '/live': <AlertOutlined />,
+  '/users': <TeamOutlined />,
+  '/history': <HistoryOutlined />,
+  '/alerts': <BellOutlined />,
+  '/support': <CustomerServiceOutlined />,
+  '/community': <CommentOutlined />,
+  '/bookings': <CalendarOutlined />,
+  '/reports': <BarChartOutlined />,
+  '/settings': <SettingOutlined />,
+  '/team': <UsergroupAddOutlined />,
+  '/rakshak': <SafetyOutlined />,
+  '/plans': <CreditCardOutlined />,
+  '/audit': <FileSearchOutlined />,
+};
 
 function useNarrow(): boolean {
   const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
@@ -32,14 +67,18 @@ function SideMenu({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const items: MenuProps['items'] = [
-    ...MAIN_SCREENS.map((s) => ({ key: s.path, label: s.menu })),
+    ...MAIN_SCREENS.map((s) => ({ key: s.path, label: s.menu, icon: MENU_ICON[s.path] })),
     // Hidden for Support Admins (the server refuses the data too).
     ...(me.role === 'super_admin'
       ? [
           {
             type: 'group' as const,
             label: 'SUPER ADMIN ONLY',
-            children: SUPER_ADMIN_SCREENS.map((s) => ({ key: s.path, label: s.menu })),
+            children: SUPER_ADMIN_SCREENS.map((s) => ({
+              key: s.path,
+              label: s.menu,
+              icon: MENU_ICON[s.path],
+            })),
           },
         ]
       : []),
@@ -54,7 +93,7 @@ function SideMenu({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
         <Brand />
       </div>
       <Menu
-        theme="dark"
+        theme="light"
         mode="inline"
         items={items}
         selectedKeys={selected}
@@ -103,7 +142,11 @@ export function AppLayout({ me, children }: { me: Me; children: ReactNode }) {
         <Layout.Header className="sr-top">
           <div className="sr-top-left">
             {narrow && (
-              <Button aria-label="Open menu" onClick={() => setMenuOpen(true)}>
+              <Button
+                aria-label="Open menu"
+                icon={<MenuOutlined />}
+                onClick={() => setMenuOpen(true)}
+              >
                 Menu
               </Button>
             )}
