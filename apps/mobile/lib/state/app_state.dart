@@ -118,30 +118,98 @@ class AppState extends ChangeNotifier {
   static const _setupDoneKey = 'setup_done';
   static const _deviceIdKey = 'device_id';
 
+  /// The loading screen must never last: every step below has a time limit and a failure of any
+  /// kind (not only a network one) moves the app on. Before, one unexpected error (a Keystore or
+  /// secure-storage problem on some phones, a bad reply) left the spinner on screen for good.
+  static const _bootLimit = Duration(seconds: 25);
+
+  /// How long the first "who am I" call may take before the app opens in offline mode and keeps
+  /// trying in the background (a sleeping test server can take a minute to wake).
+  static const _meLimit = Duration(seconds: 8);
+
   Future<void> start() async {
-    _events = engine.events.listen(_onEngineEvent, onError: (_) {});
-    final prefs = await SharedPreferences.getInstance();
-    final token = await _storage.read(key: _tokenKey);
+    _events ??= engine.events.listen(_onEngineEvent, onError: (_) {});
+    try {
+      await _boot().timeout(_bootLimit);
+    } catch (e) {
+      debugPrint('Start-up did not finish normally: $e');
+      if (stage == Stage.loading) {
+        // A session exists on this phone: open the app (the engine works offline). Otherwise login.
+        stage = api.token != null ? Stage.home : Stage.login;
+      }
+    }
+    unawaited(_refreshEngineState());
+    unawaited(_takeLaunchAction());
+    notifyListeners();
+  }
+
+  Future<void> _boot() async {
+    String? token;
+    bool seenWelcome = false;
+    try {
+      seenWelcome = (await SharedPreferences.getInstance()).getBool(_seenWelcomeKey) ?? false;
+    } catch (_) {}
+    try {
+      token = await _storage.read(key: _tokenKey).timeout(const Duration(seconds: 6));
+    } catch (e) {
+      // Secure storage can fail on some phones (damaged Keystore key after a restore or update).
+      // The saved session cannot be read: clear it and ask the user to log in again.
+      debugPrint('Secure storage unreadable: $e');
+      try {
+        await _storage.deleteAll().timeout(const Duration(seconds: 4));
+      } catch (_) {}
+      token = null;
+    }
     if (token == null) {
-      stage = (prefs.getBool(_seenWelcomeKey) ?? false) ? Stage.login : Stage.welcome;
+      stage = seenWelcome ? Stage.login : Stage.welcome;
       notifyListeners();
       return;
     }
     api.token = token;
     try {
-      me = await api.me();
+      me = await api.me().timeout(_meLimit);
       await _afterLogin(token);
     } on ApiException catch (e) {
       if (e.notLoggedIn) {
         await _endLocally();
         return;
       }
-      // Offline: keep the user in; the engine still works without internet.
-      stage = Stage.home;
+      _openOffline(token);
+    } on TimeoutException {
+      _openOffline(token);
+    } catch (e) {
+      // Anything else (a reply the app cannot read, a native error): do not get stuck.
+      debugPrint('Start-up error: $e');
+      if (me != null) {
+        stage = await _stageFor(me!).catchError((_) => Stage.home);
+      } else {
+        _openOffline(token);
+      }
     }
     await _refreshEngineState();
-    _takeLaunchAction();
+  }
+
+  /// No answer from the server yet: open Home (the safety engine works without internet) and keep
+  /// asking in the background until the server answers.
+  void _openOffline(String token) {
+    stage = Stage.home;
     notifyListeners();
+    unawaited(_retryMe(token));
+  }
+
+  Future<void> _retryMe(String token) async {
+    for (var i = 0; i < 12; i++) {
+      await Future<void>.delayed(Duration(seconds: i < 3 ? 10 : 30));
+      if (api.token != token) return; // logged out or changed meanwhile
+      try {
+        me = await api.me();
+        await _afterLogin(token);
+        notifyListeners();
+        return;
+      } on ApiException catch (e) {
+        if (e.notLoggedIn) return; // api.onSessionEnded already handled it
+      } catch (_) {}
+    }
   }
 
   Future<void> markWelcomeSeen() async {
@@ -177,9 +245,16 @@ class AppState extends ChangeNotifier {
 
   Future<void> _afterLogin(String token) async {
     final m = me!;
-    await _loadLocalPhoto();
+    try {
+      await _loadLocalPhoto();
+    } catch (_) {}
     await _loadNotices();
-    await engine.setSession(api.baseUrl, token, m.firstName.isEmpty ? 'Someone' : m.firstName);
+    try {
+      await engine.setSession(api.baseUrl, token, m.firstName.isEmpty ? 'Someone' : m.firstName).timeout(const Duration(seconds: 5));
+    } catch (e) {
+      // The engine keeps its last session; a failure here must never block the app from opening.
+      debugPrint('Engine session not updated: $e');
+    }
     if (m.consentGiven) await _saveSignUpName();
     stage = await _stageFor(me!);
     // Loaded in the background: the next screen opens at once (the stage needs only `me`).
@@ -209,6 +284,10 @@ class AppState extends ChangeNotifier {
 
   /// A Phase 2 feature switched on by the admins (staged release); on when the server is older.
   bool feature(String name) => (me?.rules['feature.$name'] ?? 1) >= 1;
+
+  /// A Phase 3 feature: off until the server switches it on (or this is a PHASE3 test build), so a
+  /// server without the Phase 3 endpoints never shows a dead screen.
+  bool feature3(String name) => AppConfig.phase3 || (me?.rules['feature.$name'] ?? 0) >= 1;
 
   String get _voiceKey => 'voice_${me?.id ?? ''}';
 
@@ -344,7 +423,10 @@ class AppState extends ChangeNotifier {
   Future<Stage> _stageFor(Me m) async {
     if (!m.consentGiven) return Stage.consent;
     if ((m.name ?? '').trim().isEmpty) return Stage.profile;
-    final done = (await SharedPreferences.getInstance()).getBool(_setupDoneKey) ?? false;
+    var done = false;
+    try {
+      done = (await SharedPreferences.getInstance()).getBool(_setupDoneKey) ?? false;
+    } catch (_) {}
     if (done) return Stage.home;
     if (m.guardiansCount == 0) return Stage.guardians;
     return Stage.safetySetup;

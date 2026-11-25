@@ -31,10 +31,29 @@ object Crypto {
         return gen.generateKey()
     }
 
+    /** A key that was invalidated or damaged (restore, lock-screen change, some OEM bugs) is replaced. */
+    private fun reset(alias: String) {
+        try {
+            KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias)
+        } catch (e: Exception) {
+            // nothing to delete
+        }
+    }
+
     fun encrypt(alias: String, plain: ByteArray): ByteArray {
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, key(alias))
-        return cipher.iv + cipher.doFinal(plain)
+        fun attempt(): ByteArray {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, key(alias))
+            return cipher.iv + cipher.doFinal(plain)
+        }
+        return try {
+            attempt()
+        } catch (e: Exception) {
+            // The session token (not the audio key: old clips would be lost) is safe to re-key.
+            if (alias != SESSION_KEY) throw e
+            reset(alias)
+            attempt()
+        }
     }
 
     fun decrypt(alias: String, data: ByteArray): ByteArray {

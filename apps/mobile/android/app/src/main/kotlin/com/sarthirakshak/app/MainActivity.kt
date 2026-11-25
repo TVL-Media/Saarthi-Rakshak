@@ -30,7 +30,10 @@ import com.sarthirakshak.app.engine.ShakeLogic
 import com.sarthirakshak.app.engine.Vault
 import com.sarthirakshak.app.engine.VoiceSos
 import android.appwidget.AppWidgetManager
+import android.content.BroadcastReceiver
 import android.content.ComponentName
+import android.content.Context
+import android.content.IntentFilter
 import android.content.ContentValues
 import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
@@ -67,21 +70,61 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        showOverLockScreen(false)
+        // The moment the screen goes off, the app must not stay allowed over the lock screen.
+        ContextCompat.registerReceiver(this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED)
         Alerts.channels(this)
         handleIntent(intent)
         // Carry on with an SOS or journey that was running (e.g. after the app was closed).
-        if (SafetyService.hasWork(this)) {
-            try {
+        try {
+            if (SafetyService.hasWork(this)) {
                 SafetyService.send(this, SafetyService.ACTION_RESUME)
-            } catch (e: Exception) {
-                // ignored: started again on the next action
+            } else if (SafetyService.running) {
+                // Nothing needs protection any more (a setting was turned off): let the service
+                // notice and stop, so its "Protection on" notification goes away.
+                SafetyService.send(this, SafetyService.ACTION_CONFIG)
             }
+        } catch (e: Exception) {
+            // ignored: started again on the next action
         }
+    }
+
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) = showOverLockScreen(false)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
+    }
+
+    /**
+     * Over the lock screen only for an SOS or check-in the engine / widget / tile just asked for.
+     * A normal launch, or the screen turning back on, shows the phone's own lock screen first.
+     */
+    private fun showOverLockScreen(on: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(on)
+            setTurnScreenOn(on)
+        } else if (on) {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            window.clearFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON,
+            )
+        }
+    }
+
+    override fun onStop() {
+        // Screen off / app left: the next time the screen wakes, the lock screen comes first.
+        showOverLockScreen(false)
+        super.onStop()
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -90,6 +133,8 @@ class MainActivity : FlutterFragmentActivity() {
             return
         }
         val action = intent?.getStringExtra(EXTRA_ACTION) ?: return
+        // Only an SOS or a check-in alert may appear without unlocking the phone.
+        showOverLockScreen(action == "sos" || action == "checkin")
         val data = HashMap<String, Any?>()
         data["action"] = action
         intent.getStringExtra(EXTRA_TRIGGER)?.let { data["trigger"] = it }
@@ -132,6 +177,8 @@ class MainActivity : FlutterFragmentActivity() {
                         File(cacheDir, "vault").deleteRecursively()
                         File(cacheDir, "shared").deleteRecursively()
                         Outbox(this).clearDaily()
+                        // Settings are gone: a service that was only running for them stops now.
+                        if (SafetyService.running) SafetyService.send(this, SafetyService.ACTION_CONFIG)
                         result.success(null)
                     }
                     "listClips" -> {
@@ -362,7 +409,9 @@ class MainActivity : FlutterFragmentActivity() {
             "engineConfig" -> {
                 call.argument<String>("triggers")?.let { store.triggers = JSONObject(it) }
                 call.argument<String>("daily")?.let { store.daily = JSONObject(it) }
-                if (SafetyService.hasWork(this) || store.sos != null || store.journey != null) {
+                // Also when it is running but no setting needs it any more (shake / fall / full-day
+                // location switched off): it must be told, or it keeps its notification forever.
+                if (SafetyService.hasWork(this) || store.sos != null || store.journey != null || SafetyService.running) {
                     SafetyService.send(this, SafetyService.ACTION_CONFIG)
                 }
                 result.success(null)
@@ -662,6 +711,11 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(screenOffReceiver)
+        } catch (e: Exception) {
+            // not registered
+        }
         stopPlayback()
         ringtone?.stop()
         super.onDestroy()

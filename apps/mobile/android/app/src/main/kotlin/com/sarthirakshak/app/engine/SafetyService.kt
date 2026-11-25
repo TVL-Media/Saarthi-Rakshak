@@ -64,6 +64,7 @@ class SafetyService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         Alerts.channels(this)
         store = Store(this)
         outbox = Outbox(this)
@@ -111,6 +112,7 @@ class SafetyService : Service() {
     }
 
     override fun onDestroy() {
+        running = false
         handler.removeCallbacksAndMessages(null)
         fused.removeLocationUpdates(locationCallback)
         audio.stop()
@@ -830,6 +832,10 @@ class SafetyService : Service() {
 
     companion object {
         private const val TAG = "SafetyEngine"
+
+        /** True while the service is alive: lets the app tell it to re-check (and stop) after a setting changed. */
+        @Volatile
+        var running = false
         const val ACTION_START_SOS = "sarthi.START_SOS"
         const val ACTION_END_SOS = "sarthi.END_SOS"
         const val ACTION_START_JOURNEY = "sarthi.START_JOURNEY"

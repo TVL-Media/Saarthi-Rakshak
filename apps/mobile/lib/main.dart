@@ -29,7 +29,7 @@ Future<void> main() async {
           messagingSenderId: AppConfig.firebaseSenderId,
           projectId: AppConfig.firebaseProjectId,
         ),
-      );
+      ).timeout(const Duration(seconds: 8)); // never hold the first screen back (old Play services)
     } catch (e) {
       debugPrint('Firebase not started: $e');
     }

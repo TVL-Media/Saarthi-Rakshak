@@ -9,6 +9,9 @@ import '../../widgets/common.dart';
 import '../community/community_screen.dart';
 import '../community/rakshak_screen.dart';
 import '../daily/daily_location_screen.dart';
+import '../phase3/book_screen.dart';
+import '../phase3/bookings_screen.dart';
+import '../phase3/nearby_screen.dart';
 import '../vault/vault_screen.dart';
 import '../../widgets/format.dart';
 import '../auth/profile_screen.dart';
@@ -171,6 +174,9 @@ class _Menu extends StatelessWidget {
             if (state.feature('vault')) _MenuItem(Icons.lock_outline, 'Mere Saboot', () => open(const VaultScreen())),
             if (state.feature('daily_location')) _MenuItem(Icons.timeline, 'My Timeline', () => open(const TimelineScreen())),
             if (state.feature('community')) _MenuItem(Icons.groups_outlined, 'Community', () => open(const CommunityScreen())),
+            if (state.feature3('bookings')) _MenuItem(Icons.event_available_outlined, 'Book a Rakshak', () => open(const BookScreen())),
+            if (state.feature3('bookings')) _MenuItem(Icons.event_note_outlined, 'My Bookings', () => open(const BookingsScreen())),
+            if (state.feature3('nearby')) _MenuItem(Icons.shield_moon_outlined, 'Rakshaks Near Me', () => open(const NearbyScreen())),
             if (state.feature('rakshak')) _MenuItem(Icons.volunteer_activism_outlined, 'Become a Rakshak', () => open(const RakshakScreen())),
             _MenuItem(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),
             _MenuItem(Icons.settings, 'Settings', () => tab(4)),

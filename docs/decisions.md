@@ -145,3 +145,5 @@ Short record of what was decided and why. Add new decisions at the top.
 | Hosting: DigitalOcean, Bangalore | Data stays in India |
 | Stack: Flutter + Kotlin safety engine, Node.js (NestJS), React | Team skills; native code needed for reliable background work |
 | Android first, Noida pilot | Most users on Android; team is based in Noida |
+| Phase 3 customer app (1.1.8): Rakshaks Near Me and Bookings call the real /v1 endpoints and show "Not available yet" on 404/501; no demo data. Staff screens, Razorpay and footage later | Server endpoints are not built yet; contract in docs/app-api-phase3.md |
+| One universal APK from 1.1.8 (version code 5016+, above every earlier split build) | Removes "App not installed" from the wrong 32/64-bit file or a lower version code |

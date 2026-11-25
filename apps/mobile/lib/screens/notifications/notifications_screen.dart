@@ -6,6 +6,7 @@ import '../../widgets/common.dart';
 import '../../widgets/format.dart';
 import '../community/community_screen.dart';
 import '../community/rakshak_screen.dart';
+import '../phase3/bookings_screen.dart';
 import '../settings/plans_screen.dart';
 
 /// The page a Phase 2 notification belongs to (null: nothing to open).
@@ -13,6 +14,7 @@ Widget? noticePage(String? type) => switch (type) {
       'community_status' => const MyReportsScreen(),
       'rakshak_status' => const RakshakScreen(),
       'plan_status' => const PlansScreen(),
+      'booking_status' => const BookingsScreen(),
       _ => null,
     };
 
@@ -117,6 +119,7 @@ class _NoticeRow extends StatelessWidget {
       'community_status' => (Icons.groups_outlined, AppColors.red),
       'rakshak_status' => (Icons.volunteer_activism_outlined, AppColors.red),
       'plan_status' => (Icons.workspace_premium_outlined, AppColors.red),
+      'booking_status' => (Icons.event_available_outlined, AppColors.red),
       _ => (Icons.notifications_none_rounded, AppColors.red),
     };
     final page = noticePage(n.type);

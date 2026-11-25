@@ -18,6 +18,11 @@ class AppConfig {
   /// Play Store build; the server also refuses the test login when NODE_ENV is production.
   static const devLogin = bool.fromEnvironment('DEV_LOGIN');
 
+  /// Phase 3 (Rakshaks near me, bookings): shown in the menu for every build made with PHASE3=true
+  /// (test builds). Otherwise each feature appears only when the server switches it on for the user
+  /// (rule `feature.nearby` / `feature.bookings` set to 1).
+  static const phase3 = bool.fromEnvironment('PHASE3');
+
   /// Google Maps / Places key for destination search (the map key itself is in the Android build).
   static const mapsApiKey = String.fromEnvironment('MAPS_API_KEY');
 
