@@ -489,6 +489,18 @@ class VaultSession extends ChangeNotifier {
   /// Why the last upload was refused for good (e.g. storage full), shown on the vault screen.
   String? uploadProblem;
 
+  /// Why the last try for one waiting item failed (shown under it), so a stuck upload is never silent.
+  final Map<String, String> uploadErrors = {};
+
+  /// A waiting item as the vault list shows it, so it can be opened from its encrypted copy on this phone.
+  Future<EvidenceItem?> pendingItem(String id) async {
+    final meta = File('${(await _pendingDir()).path}/$id.json');
+    if (!meta.existsSync()) return null;
+    final j = jsonDecode(await meta.readAsString()) as Map<String, dynamic>;
+    final now = DateTime.now().toUtc().toIso8601String();
+    return EvidenceItem.fromJson({...j, 'receivedAt': now, 'hasFile': true, 'hidden': false, 'deleteLockedUntil': now});
+  }
+
   Future<void> _upload(String id) async {
     if (!_uploading.add(id)) return;
     try {
@@ -503,11 +515,14 @@ class VaultSession extends ChangeNotifier {
       meta.deleteSync();
       enc.deleteSync();
       uploadProblem = null;
+      uploadErrors.remove(id);
     } on ApiException catch (e) {
       // Refused (e.g. storage full): say why; the file stays encrypted here for a later retry.
+      uploadErrors[id] = e.message;
       if (e.code == 'limit_reached' || e.status == 400 || e.status == 409) uploadProblem = e.message;
-    } catch (_) {
-      // Offline or slow network: tried again later.
+    } catch (e) {
+      // Offline, slow network or file storage not answering: tried again later, and the reason is kept.
+      uploadErrors[id] = 'Could not reach the file storage. Will try again.';
     } finally {
       _uploading.remove(id);
       notifyListeners();

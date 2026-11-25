@@ -96,6 +96,19 @@ class SettingsScreen extends StatelessWidget {
             MenuRow(icon: Icons.delete_outline, title: 'Delete My Account', danger: true, onTap: () => open(const DeleteAccountScreen())),
           ]),
           const SizedBox(height: 4),
+          // The app version and phone, so testers can tell which build each phone has.
+          FutureBuilder<Map<dynamic, dynamic>>(
+            future: state.engine.deviceInfo().catchError((_) => <dynamic, dynamic>{}),
+            builder: (_, snap) {
+              final i = snap.data;
+              if (i == null || i['appVersion'] == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text('Version ${i['appVersion']} · Android ${i['androidVersion'] ?? '?'} · ${i['model'] ?? ''}',
+                    textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              );
+            },
+          ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12),
             child: Text(AppConfig.notMonitoring,

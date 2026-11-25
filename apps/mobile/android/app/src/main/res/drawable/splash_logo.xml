@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Red tile with the white shield: the same on every phone while the app starts. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp" android:height="96dp" android:viewportWidth="96" android:viewportHeight="96">
+    <path android:fillColor="#EE1D23"
+        android:pathData="M24,0h48a24,24 0 0 1 24,24v48a24,24 0 0 1 -24,24h-48a24,24 0 0 1 -24,-24v-48a24,24 0 0 1 24,-24z"/>
+    <group android:translateX="24" android:translateY="24" android:scaleX="2" android:scaleY="2">
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M12,2L4,5v6.09c0,5.05 3.41,9.76 8,10.91 4.59,-1.15 8,-5.86 8,-10.91V5l-8,-3zM13,16h-2v-2h2v2zM13,12h-2V7h2v5z"/>
+    </group>
+</vector>

@@ -185,7 +185,7 @@ class _RootState extends State<_Root> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _onLaunch());
     }
     return switch (state.stage) {
-      Stage.loading => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      Stage.loading => const _Loading(),
       Stage.welcome => const WelcomeScreen(),
       Stage.login => const LoginScreen(),
       Stage.consent => const ConsentScreen(),
@@ -195,4 +195,23 @@ class _RootState extends State<_Root> {
       Stage.home => const Shell(),
     };
   }
+}
+
+/// Shown while the app starts: the logo and a spinner (never an empty white screen).
+class _Loading extends StatelessWidget {
+  const _Loading();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+        backgroundColor: AppColors.cream,
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.shield, size: 72, color: AppColors.red),
+            SizedBox(height: 14),
+            Text('Sarthi Rakshak', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            SizedBox(height: 24),
+            SizedBox(width: 26, height: 26, child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.red)),
+          ]),
+        ),
+      );
 }

@@ -199,6 +199,38 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// A file still on this phone: try the upload again, or view it from its encrypted copy.
+  Future<void> _waitingItem(PendingUpload p) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Saved on this phone'),
+        content: Text(_vault.uploadErrors[p.id] ??
+            'This file is encrypted and kept on your phone until it reaches the server. You can still open it here.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'view'), child: const Text('Open')),
+          TextButton(onPressed: () => Navigator.pop(ctx, 'retry'), child: const Text('Try upload again')),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'view') {
+      final item = await _vault.pendingItem(p.id);
+      if (!mounted) return;
+      if (item == null) {
+        await _load();
+        return;
+      }
+      await _open(EvidenceItemScreen(item: item, incidents: _incidents, incidentDetails: _incidentDetails));
+      return;
+    }
+    await _vault.retryUploads();
+    await _load();
+    if (!mounted) return;
+    final err = _vault.uploadErrors[p.id];
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err ?? 'Uploaded.')));
+  }
+
   Future<void> _open(Widget screen) async {
     _vault.touch();
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -391,14 +423,13 @@ class _VaultScreenState extends State<VaultScreen> with WidgetsBindingObserver {
                   title: evidenceLabel(p.kind),
                   subtitle: _vault.isUploading(p.id)
                       ? 'Saved on this phone · uploading…'
-                      : 'Saved on this phone · uploads when online',
+                      : _vault.uploadErrors[p.id] != null
+                          ? 'Saved on this phone · ${_vault.uploadErrors[p.id]}'
+                          : 'Saved on this phone · uploads when online',
                   trailing: _vault.isUploading(p.id)
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.cloud_upload_outlined, color: AppColors.muted),
-                  onTap: () async {
-                    await _vault.retryUploads();
-                    await _load();
-                  },
+                  onTap: () => _waitingItem(p),
                 ),
             ]),
           ),
