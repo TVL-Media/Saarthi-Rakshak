@@ -16,7 +16,7 @@ The switches reach the phone in `me.rules`.
 | `/v1/child/*` | Links, zones, routes, alerts, invitations, `POST /v1/child/location` |
 
 ## Not built in this round (decisions)
-- Safe-route guidance (WOM-05) needs the gated P4-13 scoring: shown as "not available yet".
+- Safe-route guidance (WOM-05) depends on P4-13 safety scoring, which is not built yet: shown as "not available yet".
 - Child screen time (CHD-07) and full child check-in journeys: deferred; child uses the existing SOS.
 - Guardian-route report delivery is recorded only; nothing is sent to guardians yet.
 - Child location is posted every 2 minutes while the Child mode screen is open (no background service yet).

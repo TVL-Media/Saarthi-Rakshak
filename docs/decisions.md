@@ -157,7 +157,8 @@ Short record of what was decided and why. Add new decisions at the top.
 ## Phase 4 (mobile, server, admin) — built behind off-by-default switches
 - Built: Night Mode + essential tools (P4-01), Safe Place Finder via our server's Google Places call (P4-02), Women Safety (P4-03), Men's Safety + Legal Support (P4-04), Child Safety (P4-05). P4-11 is already covered by the Phase 2 Community feed.
 - Switches (default off): `feature.night_mode`, `feature.safe_places`, `feature.women_safety`, `feature.legal_support`, `feature.child_safety`. Admins turn them on in Settings; the phone hides the menu entry until then.
-- Not built: P4-06..10, P4-12..14, Truth Shield, and Change Requests P4-15..21 (gated by the plan). Safe-route guidance shows "not available yet".
+- Not built: P4-06..10, P4-12..14, Truth Shield, and Change Requests P4-15..21 (not built yet). Safe-route guidance shows "not available yet".
 - Deferred: child screen time, child check-in journeys, background child location (posted every 2 min while Child mode is open), sending guardian-route reports, partner portal, parent ID verification.
-- Needs the client: child alert numbers (distance/time/accuracy/stale) are settings flagged "needs client approval"; `GOOGLE_PLACES_API_KEY` must be set on the server (never in the app).
+- Needs the client: child alert numbers (distance/time/accuracy/stale) are admin settings with the defaults above; `GOOGLE_PLACES_API_KEY` must be set on the server (never in the app).
 - Contract: `docs/app-api-phase4.md`.
+- Phase 4 plan update: the "gate before build" idea is removed. All Phase 4 features are normal committed scope. P4-06, P4-07, P4-08, P4-12, P4-13 and P4-14 are simply not built yet (next in line); no approval flags remain in settings or docs.

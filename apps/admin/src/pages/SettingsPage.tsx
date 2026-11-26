@@ -270,7 +270,7 @@ export const FIELDS: {
     key: 'feature.child_safety',
     label: 'Child Safety',
     unit: '1 on · 0 off',
-    hint: 'Family link, zones and route alerts. Needs client approval of the numbers below',
+    hint: 'Family link, zones and route alerts',
     applies: 'Phase 4 · applies on each phone the next time the app opens.',
   },
   {
