@@ -12,7 +12,10 @@ export type PushType =
   | 'community_status'
   | 'rakshak_status'
   | 'plan_status'
-  | 'booking_status';
+  | 'booking_status'
+  | 'partner_request_status'
+  | 'child_alert'
+  | 'child_link';
 
 export interface PushMessage {
   type: PushType;

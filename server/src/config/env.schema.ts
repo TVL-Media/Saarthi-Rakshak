@@ -78,6 +78,9 @@ const envSchema = z
       .regex(/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/, { error: 'Must be an Android package name' })
       .optional(),
     GOOGLE_PLAY_CREDENTIALS: z.string().min(1).optional(),
+    // Phase 4 Safe Place Finder: a Google Places API key used by the server only (never put in the
+    // app). Without it the finder lists approved partner safe points only.
+    GOOGLE_PLACES_API_KEY: z.string().min(10).optional(),
     // Secret added to the Pub/Sub push address (?token=...) so only Google's messages are taken.
     GOOGLE_PLAY_WEBHOOK_TOKEN: z.string().min(20).optional(),
     // 32 random bytes in base64: key for hashing phone numbers that declined a guardian invite.

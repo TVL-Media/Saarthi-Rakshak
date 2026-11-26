@@ -62,8 +62,12 @@ const PAGES: Record<string, string> = {
   '/admin/bookings': 'Bookings',
   '/admin/bookings/rakshaks': 'Approved Rakshaks (for a booking)',
   '/admin/bookings/:id': 'Booking',
-  '/admin/support-tickets': 'Support Tickets',
-  '/admin/support-tickets/:id': 'Support ticket',
+  '/admin/phase4/overview': 'Safety Services counts',
+  '/admin/phase4/partners': 'Safety Services partners',
+  '/admin/phase4/partners/:id': 'Safety Services partner',
+  '/admin/phase4/requests': 'Support and legal requests',
+  '/admin/phase4/requests/:id': 'Support or legal request',
+  '/admin/phase4/guidance': 'Guidance texts',
 };
 
 const BOOKING_ACTIONS: Record<string, string> = {
@@ -71,8 +75,15 @@ const BOOKING_ACTIONS: Record<string, string> = {
   'POST /admin/bookings/:id/assign': 'Bookings · assigned a Rakshak',
   'POST /admin/bookings/:id/status': 'Bookings · changed the progress of a booking',
   'POST /admin/bookings/:id/cancel': 'Bookings · cancelled a booking',
-  'POST /admin/support-tickets/:id/assign': 'Support Tickets · assigned or unassigned a ticket',
-  'POST /admin/support-tickets/:id/status': 'Support Tickets · changed the status of a ticket',
+  'POST /admin/phase4/partners': 'Safety Services · added a partner',
+  'POST /admin/phase4/partners/:id': 'Safety Services · edited a partner',
+  'POST /admin/phase4/partners/:id/action':
+    'Safety Services · verified, approved, rejected or expired a partner',
+  'POST /admin/phase4/requests/:id/status': 'Safety Services · moved a request on',
+  'POST /admin/phase4/guidance': 'Safety Services · added guidance',
+  'POST /admin/phase4/guidance/:id': 'Safety Services · edited guidance',
+  'POST /admin/phase4/guidance/:id/approve': 'Safety Services · approved guidance',
+  'POST /admin/phase4/guidance/:id/retire': 'Safety Services · retired guidance',
 };
 
 function pageName(route: string): string {

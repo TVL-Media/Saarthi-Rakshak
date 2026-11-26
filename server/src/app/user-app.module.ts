@@ -55,6 +55,10 @@ import { VaultController, VaultService } from './phase2/vault';
 import { AdminPhase3Controller, AdminPhase3Service } from './phase3/admin-phase3';
 import { AdminSupportController, AdminSupportService } from './support/admin-support';
 import { BookingsController, BookingsService } from './phase3/bookings';
+import { AdminPhase4Controller, AdminPhase4Service } from './phase4/admin-phase4';
+import { ChildController, ChildService } from './phase4/child';
+import { Phase4Gate } from './phase4/common';
+import { SafetyServicesController, SafetyServicesService } from './phase4/support';
 
 /** Everything the Android app and the guardian pages call: /v1/... and /g/... */
 @Module({
@@ -82,6 +86,9 @@ import { BookingsController, BookingsService } from './phase3/bookings';
     AdminPhase2Controller,
     BookingsController,
     AdminPhase3Controller,
+    SafetyServicesController,
+    ChildController,
+    AdminPhase4Controller,
     AdminSupportController,
   ],
   providers: [
@@ -113,6 +120,10 @@ import { BookingsController, BookingsService } from './phase3/bookings';
     AdminPhase2Service,
     BookingsService,
     AdminPhase3Service,
+    Phase4Gate,
+    SafetyServicesService,
+    ChildService,
+    AdminPhase4Service,
     AdminSupportService,
     { provide: JobHandlers, useFactory: () => new JobHandlers() },
     {

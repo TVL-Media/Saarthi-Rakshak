@@ -93,10 +93,10 @@ const changeRows = () =>
     .execute();
 
 describe('GET /admin/settings', () => {
-  it('shows the 31 saved defaults (Phases 1, 2 and 3) with their ranges, and logs the view', async () => {
+  it('shows the 41 saved defaults (Phases 1 to 4) with their ranges, and logs the view', async () => {
     const sa = await loggedIn('super_admin', 'sa@example.test');
     const body = await view(sa);
-    expect(body.settings).toHaveLength(31);
+    expect(body.settings).toHaveLength(41);
     expect(body.settings).toContainEqual({
       key: 'sos.countdown_seconds',
       value: 5,

@@ -201,6 +201,68 @@ export const DEFAULT_SETTINGS = {
     min: 0,
     max: 1,
   },
+  // ---- Phase 4 (staged release switches: 1 = on for everyone, 0 = off) ----
+  'feature.night_mode': {
+    value: 0,
+    description: 'Night Mode and Essential Safety Tools: 1 = on, 0 = off (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.safe_places': {
+    value: 0,
+    description: 'Nearby Safe Place Finder: 1 = on, 0 = off (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  'feature.women_safety': {
+    value: 0,
+    description: 'Women Safety home, harassment reports, support network and guidance: 1 = on, 0 = off',
+    min: 0,
+    max: 1,
+  },
+  'feature.legal_support': {
+    value: 0,
+    description: "Men's Safety and Legal Support (workplace and disputed-allegation reports, lawyers): 1 = on, 0 = off",
+    min: 0,
+    max: 1,
+  },
+  'feature.child_safety': {
+    value: 0,
+    description: 'Child Safety (family link, zones, route alerts): 1 = on, 0 = off (staged release switch)',
+    min: 0,
+    max: 1,
+  },
+  // Numbers the plan says need client approval before launch; these are starting values only.
+  'safe_places.cache_minutes': {
+    value: 60,
+    description: 'How long a nearby-places search from the map provider is kept before asking again (needs client approval)',
+    min: 5,
+    max: 1440,
+  },
+  'child.max_accuracy_m': {
+    value: 100,
+    description: 'A child location less accurate than this never raises a definite zone or route alert (needs client approval)',
+    min: 20,
+    max: 500,
+  },
+  'child.deviation_m': {
+    value: 150,
+    description: 'How far from the set route counts as off route for a child (needs client approval)',
+    min: 50,
+    max: 1000,
+  },
+  'child.deviation_seconds': {
+    value: 120,
+    description: 'How long a child must stay off route before one alert is raised (needs client approval)',
+    min: 30,
+    max: 1800,
+  },
+  'child.stale_gps_minutes': {
+    value: 15,
+    description: 'After this long without a child location the parent sees a "GPS is stale" warning (needs client approval)',
+    min: 5,
+    max: 240,
+  },
 } as const satisfies Record<string, SettingDefinition>;
 
 export type SettingKey = keyof typeof DEFAULT_SETTINGS;

@@ -12,6 +12,10 @@ import '../daily/daily_location_screen.dart';
 import '../phase3/book_screen.dart';
 import '../phase3/bookings_screen.dart';
 import '../phase3/nearby_screen.dart';
+import '../phase4/child_screens.dart';
+import '../phase4/safe_places_screen.dart';
+import '../phase4/support_screens.dart';
+import '../phase4/tools_screen.dart';
 import '../vault/vault_screen.dart';
 import '../../widgets/format.dart';
 import '../auth/profile_screen.dart';
@@ -177,6 +181,11 @@ class _Menu extends StatelessWidget {
             if (state.feature3('bookings')) _MenuItem(Icons.event_available_outlined, 'Book a Rakshak', () => open(const BookScreen())),
             if (state.feature3('bookings')) _MenuItem(Icons.event_note_outlined, 'My Bookings', () => open(const BookingsScreen())),
             if (state.feature3('nearby')) _MenuItem(Icons.shield_moon_outlined, 'Rakshaks Near Me', () => open(const NearbyScreen())),
+            if (state.feature4('night_mode')) _MenuItem(Icons.nightlight_outlined, 'Night Mode & Tools', () => open(const ToolsScreen())),
+            if (state.feature4('safe_places')) _MenuItem(Icons.local_police_outlined, 'Safe Places', () => open(const SafePlacesScreen())),
+            if (state.feature4('women_safety')) _MenuItem(Icons.woman, 'Women Safety', () => open(const WomenSafetyScreen())),
+            if (state.feature4('legal_support')) _MenuItem(Icons.balance, "Men's Safety & Legal", () => open(const LegalSupportScreen())),
+            if (state.feature4('child_safety')) _MenuItem(Icons.child_care, 'Child Safety', () => open(const ChildSafetyScreen())),
             if (state.feature('rakshak')) _MenuItem(Icons.volunteer_activism_outlined, 'Become a Rakshak', () => open(const RakshakScreen())),
             _MenuItem(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),
             _MenuItem(Icons.settings, 'Settings', () => tab(4)),

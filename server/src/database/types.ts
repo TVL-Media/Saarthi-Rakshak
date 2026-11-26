@@ -7,6 +7,8 @@ type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>;
 type CreatedAt = ColumnType<Date, Date | string | undefined, never>;
 /** PostGIS geography(Point, 4326). Write with sql`ST_MakePoint(lng, lat)::geography`. */
 type Geography = string;
+/** A jsonb column: read as the parsed value, written as JSON text. */
+type Json<T> = ColumnType<T, string, string>;
 
 export interface UsersTable {
   id: Generated<string>;
@@ -547,6 +549,185 @@ export interface RakshakPresenceTable {
   updated_at: Timestamp;
 }
 
+// ---- Phase 4 ----
+
+export interface NightModeStateTable {
+  user_id: string;
+  active: Generated<boolean>;
+  updated_at: Timestamp;
+}
+
+export type PartnerKind = 'safe_point' | 'women_support' | 'lawyer';
+export type PartnerStatus = 'submitted' | 'verified' | 'approved' | 'rejected' | 'expired';
+
+export interface PartnersTable {
+  id: Generated<string>;
+  kind: PartnerKind;
+  name: string;
+  category: string;
+  location: Geography | null;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  hours: string | null;
+  languages: Generated<string[]>;
+  services: string | null;
+  status: Generated<PartnerStatus>;
+  verified_at: Date | null;
+  verified_by: string | null;
+  expires_at: Date | null;
+  created_by: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export type PartnerRequestStatus =
+  | 'requested'
+  | 'accepted'
+  | 'declined'
+  | 'contacted'
+  | 'in_progress'
+  | 'closed';
+
+export interface PartnerRequestsTable {
+  id: string;
+  user_id: string;
+  partner_id: string | null;
+  kind: 'women_support' | 'legal';
+  category: string;
+  urgency: Generated<'low' | 'normal' | 'urgent'>;
+  preferred_contact: Generated<'phone' | 'sms' | 'any'>;
+  summary: string;
+  shared_item_ids: Json<string[]>;
+  shared_until: Date | string | null;
+  status: Generated<PartnerRequestStatus>;
+  reference: string;
+  internal_note: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface PartnerRequestEventsTable {
+  id: Generated<string>;
+  request_id: string;
+  status: string;
+  actor: 'user' | 'admin' | 'system';
+  admin_id: string | null;
+  note: string | null;
+  created_at: CreatedAt;
+}
+
+export interface IncidentReportsTable {
+  id: string;
+  user_id: string;
+  kind: 'harassment' | 'workplace' | 'false_accusation';
+  category: string;
+  occurred_at: Date | string;
+  place_label: string | null;
+  description: string;
+  frequency: string | null;
+  immediate_risk: Generated<boolean>;
+  organisation: string | null;
+  witness_notes: string | null;
+  details: Json<Record<string, unknown>>;
+  evidence_item_ids: Json<string[]>;
+  route: Generated<'private' | 'guardian' | 'legal' | 'organisation'>;
+  partner_request_id: string | null;
+  status: Generated<'draft' | 'submitted' | 'closed'>;
+  reference: string;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface IncidentReportEventsTable {
+  id: Generated<string>;
+  report_id: string;
+  action: string;
+  note: string | null;
+  created_at: CreatedAt;
+}
+
+export interface GuidanceArticlesTable {
+  id: Generated<string>;
+  situation: 'threat' | 'harassment' | 'stalking' | 'medical' | 'travel' | 'child' | 'senior';
+  title: string;
+  steps: Json<string[]>;
+  language: Generated<string>;
+  status: Generated<'draft' | 'approved' | 'retired'>;
+  reviewed_on: Date | string | null;
+  review_due: Date | string | null;
+  approved_by: string | null;
+  created_by: string | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface ChildLinksTable {
+  id: string;
+  parent_user_id: string;
+  child_user_id: string | null;
+  child_name: string;
+  child_phone: string;
+  status: Generated<'invited' | 'active' | 'declined' | 'revoked'>;
+  accepted_at: Date | null;
+  revoked_at: Date | null;
+  created_at: CreatedAt;
+  updated_at: Timestamp;
+}
+
+export interface ChildLinkEventsTable {
+  id: Generated<string>;
+  link_id: string;
+  action: string;
+  actor_user_id: string | null;
+  created_at: CreatedAt;
+}
+
+export interface ChildZonesTable {
+  id: string;
+  link_id: string;
+  name: string;
+  kind: Generated<'home' | 'school' | 'other'>;
+  center: Geography;
+  radius_m: number;
+  inside: boolean | null;
+  changed_at: Date | null;
+  created_at: CreatedAt;
+}
+
+export interface ChildRoutesTable {
+  id: string;
+  link_id: string;
+  name: string;
+  points: Json<[number, number][]>;
+  active: Generated<boolean>;
+  off_since: Date | null;
+  alerted: Generated<boolean>;
+  created_at: CreatedAt;
+}
+
+export interface ChildLastLocationTable {
+  link_id: string;
+  location: Geography;
+  accuracy_m: number | null;
+  recorded_at: Date | string;
+  received_at: Timestamp;
+}
+
+export interface ChildAlertsTable {
+  id: Generated<string>;
+  link_id: string;
+  kind: 'zone_enter' | 'zone_exit' | 'route_deviation' | 'stale_gps' | 'sos';
+  zone_id: string | null;
+  route_id: string | null;
+  title: string;
+  accuracy_m: number | null;
+  approximate: Generated<boolean>;
+  rule_version: string | null;
+  acknowledged_at: Date | null;
+  created_at: CreatedAt;
+}
+
 export interface Database {
   users: UsersTable;
   devices: DevicesTable;
@@ -584,4 +765,17 @@ export interface Database {
   bookings: BookingsTable;
   booking_events: BookingEventsTable;
   rakshak_presence: RakshakPresenceTable;
+  night_mode_state: NightModeStateTable;
+  partners: PartnersTable;
+  partner_requests: PartnerRequestsTable;
+  partner_request_events: PartnerRequestEventsTable;
+  incident_reports: IncidentReportsTable;
+  incident_report_events: IncidentReportEventsTable;
+  guidance_articles: GuidanceArticlesTable;
+  child_links: ChildLinksTable;
+  child_link_events: ChildLinkEventsTable;
+  child_zones: ChildZonesTable;
+  child_routes: ChildRoutesTable;
+  child_last_location: ChildLastLocationTable;
+  child_alerts: ChildAlertsTable;
 }

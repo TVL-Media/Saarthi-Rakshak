@@ -289,6 +289,9 @@ class AppState extends ChangeNotifier {
   /// server without the Phase 3 endpoints never shows a dead screen.
   bool feature3(String name) => AppConfig.phase3 || (me?.rules['feature.$name'] ?? 0) >= 1;
 
+  /// A Phase 4 feature (Night Mode, Safe Places, Women, Legal, Child): off until the admins switch it on.
+  bool feature4(String name) => (me?.rules['feature.$name'] ?? 0) >= 1;
+
   String get _voiceKey => 'voice_${me?.id ?? ''}';
 
   /// Loads the Phase 2 settings and hands them to the safety engine (it keeps them across restarts).

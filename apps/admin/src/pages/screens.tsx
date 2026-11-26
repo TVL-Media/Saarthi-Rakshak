@@ -1,5 +1,6 @@
+import { Table } from 'antd';
 import type { ReactNode } from 'react';
-import { EmptyState, SectionCard } from '../components/states';
+import { EmptyState, SectionCard, type IconName } from '../components/states';
 import { AlertsBody } from './AlertsPage';
 import { AuditBody } from './AuditPage';
 import { DashboardBody } from './DashboardPage';
@@ -7,13 +8,40 @@ import { HistoryBody } from './HistoryPage';
 import { LiveBody } from './LivePage';
 import { CommunityBody, Phase2Stats, PlansBody, RakshakBody } from './Phase2Pages';
 import { BookingsBody } from './Phase3Pages';
-import { SupportBody } from './SupportPage';
+import { SafetyServicesBody } from './Phase4Pages';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
 
 // Step 6: each screen has its title and the empty states from the design. Data comes with each
 // screen's own step (filters, stat cards and health are left out until then).
+
+/** A table with the design's column headings and its empty state. */
+function EmptyTable(props: { columns: string[]; icon: IconName; title: string; text: string }) {
+  return (
+    <Table
+      className="sr-table"
+      columns={props.columns.map((c) => ({ title: c, key: c }))}
+      dataSource={[]}
+      pagination={false}
+      scroll={{ x: 'max-content' }}
+      locale={{ emptyText: <EmptyState icon={props.icon} title={props.title} text={props.text} /> }}
+    />
+  );
+}
+
+function Support() {
+  return (
+    <SectionCard>
+      <EmptyTable
+        columns={['Received', 'User', 'Subject', 'Status', 'Assigned to']}
+        icon="inbox"
+        title="No tickets yet"
+        text="When a user taps “Report a problem” in the app, the ticket appears here."
+      />
+    </SectionCard>
+  );
+}
 
 function Reports() {
   const charts: [string, string][] = [
@@ -77,7 +105,7 @@ export const MAIN_SCREENS: Screen[] = [
     menu: 'Support Tickets',
     title: 'Support Tickets',
     sub: 'Problems reported by users from the app',
-    body: SupportBody,
+    body: Support,
   },
   {
     path: '/community',
@@ -92,6 +120,13 @@ export const MAIN_SCREENS: Screen[] = [
     title: 'Bookings',
     sub: 'Book a Rakshak · quote, assign and follow each booking',
     body: BookingsBody,
+  },
+  {
+    path: '/safety-services',
+    menu: 'Safety Services',
+    title: 'Safety Services',
+    sub: 'Partners, support and legal requests, and reviewed guidance',
+    body: SafetyServicesBody,
   },
   { path: '/reports', menu: 'Reports', title: 'Reports', sub: 'Pilot numbers', body: Reports },
 ];
