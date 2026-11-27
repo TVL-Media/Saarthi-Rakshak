@@ -118,6 +118,21 @@ describe('GET /admin/settings', () => {
     expect(views).toHaveLength(1);
   });
 
+  it('a setting added after setup (no saved row) shows its default and can be saved', async () => {
+    const sa = await loggedIn('super_admin', 'sa@example.test');
+    await db.deleteFrom('settings').where('key', '=', 'monitor.expiry_minutes').execute();
+    const body = await view(sa);
+    const row = body.settings.find((s) => s.key === 'monitor.expiry_minutes');
+    expect(row?.value).toBe(DEFAULT_SETTINGS['monitor.expiry_minutes'].value);
+    const res = await sa.send('patch', '/admin/settings', {
+      version: body.version,
+      reason: 'Shorter checks',
+      values: { 'monitor.expiry_minutes': 10 },
+    });
+    expect(res.status).toBe(200);
+    expect((await settingRows()).find((r) => r.key === 'monitor.expiry_minutes')?.value).toBe(10);
+  });
+
   it('every default is inside its own range', () => {
     for (const [key, def] of Object.entries(DEFAULT_SETTINGS)) {
       expect([key, def.value >= def.min && def.value <= def.max]).toEqual([key, true]);

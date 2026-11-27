@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, type SettingKey } from './default-settings';
 
 export interface SettingView {
   key: SettingKey;
-  /** null if the setup command has not saved it yet. */
+  /** The saved value, or the default while no row has been saved yet. */
   value: number | null;
   min: number;
   max: number;
@@ -48,7 +48,8 @@ export class SettingsService {
         const value = saved.get(key)?.value;
         return {
           key,
-          value: typeof value === 'number' ? value : null,
+          // A setting added after setup has no row yet: show the value the system really uses (its default).
+          value: typeof value === 'number' ? value : DEFAULT_SETTINGS[key].value,
           min: DEFAULT_SETTINGS[key].min,
           max: DEFAULT_SETTINGS[key].max,
         };
