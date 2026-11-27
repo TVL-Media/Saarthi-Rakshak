@@ -206,6 +206,25 @@ body {
   font-size: 13px;
   font-weight: 500;
 }
+/* Two-line labels no longer push their box lower than the neighbours' boxes. */
+.sr-set-grid .sr-field > label {
+  line-height: 1.3;
+  min-height: 34px;
+  display: flex;
+  align-items: flex-end;
+}
+.sr-field > .sr-hint {
+  line-height: 1.35;
+}
+.sr-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+.sr-group-note {
+  margin: 0 0 14px;
+}
 .sr-err-text {
   color: var(--sr-error);
   font-size: 12px;
@@ -540,8 +559,9 @@ body {
 /* ---------- settings ---------- */
 .sr-set-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px 20px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px 20px;
+  align-items: start;
 }
 .sr-unit.ant-space-compact {
   display: flex;
@@ -570,6 +590,8 @@ body {
 .sr-sticky-bar {
   position: sticky;
   bottom: 16px;
+  z-index: 20;
+  margin-top: 4px;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -647,6 +669,12 @@ body {
 .sr-filters > * {
   min-width: 150px;
   flex: 1 1 150px;
+}
+.sr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 .sr-tags {
   display: inline-flex;

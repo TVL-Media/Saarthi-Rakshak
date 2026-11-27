@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Input, Modal, Select, Space } from 'antd';
+import { Alert, Button, Input, Modal, Select, Space, Switch } from 'antd';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch, type Resolver } from 'react-hook-form';
 import { z } from 'zod';
@@ -347,40 +347,50 @@ export const FIELDS: {
     key: 'safe_places.cache_minutes',
     label: 'Map places kept for',
     unit: 'min',
-    hint: 'How long a nearby-places search is kept before asking the map provider again (needs approval)',
+    hint: 'How long a nearby-places search is kept before asking the map provider again',
     applies: 'Phase 4 · applies at once.',
   },
   {
     key: 'child.max_accuracy_m',
     label: 'Child location: roughest accuracy for an alert',
     unit: 'm',
-    hint: 'A less accurate location never raises a definite zone or route alert (needs approval)',
+    hint: 'A less accurate location never raises a definite zone or route alert',
     applies: 'Phase 4 · applies at once.',
   },
   {
     key: 'child.deviation_m',
     label: 'Child route: off-route distance',
     unit: 'm',
-    hint: 'Needs approval',
     applies: 'Phase 4 · applies at once.',
   },
   {
     key: 'child.deviation_seconds',
     label: 'Child route: off-route time before an alert',
     unit: 'sec',
-    hint: 'Needs approval',
     applies: 'Phase 4 · applies at once.',
   },
   {
     key: 'child.stale_gps_minutes',
     label: 'Child location: stale after',
     unit: 'min',
-    hint: 'The parent sees a stale-GPS warning after this long (needs approval)',
+    hint: 'The parent sees a stale-GPS warning after this long',
     applies: 'Phase 4 · applies at once.',
   },
 ];
 
 const SETTINGS_KEY = ['settings'] as const;
+
+const isSwitch = (key: string) => key.startsWith('feature.');
+const isTuning = (key: string) => /^(child|monitor|school|safe_places)\./.test(key);
+const GROUPS: { title: string; note?: string; test: (key: string) => boolean }[] = [
+  { title: 'Safety rules', test: (k) => !isSwitch(k) && !isTuning(k) },
+  {
+    title: 'Feature switches',
+    note: 'Turn a feature on or off for every phone. Phones pick the change up the next time the app opens.',
+    test: isSwitch,
+  },
+  { title: 'Child safety, school and map tuning', test: isTuning },
+];
 
 /** Form field name for a setting key: React Hook Form reads dots as nesting. */
 const fieldName = (key: string) => key.replaceAll('.', '__');
@@ -500,48 +510,75 @@ function SettingsForm({ view }: { view: SettingsView }) {
         ? "Couldn't save. Check your internet connection and try again."
         : undefined;
   const n = changed.length;
+  const problems = Object.keys(formState.errors).length;
+  const goToProblem = () => {
+    const first = Object.keys(formState.errors)[0];
+    if (!first) return;
+    const el = document.querySelector<HTMLElement>(`[data-setting="${first.replaceAll('__', '.')}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el?.querySelector<HTMLElement>('input')?.focus({ preventScroll: true });
+  };
 
   return (
     <>
-      <SectionCard title="Safety rules">
-        <div className="sr-set-grid">
-          {FIELDS.filter((f) => ranges.has(f.key)).map((f) => (
-            <div className="sr-field" key={f.key}>
-              <label htmlFor={f.key}>{f.label}</label>
-              <Controller
-                name={fieldName(f.key)}
-                control={control}
-                render={({ field, fieldState }) => (
-                  <>
-                    <Space.Compact className="sr-unit">
-                      <WholeNumberInput
-                        id={f.key}
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        invalid={Boolean(fieldState.error)}
-                        describedBy={`${f.key}-hint`}
-                      />
-                      <span className="sr-unit-label">{f.unit}</span>
-                    </Space.Compact>
-                    {fieldState.error ? (
-                      <span className="sr-err-text" role="alert">
-                        {fieldState.error.message}
-                      </span>
-                    ) : (
-                      f.hint && (
-                        <small className="sr-hint" id={`${f.key}-hint`}>
-                          {f.hint}
-                        </small>
-                      )
+      {GROUPS.map((group) => {
+        const fields = FIELDS.filter((f) => ranges.has(f.key) && group.test(f.key));
+        if (fields.length === 0) return null;
+        return (
+          <SectionCard title={group.title} key={group.title}>
+            {group.note && <p className="sr-muted sr-group-note">{group.note}</p>}
+            <div className="sr-set-grid">
+              {fields.map((f) => (
+                <div className="sr-field" key={f.key} data-setting={f.key}>
+                  <label htmlFor={f.key}>{f.label}</label>
+                  <Controller
+                    name={fieldName(f.key)}
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <>
+                        {isSwitch(f.key) ? (
+                          <div className="sr-switch-row">
+                            <Switch
+                              id={f.key}
+                              checked={field.value === 1}
+                              onChange={(on) => field.onChange(on ? 1 : 0)}
+                              aria-describedby={`${f.key}-hint`}
+                            />
+                            <span>{field.value === 1 ? 'On' : 'Off'}</span>
+                          </div>
+                        ) : (
+                          <Space.Compact className="sr-unit">
+                            <WholeNumberInput
+                              id={f.key}
+                              value={field.value}
+                              onChange={field.onChange}
+                              onBlur={field.onBlur}
+                              invalid={Boolean(fieldState.error)}
+                              describedBy={`${f.key}-hint`}
+                            />
+                            <span className="sr-unit-label">{f.unit}</span>
+                          </Space.Compact>
+                        )}
+                        {fieldState.error ? (
+                          <span className="sr-err-text" role="alert">
+                            {fieldState.error.message}
+                          </span>
+                        ) : (
+                          f.hint && (
+                            <small className="sr-hint" id={`${f.key}-hint`}>
+                              {f.hint}
+                            </small>
+                          )
+                        )}
+                      </>
                     )}
-                  </>
-                )}
-              />
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </SectionCard>
+          </SectionCard>
+        );
+      })}
 
       <SectionCard title="SMS providers">
         <div className="sr-set-grid">
@@ -570,6 +607,17 @@ function SettingsForm({ view }: { view: SettingsView }) {
       <div className="sr-sticky-bar">
         <span className="sr-muted">
           {n === 0 ? 'No unsaved changes' : `${n} unsaved change${n === 1 ? '' : 's'}`}
+          {problems > 0 && (
+            <>
+              {' · '}
+              <span className="sr-err-text" role="alert">
+                {problems} value{problems === 1 ? ' needs' : 's need'} fixing before you can save
+              </span>{' '}
+              <Button type="link" size="small" onClick={goToProblem}>
+                Show me
+              </Button>
+            </>
+          )}
         </span>
         <Space>
           <Button disabled={n === 0} onClick={() => reset(saved)}>

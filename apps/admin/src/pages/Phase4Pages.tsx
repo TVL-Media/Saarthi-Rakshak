@@ -380,7 +380,7 @@ function PartnerForm({
         />
       )}
       {save.isError && (
-        <Alert type="error" showIcon message={errorText(save.error)} style={{ marginBottom: 12 }} />
+        <Alert type="error" showIcon title={errorText(save.error)} style={{ marginBottom: 12 }} />
       )}
       <Form
         form={form}
@@ -604,7 +604,7 @@ function ActionModal({
         )
       }
     >
-      {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} />}
+      {error && <Alert type="error" showIcon title={error} style={{ marginBottom: 12 }} />}
       {kind === 'approve' ? (
         <>
           <p>The badge stays until this date and then comes off by itself.</p>
@@ -1035,7 +1035,7 @@ function GuidanceForm({ initial, onClose }: { initial?: GuidanceRow; onClose: ()
         />
       )}
       {save.isError && (
-        <Alert type="error" showIcon message={errorText(save.error)} style={{ marginBottom: 12 }} />
+        <Alert type="error" showIcon title={errorText(save.error)} style={{ marginBottom: 12 }} />
       )}
       <Form
         form={form}
@@ -1097,7 +1097,7 @@ function ApproveGuidance({ row, onClose }: { row: GuidanceRow; onClose: () => vo
       onOk={() => save.mutate()}
     >
       {save.isError && (
-        <Alert type="error" showIcon message={errorText(save.error)} style={{ marginBottom: 12 }} />
+        <Alert type="error" showIcon title={errorText(save.error)} style={{ marginBottom: 12 }} />
       )}
       <p>
         The text is shown in the app until the next review date. After that it is hidden until it is

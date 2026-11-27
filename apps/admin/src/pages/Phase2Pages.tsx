@@ -295,7 +295,7 @@ function EditPostModal(props: {
             Publish without the photo (face or number plate visible)
           </Checkbox>
         )}
-        {error && <Alert type="error" showIcon message={error} />}
+        {error && <Alert type="error" showIcon title={error} />}
       </Space>
     </Modal>
   );
@@ -326,7 +326,7 @@ function ReasonModal(props: {
         onChange={(e) => setReason(e.target.value)}
         placeholder="Reason (at least 5 characters)"
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginTop: 12 }} />}
+      {error && <Alert type="error" showIcon title={error} style={{ marginTop: 12 }} />}
     </Modal>
   );
 }
@@ -369,7 +369,7 @@ function OfficialPostModal({ onClose }: { onClose: () => void }) {
           onChange={(e) => setBody(e.target.value)}
           placeholder="What people in this area should know (20–500 characters)"
         />
-        {save.isError && <Alert type="error" showIcon message={errorText(save.error)} />}
+        {save.isError && <Alert type="error" showIcon title={errorText(save.error)} />}
       </Space>
     </Modal>
   );
@@ -818,7 +818,7 @@ function PlanDrawer({ plan, onClose }: { plan: PlanRow; onClose: () => void }) {
           app
         </Space>
         <p className="sr-muted">SOS, guardians and live location are never part of a paid plan.</p>
-        {save.isError && <Alert type="error" showIcon message={errorText(save.error)} />}
+        {save.isError && <Alert type="error" showIcon title={errorText(save.error)} />}
       </Space>
     </Drawer>
   );

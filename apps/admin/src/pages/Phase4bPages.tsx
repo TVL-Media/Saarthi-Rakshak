@@ -135,7 +135,7 @@ function FormModal({
             )}
           </Form.Item>
         ))}
-        {error && <Alert type="error" message={error} showIcon />}
+        {error && <Alert type="error" title={error} showIcon />}
       </Form>
     </Modal>
   );
@@ -197,7 +197,7 @@ function Schools({ isSuper }: { isSuper: boolean }) {
   const run = (path: string, body?: object) => act.mutateAsync({ path, body });
   return (
     <>
-      <div className="sr-filters">
+      <div className="sr-actions">
         {isSuper && <Button type="primary" onClick={() => setAdding(true)}>Add school</Button>}
       </div>
       <SectionCard title="Schools">
@@ -373,8 +373,8 @@ function SafetyData({ isSuper }: { isSuper: boolean }) {
   const run = (path: string, body?: object) => act.mutateAsync({ path, body });
   return (
     <>
-      <Alert type="warning" showIcon style={{ marginBottom: 16 }} message="Scores are advice based on the data below. Weights, datasets and refresh times are your decision: every change is logged, and old model versions are kept." />
-      <div className="sr-filters">{isSuper && <Button type="primary" onClick={() => setDataset(true)}>Add dataset</Button>}</div>
+      <Alert type="warning" showIcon style={{ marginBottom: 16 }} title="Scores are advice based on the data below. Weights, datasets and refresh times are your decision: every change is logged, and old model versions are kept." />
+      <div className="sr-actions">{isSuper && <Button type="primary" onClick={() => setDataset(true)}>Add dataset</Button>}</div>
       <SectionCard title="Datasets">
         <List<{ id: string; name: string; kind: string; source: string; licence: string; refreshDays: number; status: string; lastImportedAt: string | null; records: number; stale: boolean }>
           queryKey="p4b-datasets"
@@ -404,7 +404,7 @@ function SafetyData({ isSuper }: { isSuper: boolean }) {
           ]}
         />
       </SectionCard>
-      <div className="sr-filters">{isSuper && <Button onClick={() => setModel(true)}>Add model version</Button>}</div>
+      <div className="sr-actions">{isSuper && <Button onClick={() => setModel(true)}>Add model version</Button>}</div>
       <SectionCard title="Scoring models">
         <List<{ id: string; version: string; active: boolean; createdAt: string }>
           queryKey="p4b-models"
@@ -522,8 +522,8 @@ function Authority() {
   };
   return (
     <>
-      <Alert type="warning" showIcon style={{ marginBottom: 16 }} message="Only add an endpoint that the authority approved in writing. Secrets live in the server settings: here you only name them. SOS always works without this, and the app never says police were dispatched unless the authority confirms." />
-      <div className="sr-filters"><Button type="primary" onClick={() => setAdding(true)}>Add endpoint</Button></div>
+      <Alert type="warning" showIcon style={{ marginBottom: 16 }} title="Only add an endpoint that the authority approved in writing. Secrets live in the server settings: here you only name them. SOS always works without this, and the app never says police were dispatched unless the authority confirms." />
+      <div className="sr-actions"><Button type="primary" onClick={() => setAdding(true)}>Add endpoint</Button></div>
       <SectionCard title="Authority endpoints">
         <List<EndpointRow>
           queryKey="p4b-endpoints"

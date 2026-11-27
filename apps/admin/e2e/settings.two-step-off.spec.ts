@@ -91,3 +91,22 @@ test('a value outside its range shows an error and cannot be saved; Discard rest
   await expect(page.getByText('No unsaved changes')).toBeVisible();
   expect(await settingValueForTest('sos.countdown_seconds')).toBe(5);
 });
+
+test('a feature switch turns on and is saved; a bad value says why Save is off', async ({ page }) => {
+  await openSettings(page);
+  await page.getByLabel('Chhupa Rakshak', { exact: true }).click();
+  await expect(page.getByText('1 unsaved change')).toBeVisible();
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Reason for the change').fill('Start the Noida pilot');
+  await dialog.getByRole('button', { name: 'Save change' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('No unsaved changes')).toBeVisible();
+  expect(await settingValueForTest('feature.chhupa_rakshak')).toBe(1);
+
+  await page.getByLabel('SOS countdown').fill('99');
+  await expect(page.getByText('1 value needs fixing before you can save')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Show me' }).click();
+  await expect(page.getByLabel('SOS countdown')).toBeFocused();
+});

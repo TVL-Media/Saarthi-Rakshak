@@ -385,7 +385,7 @@ function QuoteModal(props: { onClose: () => void; onSave: (body: object) => Prom
         onChange={(e) => setNote(e.target.value)}
         placeholder="Note for the user (optional), for example “Two hours”"
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginTop: 12 }} />}
+      {error && <Alert type="error" showIcon title={error} style={{ marginTop: 12 }} />}
     </Modal>
   );
 }
@@ -431,7 +431,7 @@ function AssignModal(props: { onClose: () => void; onSave: (id: string) => Promi
           }))}
         />
       )}
-      {error && <Alert type="error" showIcon message={error} style={{ marginTop: 12 }} />}
+      {error && <Alert type="error" showIcon title={error} style={{ marginTop: 12 }} />}
     </Modal>
   );
 }
@@ -456,7 +456,7 @@ function CancelModal(props: { onClose: () => void; onSave: (r: string) => Promis
         onChange={(e) => setReason(e.target.value)}
         placeholder="Reason (at least 5 characters)"
       />
-      {error && <Alert type="error" showIcon message={error} style={{ marginTop: 12 }} />}
+      {error && <Alert type="error" showIcon title={error} style={{ marginTop: 12 }} />}
     </Modal>
   );
 }
