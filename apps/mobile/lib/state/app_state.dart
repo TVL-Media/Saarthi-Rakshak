@@ -517,6 +517,11 @@ class AppState extends ChangeNotifier {
   /// Logs out on this phone at once; the server is told in the background (it may be slow or
   /// asleep, and ending locally is enough: the old token is never used again).
   Future<void> logout() async {
+    // "Available now" ends with the session: told with the current token, before it is cleared.
+    if (rakshakAvailable.value.until != null) {
+      unawaited(api.rakshakPresenceOff().timeout(const Duration(seconds: 15)).catchError((_) {}));
+      rakshakAvailable.value = (until: null, reason: 'logout');
+    }
     // The request takes the current token now, before it is cleared below.
     unawaited(api.logout().timeout(const Duration(seconds: 15)).catchError((_) {}));
     await _endLocally();
@@ -568,8 +573,17 @@ class AppState extends ChangeNotifier {
         playbackDone.value++;
       case 'voiceDownload':
         voiceDownload.value = (e.data['progress'] as int?) ?? 0;
+      case 'rakshakAvailable':
+        final until = (e.data['until'] as int?) ?? 0;
+        rakshakAvailable.value = (
+          until: (e.data['on'] == true && until > 0) ? DateTime.fromMillisecondsSinceEpoch(until) : null,
+          reason: e.data['reason'] as String?,
+        );
     }
   }
+
+  /// Rakshak "Available now": when it ends (null = off), and why it last stopped (e.g. "time_up").
+  final ValueNotifier<({DateTime? until, String? reason})> rakshakAvailable = ValueNotifier((until: null, reason: null));
 
   Future<void> _refreshEngineState() async {
     try {

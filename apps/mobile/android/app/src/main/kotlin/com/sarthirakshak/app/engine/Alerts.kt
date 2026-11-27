@@ -28,6 +28,7 @@ object Alerts {
     const val ID_SMS = 3
     const val ID_DETECTION = 4
     const val ID_FAKE_CALL = 5
+    const val ID_RAKSHAK = 6
     const val CH_FAKE_CALL = "fake_call"
 
     private var alarm: Ringtone? = null

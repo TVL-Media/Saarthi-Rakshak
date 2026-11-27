@@ -425,6 +425,9 @@ extension Phase2Api on ApiClient {
 
   Future<void> rakshakWithdraw() => send('DELETE', '/v1/rakshak/application');
 
+  /// Rakshak "Available now" off: the server forgets the position at once.
+  Future<void> rakshakPresenceOff() => send('DELETE', '/v1/rakshak/presence');
+
   // ---- Plans ------------------------------------------------------------------------------------
 
   Future<PlansReply> plans() async => PlansReply.fromJson(_obj(await send('GET', '/v1/plans')));

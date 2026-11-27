@@ -23,6 +23,7 @@ import com.sarthirakshak.app.engine.Alerts
 import com.sarthirakshak.app.engine.Crypto
 import com.sarthirakshak.app.engine.EngineBus
 import com.sarthirakshak.app.engine.FakeCallService
+import com.sarthirakshak.app.engine.RakshakPresenceService
 import com.sarthirakshak.app.engine.LocalClips
 import com.sarthirakshak.app.engine.Outbox
 import com.sarthirakshak.app.engine.SafetyService
@@ -170,6 +171,8 @@ class MainActivity : FlutterFragmentActivity() {
                         result.success(null)
                     }
                     "clearSession" -> {
+                        // "Available now" ends with the session (the app told the server already).
+                        RakshakPresenceService.stop(this, tellServer = false)
                         store.clearSession()
                         // Recordings are private: nobody who logs in next on this phone may hear them.
                         LocalClips.dir(this).deleteRecursively()
@@ -331,6 +334,16 @@ class MainActivity : FlutterFragmentActivity() {
                         FakeCallService.cancel(this)
                         result.success(null)
                     }
+                    "rakshakAvailableStart" -> {
+                        RakshakPresenceService.start(this, call.argument<Int>("hours") ?: 4)
+                        result.success(null)
+                    }
+                    "rakshakAvailableStop" -> {
+                        RakshakPresenceService.stop(this)
+                        result.success(null)
+                    }
+                    // When "Available now" ends (epoch ms), or 0 when it is off.
+                    "rakshakAvailableUntil" -> result.success(RakshakPresenceService.until(this))
                     "pickContact" -> {
                         pickResult?.success(null) // an older picker that never answered
                         pickResult = result

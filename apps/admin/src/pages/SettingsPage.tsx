@@ -228,8 +228,15 @@ export const FIELDS: {
     key: 'feature.nearby',
     label: 'Rakshaks Near Me',
     unit: '1 on · 0 off',
-    hint: 'Off until Rakshaks can go online (Rakshak app, later). Switch on to show it in the app',
+    hint: 'Approved Rakshaks appear while they switch "Available now" on in the app. Switch on to show it',
     applies: 'Phase 3 · applies on each phone the next time the app opens.',
+  },
+  {
+    key: 'rakshak.available_hours',
+    label: 'Rakshak "Available now" turns off after',
+    unit: 'hours',
+    hint: 'The Rakshak can switch it on again; it stops sharing their location until then',
+    applies: 'Phase 3 · applies the next time a Rakshak switches it on.',
   },
   {
     key: 'feature.bookings',

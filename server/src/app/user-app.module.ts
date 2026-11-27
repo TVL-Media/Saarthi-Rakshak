@@ -55,6 +55,7 @@ import { VaultController, VaultService } from './phase2/vault';
 import { AdminPhase3Controller, AdminPhase3Service } from './phase3/admin-phase3';
 import { AdminSupportController, AdminSupportService } from './support/admin-support';
 import { BookingsController, BookingsService } from './phase3/bookings';
+import { RakshakPresenceController, RakshakPresenceService } from './phase3/presence';
 import { AdminPhase4Controller, AdminPhase4Service } from './phase4/admin-phase4';
 import { ChildController, ChildService } from './phase4/child';
 import { Phase4Gate } from './phase4/common';
@@ -92,6 +93,7 @@ import { SafetyServicesController, SafetyServicesService } from './phase4/suppor
     PlansController,
     AdminPhase2Controller,
     BookingsController,
+    RakshakPresenceController,
     AdminPhase3Controller,
     SafetyServicesController,
     ChildController,
@@ -133,6 +135,7 @@ import { SafetyServicesController, SafetyServicesService } from './phase4/suppor
     PlansService,
     AdminPhase2Service,
     BookingsService,
+    RakshakPresenceService,
     AdminPhase3Service,
     Phase4Gate,
     SafetyServicesService,

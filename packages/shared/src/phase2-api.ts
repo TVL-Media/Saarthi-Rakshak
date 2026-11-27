@@ -435,6 +435,21 @@ export const RakshakApplicationRequest = z.object({
   agreeToChecks: z.literal(true, { error: 'Please agree to the verification checks' }),
 });
 
+/**
+ * POST /v1/rakshak/presence — an approved Rakshak with "Available now" on, every few minutes.
+ * `start: true` when the switch is turned on (starts the time limit). Only the latest position is
+ * kept; others see a first name and a position rounded to about 100 m.
+ */
+export const RakshakPresenceRequest = z.object({
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  accuracyM: z.number().min(0).max(100_000).optional(),
+  start: z.boolean().optional(),
+});
+
+/** Reply to POST /v1/rakshak/presence: when "Available now" switches itself off. */
+export const RakshakPresence = z.object({ availableUntil: DateTime });
+
 export const RakshakApplication = z.object({
   id: Id,
   status: z.enum(['under_review', 'approved', 'rejected', 'withdrawn']),
@@ -519,6 +534,8 @@ export type FlagPostRequest = z.infer<typeof FlagPostRequest>;
 export type RakshakDocumentUploadRequest = z.infer<typeof RakshakDocumentUploadRequest>;
 export type RakshakApplicationRequest = z.infer<typeof RakshakApplicationRequest>;
 export type RakshakApplication = z.infer<typeof RakshakApplication>;
+export type RakshakPresenceRequest = z.infer<typeof RakshakPresenceRequest>;
+export type RakshakPresence = z.infer<typeof RakshakPresence>;
 export type Plan = z.infer<typeof Plan>;
 export type PlansReply = z.infer<typeof PlansReply>;
 export type VerifyPurchaseRequest = z.infer<typeof VerifyPurchaseRequest>;

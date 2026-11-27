@@ -96,7 +96,7 @@ describe('GET /admin/settings', () => {
   it('shows the 50 saved defaults (Phases 1 to 4) with their ranges, and logs the view', async () => {
     const sa = await loggedIn('super_admin', 'sa@example.test');
     const body = await view(sa);
-    expect(body.settings).toHaveLength(50);
+    expect(body.settings).toHaveLength(51);
     expect(body.settings).toContainEqual({
       key: 'sos.countdown_seconds',
       value: 5,

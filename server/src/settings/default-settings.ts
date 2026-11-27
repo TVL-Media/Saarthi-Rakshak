@@ -201,6 +201,13 @@ export const DEFAULT_SETTINGS = {
     min: 0,
     max: 1,
   },
+  'rakshak.available_hours': {
+    value: 4,
+    description:
+      'An approved Rakshak who switches "Available now" on is switched off again after this many hours',
+    min: 1,
+    max: 12,
+  },
   // ---- Phase 4 (staged release switches: 1 = on for everyone, 0 = off) ----
   'feature.night_mode': {
     value: 0,

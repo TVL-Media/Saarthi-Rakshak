@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 import { DatabaseService } from '../../database/database.module';
 import { StorageService } from '../../storage/storage.module';
 import { JobHandlers } from '../jobs/job-queue';
+import { PRESENCE_KEEP_HOURS } from '../phase3/presence';
 
 /** Rows handled per run of each step, so one run never takes long. */
 const BATCH = 500;
@@ -100,6 +101,11 @@ export class CleanupService implements OnModuleInit {
         this.logger.error(`Evidence ${item.id} not deleted: ${(err as Error).message}`);
       }
     }
+    // … Rakshak positions not updated for a day ("Available now" keeps no location history) …
+    await db
+      .deleteFrom('rakshak_presence')
+      .where('updated_at', '<', sql<Date>`now() - make_interval(hours => ${PRESENCE_KEEP_HOURS})`)
+      .execute();
     // … and Rakshak applications rejected more than 90 days ago (with their documents).
     const oldApps = await db
       .selectFrom('rakshak_applications')

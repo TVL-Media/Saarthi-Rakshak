@@ -547,6 +547,8 @@ export interface RakshakPresenceTable {
   accuracy_m: number | null;
   online: Generated<boolean>;
   updated_at: Timestamp;
+  /** When "Available now" was switched on (migration 0025); null while off. */
+  available_since: Date | null;
 }
 
 // ---- Phase 4 ----

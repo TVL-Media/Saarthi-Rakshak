@@ -14,6 +14,7 @@ import {
   Space,
   Switch,
   Table,
+  Tag,
 } from 'antd';
 import { useState } from 'react';
 import { api, ApiError } from '../api';
@@ -391,6 +392,9 @@ interface AppRow {
   status: 'under_review' | 'approved' | 'rejected';
   createdAt: string;
   decidedAt: string | null;
+  /** "Available now" in the app (yes / no and when last seen; never where). */
+  availableNow?: boolean;
+  lastAvailableAt?: string | null;
 }
 
 interface AppDetail extends AppRow {
@@ -460,6 +464,21 @@ export function RakshakBody() {
                 key: 'd',
                 render: (_: unknown, r: AppRow) =>
                   r.decidedAt ? formatTimeShort(r.decidedAt) : '—',
+              },
+              {
+                // Approved Rakshaks only: "Available now" in the app. Never their location.
+                title: 'Available',
+                key: 'av',
+                render: (_: unknown, r: AppRow) =>
+                  r.status !== 'approved' ? (
+                    '—'
+                  ) : r.availableNow ? (
+                    <Tag color="green">Available now</Tag>
+                  ) : r.lastAvailableAt ? (
+                    <span className="sr-muted">Last {formatTimeShort(r.lastAvailableAt)}</span>
+                  ) : (
+                    <span className="sr-muted">Not yet</span>
+                  ),
               },
               { title: '', key: 'o', render: () => <Button size="small">Open</Button> },
             ]}

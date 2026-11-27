@@ -299,6 +299,17 @@ class SafetyEngine {
   /// Stops a waiting or ringing fake call (its notification and ringtone).
   Future<void> cancelFakeCall() => _ch.invokeMethod('cancelFakeCall');
 
+  /// Rakshak "Available now": share this phone's position every few minutes for [hours].
+  Future<void> rakshakAvailableStart(int hours) => _ch.invokeMethod('rakshakAvailableStart', {'hours': hours});
+
+  Future<void> rakshakAvailableStop() => _ch.invokeMethod('rakshakAvailableStop');
+
+  /// When "Available now" ends, or null when it is off.
+  Future<DateTime?> rakshakAvailableUntil() async {
+    final ms = (await _ch.invokeMethod<int>('rakshakAvailableUntil')) ?? 0;
+    return ms > 0 ? DateTime.fromMillisecondsSinceEpoch(ms) : null;
+  }
+
   /// A strong buzz (e.g. each second of the SOS countdown).
   Future<void> vibrate(int ms) => _ch.invokeMethod('vibrate', {'ms': ms});
 

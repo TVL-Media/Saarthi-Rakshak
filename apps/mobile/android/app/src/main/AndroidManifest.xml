@@ -95,6 +95,12 @@
             android:exported="false"
             android:foregroundServiceType="shortService" />
 
+        <!-- Rakshak "Available now": shares an approved Rakshak's position every few minutes while on -->
+        <service
+            android:name=".engine.RakshakPresenceService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <!-- Home-screen SOS widget -->
         <receiver
             android:name=".SosWidgetProvider"

@@ -5,8 +5,8 @@ What the Flutter app (`apps/mobile`, version 1.1.8+) calls for Phase 3. **The se
 `feature.nearby` / `feature.bookings` are 0 (Settings in the admin panel) every call answers 404 and the
 screens show "Not available yet" (the app treats HTTP 404 and 501 as "not built"), never an error and never
 made-up data. Bookings are worked from the admin panel (**Bookings** screen: quote, assign a Rakshak, started,
-completed, cancel with a reason). "Near me" stays empty until the Rakshak app writes positions to
-`rakshak_presence` (not built yet). The shapes below are what the server returns. If the server needs a different shape, change
+completed, cancel with a reason). "Near me" lists approved Rakshaks who switched **Available now** on in the
+app (see below; the separate Rakshak app is not built yet). The shapes below are what the server returns. If the server needs a different shape, change
 `apps/mobile/lib/api/phase3_api.dart` (one file) and the tests in `apps/mobile/test/phase3_test.dart`.
 
 Same rules as `docs/app-api.md`: `Authorization: Bearer <session token>`, errors are `{ "error", "message" }`.
@@ -25,6 +25,22 @@ Menu items appear only when the server switches them on for the user, in `rules`
 
 Test builds made with `--dart-define=PHASE3=true` show them always (they then show "Not available yet" if the
 server has nothing).
+
+## Rakshak "Available now" (how Rakshaks get on the list)
+
+Until the Rakshak app exists, an **approved Rakshak** uses the normal app: Become a Rakshak → **Available now**.
+While it is on, the phone (`RakshakPresenceService`, a foreground service) sends its position about every
+3 minutes; it turns itself off after `rakshak.available_hours` (Settings, default 4), on Stop, on logout, or when
+the server refuses.
+
+| Call | Body | Answer |
+| --- | --- | --- |
+| `POST /v1/rakshak/presence` | `{ lat, lng, accuracyM?, start? }` (`start: true` when switched on) | `{ availableUntil }`; 404 while `feature.nearby` is 0; 409 if not an approved Rakshak or the hours are up (the phone stops) |
+| `DELETE /v1/rakshak/presence` | — | 204: off at once, the position is deleted |
+
+Only the latest position is kept (one row per Rakshak, overwritten; migration `0025_rakshak_available` adds
+`available_since`); positions older than 24 hours are deleted by the hourly cleanup. A Rakshak silent for
+10 minutes drops off the list. Admins see "Available now / last available" only, never the position.
 
 ## Rakshaks near me
 

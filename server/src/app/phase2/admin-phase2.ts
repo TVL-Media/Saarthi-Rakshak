@@ -219,10 +219,24 @@ export class AdminPhase2Service {
 
   async applications(status: string) {
     const rows = await this.database.db
-      .selectFrom('rakshak_applications')
-      .select(['id', 'areas', 'id_type', 'status', 'created_at', 'decided_at'])
-      .where('status', '=', status as 'under_review')
-      .orderBy('created_at', status === 'under_review' ? 'asc' : 'desc')
+      .selectFrom('rakshak_applications as a')
+      // "Available now": yes / no and when last seen only. Admins never see a Rakshak's position
+      // (live location is shown to admins only during an active SOS).
+      .leftJoin('rakshak_presence as p', 'p.user_id', 'a.user_id')
+      .select([
+        'a.id',
+        'a.areas',
+        'a.id_type',
+        'a.status',
+        'a.created_at',
+        'a.decided_at',
+        'p.updated_at as presence_at',
+        sql<boolean>`coalesce(p.online AND p.updated_at > now() - interval '10 minutes', false)`.as(
+          'available_now',
+        ),
+      ])
+      .where('a.status', '=', status as 'under_review')
+      .orderBy('a.created_at', status === 'under_review' ? 'asc' : 'desc')
       .limit(200)
       .execute();
     return {
@@ -234,6 +248,8 @@ export class AdminPhase2Service {
         status: r.status,
         createdAt: r.created_at.toISOString(),
         decidedAt: r.decided_at?.toISOString() ?? null,
+        availableNow: r.available_now,
+        lastAvailableAt: r.presence_at ? new Date(r.presence_at).toISOString() : null,
       })),
     };
   }

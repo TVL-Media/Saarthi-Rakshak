@@ -169,6 +169,8 @@ export class RakshakService {
       .deleteFrom('rakshak_applications')
       .where('user_id', '=', userId)
       .execute();
+    // No longer a Rakshak: never shown as available again, and the last position goes too.
+    await this.database.db.deleteFrom('rakshak_presence').where('user_id', '=', userId).execute();
   }
 
   async deleteDocuments(documents: unknown): Promise<void> {

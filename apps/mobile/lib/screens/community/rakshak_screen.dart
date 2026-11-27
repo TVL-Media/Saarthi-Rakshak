@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../api/api_client.dart';
 import '../../api/phase2_api.dart';
@@ -90,12 +92,135 @@ class _RakshakScreenState extends State<RakshakScreen> {
                 ]),
               ),
               const SizedBox(height: 16),
+              // Approved Rakshaks can be seen in "Rakshaks Near Me" while they switch this on.
+              if (app.status == 'approved' && _state.feature3('nearby')) ...[
+                const AvailableNowCard(),
+                const SizedBox(height: 16),
+              ],
               if (app.status == 'under_review')
                 MenuGroup(children: [MenuRow(icon: Icons.undo, title: 'Withdraw application', danger: true, onTap: _withdraw)]),
             ]);
           },
         ),
       );
+}
+
+/// "Available now" for an approved Rakshak: while on, the phone shares its position every few
+/// minutes so people nearby see a Rakshak is close (first name and a rounded position only). It
+/// turns itself off after the hours set by the admins. Asks for consent the first time.
+class AvailableNowCard extends StatefulWidget {
+  const AvailableNowCard({super.key});
+
+  @override
+  State<AvailableNowCard> createState() => _AvailableNowCardState();
+}
+
+class _AvailableNowCardState extends State<AvailableNowCard> {
+  late final AppState _state = AppScope.read(context);
+  static const _consentKey = 'rakshak_available_consent';
+  bool _busy = false;
+
+  int get _hours => ((_state.me?.rules['rakshak.available_hours'] ?? 4).round()).clamp(1, 12);
+
+  @override
+  void initState() {
+    super.initState();
+    _state.rakshakAvailable.addListener(_onChange);
+    // The phone may have been sharing since before this screen opened (or stopped meanwhile).
+    _state.engine.rakshakAvailableUntil().then((until) {
+      if (mounted) _state.rakshakAvailable.value = (until: until, reason: _state.rakshakAvailable.value.reason);
+    }).catchError((_) {});
+  }
+
+  @override
+  void dispose() {
+    _state.rakshakAvailable.removeListener(_onChange);
+    super.dispose();
+  }
+
+  void _onChange() {
+    if (!mounted) return;
+    setState(() {});
+    final v = _state.rakshakAvailable.value;
+    if (v.until != null) return;
+    final why = switch (v.reason) {
+      'time_up' => 'Available now ended after $_hours hours. Switch it on again if you are still free.',
+      'refused' => 'Available now was stopped by the server (approval or time limit). Switch it on again later.',
+      'unavailable' => 'Rakshaks Near Me is switched off for now.',
+      'no_location' => 'Allow location for Sarthi Rakshak to be available.',
+      _ => null,
+    };
+    if (why != null) showInfo(context, why);
+  }
+
+  Future<bool> _consent() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_consentKey) == true) return true;
+    if (!mounted) return false;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Be available as a Rakshak?'),
+        content: Text(
+          'While this is on, your phone shares your approximate location every few minutes so people near you can '
+          'see that a Rakshak is close.\n\n'
+          '• Only your first name is shown, never your phone number.\n'
+          '• Your position is rounded and no history of it is kept.\n'
+          '• It turns off by itself after $_hours hours, and you can stop it any time.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('Not now')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('I agree')),
+        ],
+      ),
+    );
+    if (ok == true) await prefs.setBool(_consentKey, true);
+    return ok == true;
+  }
+
+  Future<void> _set(bool on) async {
+    setState(() => _busy = true);
+    try {
+      if (on) {
+        if (!await _consent()) return;
+        var p = await Geolocator.checkPermission();
+        if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+        if (p == LocationPermission.denied || p == LocationPermission.deniedForever) {
+          if (mounted) showInfo(context, 'Allow location for Sarthi Rakshak to be available.');
+          return;
+        }
+        await _state.engine.rakshakAvailableStart(_hours);
+        final until = await _state.engine.rakshakAvailableUntil();
+        _state.rakshakAvailable.value = (until: until, reason: null);
+      } else {
+        await _state.engine.rakshakAvailableStop();
+        _state.rakshakAvailable.value = (until: null, reason: 'off');
+      }
+    } catch (_) {
+      if (mounted) showInfo(context, 'Could not change Available now. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final until = _state.rakshakAvailable.value.until;
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: SwitchListTile(
+        key: const Key('rakshak-available'),
+        isThreeLine: true,
+        secondary: IconTile(Icons.shield_moon_outlined, size: 40, color: until != null ? AppColors.green : AppColors.red),
+        title: const Text('Available now', style: TextStyle(fontWeight: FontWeight.w600)),
+        subtitle: Text(until != null
+            ? 'People nearby can see a Rakshak is close. On until ${DateFormat('h:mm a').format(until)}.'
+            : 'Switch on when you are free to help: people nearby will see a Rakshak is close (first name only).'),
+        value: until != null,
+        onChanged: _busy ? null : _set,
+      ),
+    );
+  }
 }
 
 class _Intro extends StatelessWidget {
