@@ -1,6 +1,5 @@
-import { Table } from 'antd';
 import type { ReactNode } from 'react';
-import { EmptyState, SectionCard, type IconName } from '../components/states';
+import { EmptyState, SectionCard } from '../components/states';
 import { AlertsBody } from './AlertsPage';
 import { AuditBody } from './AuditPage';
 import { DashboardBody } from './DashboardPage';
@@ -11,38 +10,12 @@ import { BookingsBody } from './Phase3Pages';
 import { SafetyServicesBody } from './Phase4Pages';
 import { SafetyIntegrationsBody } from './Phase4bPages';
 import { SettingsBody } from './SettingsPage';
+import { SupportBody } from './SupportPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
 
 // Step 6: each screen has its title and the empty states from the design. Data comes with each
 // screen's own step (filters, stat cards and health are left out until then).
-
-/** A table with the design's column headings and its empty state. */
-function EmptyTable(props: { columns: string[]; icon: IconName; title: string; text: string }) {
-  return (
-    <Table
-      className="sr-table"
-      columns={props.columns.map((c) => ({ title: c, key: c }))}
-      dataSource={[]}
-      pagination={false}
-      scroll={{ x: 'max-content' }}
-      locale={{ emptyText: <EmptyState icon={props.icon} title={props.title} text={props.text} /> }}
-    />
-  );
-}
-
-function Support() {
-  return (
-    <SectionCard>
-      <EmptyTable
-        columns={['Received', 'User', 'Subject', 'Status', 'Assigned to']}
-        icon="inbox"
-        title="No tickets yet"
-        text="When a user taps “Report a problem” in the app, the ticket appears here."
-      />
-    </SectionCard>
-  );
-}
 
 function Reports() {
   const charts: [string, string][] = [
@@ -106,7 +79,7 @@ export const MAIN_SCREENS: Screen[] = [
     menu: 'Support Tickets',
     title: 'Support Tickets',
     sub: 'Problems reported by users from the app',
-    body: Support,
+    body: SupportBody,
   },
   {
     path: '/community',
