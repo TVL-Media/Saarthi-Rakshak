@@ -279,11 +279,11 @@ class _ChildModeScreenState extends State<ChildModeScreen> {
             return ListView(padding: const EdgeInsets.all(16), children: [
               SizedBox(
                 height: 90,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: AppColors.red, textStyle: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                  icon: const Icon(Icons.sos, size: 34),
-                  label: const Text('SOS'),
+                // Just the word: the "sos" icon is itself the letters SOS, which showed "SOS SOS".
+                child: FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: AppColors.red, textStyle: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 2)),
                   onPressed: () => _push(context, const SosCountdownScreen(trigger: 'button')),
+                  child: const Text('SOS'),
                 ),
               ),
               const SizedBox(height: 16),
@@ -295,10 +295,12 @@ class _ChildModeScreenState extends State<ChildModeScreen> {
                       Text('${i['parentName']} wants to see where you are.', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
                       const Text('If you accept, your location is shared with them. You can stop any time.'),
                       const SizedBox(height: 8),
+                      // Expanded: the app's buttons are full width by default; two in a row without
+                      // it broke the layout and left this whole screen blank.
                       Row(children: [
-                        FilledButton(onPressed: () => _answer('${i['id']}', true), child: const Text('Accept')),
+                        Expanded(child: FilledButton(key: Key('accept-${i['id']}'), onPressed: () => _answer('${i['id']}', true), child: const Text('Accept'))),
                         const SizedBox(width: 8),
-                        OutlinedButton(onPressed: () => _answer('${i['id']}', false), child: const Text('Decline')),
+                        Expanded(child: OutlinedButton(key: Key('decline-${i['id']}'), onPressed: () => _answer('${i['id']}', false), child: const Text('Decline'))),
                       ]),
                     ]),
                   ),

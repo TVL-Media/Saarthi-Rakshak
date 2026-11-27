@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../api/maps_service.dart';
 import '../../api/models.dart';
 import '../../api/phase3_api.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
 import '../../widgets/common.dart';
+import '../../widgets/place_search_sheet.dart';
 import 'bookings_screen.dart';
 import 'phase3_common.dart';
 
@@ -28,6 +30,9 @@ class _BookScreenState extends State<BookScreen> {
   int _hours = 2;
   SavedPlace? _saved;
   ({double lat, double lng})? _here;
+
+  /// Any place found with "Search a place" (not saved, not where the phone is).
+  PlaceResult? _searched;
   bool _locating = false;
   final _notes = TextEditingController();
   String? _error;
@@ -91,6 +96,7 @@ class _BookScreenState extends State<BookScreen> {
         setState(() {
           _here = (lat: pos.latitude, lng: pos.longitude);
           _saved = null;
+          _searched = null;
         });
       }
     } catch (_) {
@@ -100,10 +106,24 @@ class _BookScreenState extends State<BookScreen> {
     }
   }
 
+  /// "Search a place": any area, address or landmark, not only saved places.
+  Future<void> _searchPlace() async {
+    final p = await showPlaceSearch(context);
+    if (p == null || !mounted) return;
+    setState(() {
+      _searched = p;
+      _saved = null;
+      _here = null;
+      _error = null;
+    });
+  }
+
   Future<void> _send() async {
     final service = _service;
     if (service == null) return setState(() => _error = 'Choose a service.');
-    if (_saved == null && _here == null) return setState(() => _error = 'Choose where you need the Rakshak.');
+    if (_saved == null && _here == null && _searched == null) {
+      return setState(() => _error = 'Choose where you need the Rakshak.');
+    }
     final start = _startAt;
     if (!start.isAfter(DateTime.now())) return setState(() => _error = 'Choose a time in the future.');
     setState(() => _error = null);
@@ -113,12 +133,17 @@ class _BookScreenState extends State<BookScreen> {
         serviceType: service.id,
         windowStart: start,
         windowEnd: start.add(Duration(hours: _hours)),
-        lat: _saved?.lat ?? _here!.lat,
-        lng: _saved?.lng ?? _here!.lng,
-        label: _saved == null ? 'My current location' : (_saved!.address ?? _saved!.name),
+        lat: _saved?.lat ?? _searched?.lat ?? _here!.lat,
+        lng: _saved?.lng ?? _searched?.lng ?? _here!.lng,
+        label: _saved != null
+            ? (_saved!.address ?? _saved!.name)
+            : _searched != null
+                ? (_searched!.address.isEmpty ? _searched!.name : _searched!.address)
+                : 'My current location',
         notes: _notes.text,
       );
       if (!mounted) return;
+      showInfo(context, 'Booking request sent. We will send you a quote.');
       await Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => BookingDetailScreen(booking: b)));
     } catch (e) {
       if (!mounted) return;
@@ -193,7 +218,7 @@ class _BookScreenState extends State<BookScreen> {
         PillChoice(
           label: _locating ? 'Finding you…' : 'My current location',
           icon: Icons.my_location,
-          selected: _here != null && _saved == null,
+          selected: _here != null && _saved == null && _searched == null,
           onSelected: (_) => _locating ? null : _useHere(),
         ),
         for (final p in places)
@@ -204,13 +229,27 @@ class _BookScreenState extends State<BookScreen> {
             onSelected: (_) => setState(() {
               _saved = p;
               _here = null;
+              _searched = null;
             }),
           ),
+        PillChoice(
+          key: const Key('book-search-place'),
+          label: _searched?.name ?? 'Search a place',
+          icon: Icons.search,
+          selected: _searched != null,
+          onSelected: (_) => _searchPlace(),
+        ),
       ]),
+      if (_searched != null && _searched!.address.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('Selected: ${_searched!.address}',
+              key: const Key('book-place-selected'), style: const TextStyle(color: AppColors.green, fontWeight: FontWeight.w600)),
+        ),
       if (places.isEmpty)
         const Padding(
           padding: EdgeInsets.only(top: 8),
-          child: Text('Tip: save Home and Work in Saved Places to pick them here.', style: TextStyle(color: AppColors.muted, fontSize: 13.5)),
+          child: Text('Tip: save Home and Work in Saved Places to pick them here, or search any place.', style: TextStyle(color: AppColors.muted, fontSize: 13.5)),
         ),
       const SizedBox(height: 18),
       const SectionLabel('Notes for the Rakshak (optional)'),

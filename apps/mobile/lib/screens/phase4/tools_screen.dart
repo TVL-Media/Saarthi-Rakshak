@@ -21,30 +21,35 @@ class ToolsScreen extends StatefulWidget {
 class _ToolsScreenState extends State<ToolsScreen> {
   late final AppState _state = AppScope.read(context);
   bool _night = false;
-  bool _ready = false;
-  bool _saving = false;
+
+  /// The user tapped before the saved state arrived: their choice wins.
+  bool _touched = false;
+
+  /// Only the newest tap may undo the switch if saving fails (fast taps save in order).
+  int _tapNo = 0;
 
   @override
   void initState() {
     super.initState();
     _state.api.nightModeActive().then((v) {
-      if (mounted) setState(() { _night = v; _ready = true; });
-    }).catchError((_) {
-      if (mounted) setState(() => _ready = true);
-    });
+      if (mounted && !_touched) setState(() => _night = v);
+    }).catchError((_) {});
   }
 
+  /// Moves at once and saves in the background (it used to stay greyed out while the phone asked
+  /// the server, which felt stuck). Goes back, with a message, only if saving fails.
   Future<void> _toggle(bool on) async {
-    setState(() { _night = on; _saving = true; });
+    _touched = true;
+    final no = ++_tapNo;
+    setState(() => _night = on);
     try {
       await _state.api.setNightMode(on);
     } catch (e) {
-      if (mounted) {
+      if (mounted && no == _tapNo) {
         setState(() => _night = !on);
         showError(context, e);
       }
     }
-    if (mounted) setState(() => _saving = false);
   }
 
   Future<void> _shareLocation() async {
@@ -71,7 +76,7 @@ class _ToolsScreenState extends State<ToolsScreen> {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         SwitchListTile(
           value: _night,
-          onChanged: _ready && !_saving ? _toggle : null,
+          onChanged: _toggle,
           title: Text('Night Mode', style: TextStyle(color: fg, fontWeight: FontWeight.w700)),
           subtitle: Text('Darker screen with the tools you need first. It never starts SOS or tracking by itself.',
               style: TextStyle(color: dark ? Colors.white70 : AppColors.muted)),
@@ -79,11 +84,11 @@ class _ToolsScreenState extends State<ToolsScreen> {
         const SizedBox(height: 8),
         SizedBox(
           height: 96,
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.red, textStyle: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-            icon: const Icon(Icons.sos, size: 36),
-            label: const Text('SOS'),
+          // Just the word: the "sos" icon is itself the letters SOS, which showed "SOS SOS".
+          child: FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red, textStyle: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, letterSpacing: 2)),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SosCountdownScreen(trigger: 'button'))),
+            child: const Text('SOS'),
           ),
         ),
         const SizedBox(height: 12),

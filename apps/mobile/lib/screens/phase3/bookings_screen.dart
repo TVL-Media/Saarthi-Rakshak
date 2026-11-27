@@ -191,13 +191,26 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> with WidgetsB
               if (b.notes != null && b.notes!.isNotEmpty) _line(Icons.notes, b.notes!),
             ]),
           ),
+          // The request is sent; a Rakshak is found and a quote sent by our team (no Rakshak app yet),
+          // which can take a while. A clear "sent" message, not a spinner that never stops.
           if (searching) ...[
             const SizedBox(height: 14),
             AppCard(
-              child: Row(children: [
-                const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+              key: const Key('booking-sent'),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.check_circle, color: AppColors.green, size: 26),
                 const SizedBox(width: 14),
-                Expanded(child: Text(matching.message ?? 'Finding a Rakshak near you…', style: const TextStyle(fontSize: 15.5))),
+                const Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Request sent', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    SizedBox(height: 4),
+                    Text(
+                      'We are finding a Rakshak for this time and will send you a quote to accept. '
+                      'You will get a notification, so you can close this screen. Pull down to check for updates.',
+                      style: TextStyle(color: AppColors.muted, height: 1.4),
+                    ),
+                  ]),
+                ),
               ]),
             ),
           ],

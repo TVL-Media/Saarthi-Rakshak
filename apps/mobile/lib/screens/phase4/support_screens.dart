@@ -25,11 +25,11 @@ class WomenSafetyScreen extends StatelessWidget {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         SizedBox(
           height: 80,
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.red, textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            icon: const Icon(Icons.sos, size: 32),
-            label: const Text('SOS'),
+          // Just the word: the "sos" icon is itself the letters SOS, which showed "SOS SOS".
+          child: FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red, textStyle: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 2)),
             onPressed: () => _push(context, const SosCountdownScreen(trigger: 'button')),
+            child: const Text('SOS'),
           ),
         ),
         const SizedBox(height: 16),
@@ -40,7 +40,14 @@ class WomenSafetyScreen extends StatelessWidget {
           if (s.feature('vault')) MenuRow(icon: Icons.lock_outline, title: 'Save evidence', subtitle: 'Photos, audio and notes go to Mere Saboot', accent: true, onTap: () => _push(context, const VaultScreen())),
         ]),
         MenuGroup(label: 'Report and support', children: [
-          MenuRow(icon: Icons.edit_note, title: 'Report harassment', subtitle: 'Private by default. Nothing is sent to police.', accent: true, onTap: () => _push(context, const IncidentListScreen(group: 'women', title: 'Harassment reports', kind: 'harassment'))),
+          MenuRow(
+            key: const Key('women-reports'),
+            icon: Icons.edit_note,
+            title: 'My reports',
+            subtitle: 'Report harassment. Private by default. Nothing is sent to police.',
+            accent: true,
+            onTap: () => _push(context, const IncidentListScreen(group: 'women', kinds: ['harassment'])),
+          ),
           MenuRow(icon: Icons.volunteer_activism_outlined, title: 'Support organisations', subtitle: 'Counselling and help partners', accent: true, onTap: () => _push(context, const PartnersScreen(kind: 'women_support', title: 'Support organisations'))),
           MenuRow(icon: Icons.menu_book_outlined, title: 'What to do', subtitle: 'Step-by-step safety guidance', accent: true, onTap: () => _push(context, const GuidanceScreen())),
           const MenuRow(icon: Icons.alt_route, title: 'Safer route', subtitle: 'Not available yet. We do not guess how safe a road is.', trailing: SizedBox()),
@@ -58,13 +65,20 @@ class LegalSupportScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text("Men's Safety & Legal Support")),
         body: ListView(padding: const EdgeInsets.all(16), children: [
+          // One list for every report (the type is chosen with "New report").
           MenuGroup(label: 'Reports', children: [
-            MenuRow(icon: Icons.business_center_outlined, title: 'Workplace report', subtitle: 'Harassment or pressure at work', accent: true, onTap: () => _push(context, const IncidentListScreen(group: 'men', title: 'My reports', kind: 'workplace'))),
-            MenuRow(icon: Icons.gavel, title: 'A disputed allegation', subtitle: 'Keep your own record. Nobody is called guilty here.', accent: true, onTap: () => _push(context, const IncidentListScreen(group: 'men', title: 'My reports', kind: 'false_accusation'))),
+            MenuRow(
+              key: const Key('men-reports'),
+              icon: Icons.description_outlined,
+              title: 'My reports',
+              subtitle: 'Workplace reports and disputed allegations. Private by default.',
+              accent: true,
+              onTap: () => _push(context, const IncidentListScreen(group: 'men', kinds: ['workplace', 'false_accusation'])),
+            ),
           ]),
           MenuGroup(label: 'Legal help', children: [
             MenuRow(icon: Icons.balance, title: 'Find a lawyer', subtitle: 'Verified directory', accent: true, onTap: () => _push(context, const PartnersScreen(kind: 'lawyer', title: 'Lawyers'))),
-            MenuRow(icon: Icons.track_changes, title: 'My requests', subtitle: 'Track a consultation request', accent: true, onTap: () => _push(context, const RequestsScreen())),
+            MenuRow(icon: Icons.track_changes, title: 'Lawyer requests', subtitle: 'Consultations with a lawyer, including reports you sent to one', accent: true, onTap: () => _push(context, const RequestsScreen())),
           ]),
           const NoticeBox(text: 'We connect you with independent lawyers. Sarthi Rakshak does not give legal advice and does not guarantee any result.'),
         ]),
@@ -214,7 +228,7 @@ class RequestsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.read(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('My requests')),
+      appBar: AppBar(title: const Text('Lawyer requests')),
       body: P4Loader(
         load: () => s.api.partnerRequests(),
         builder: (c, items, reload) => RefreshIndicator(
@@ -282,41 +296,102 @@ class RequestDetailScreen extends StatelessWidget {
 }
 
 // ---- Incident reports ----
+
+/// The report types and how they are named (one list shows them all, each with its type).
+const reportKinds = {
+  'harassment': 'Harassment report',
+  'workplace': 'Workplace report',
+  'false_accusation': 'A disputed allegation',
+};
+
+/// "My reports": every report of this group in one list, each labelled with its type. "New report"
+/// asks for the type when the group has more than one (it used to be two menu rows that opened the
+/// same list).
 class IncidentListScreen extends StatelessWidget {
-  const IncidentListScreen({super.key, required this.group, required this.title, required this.kind});
+  const IncidentListScreen({super.key, required this.group, required this.kinds, this.title = 'My reports'});
   final String group;
+
+  /// The types of report that can be made here, in the order they are offered.
+  final List<String> kinds;
   final String title;
-  final String kind;
+
+  Future<void> _newReport(BuildContext context, Future<void> Function() reload) async {
+    var kind = kinds.first;
+    if (kinds.length > 1) {
+      final chosen = await showModalBottomSheet<String>(
+        context: context,
+        backgroundColor: AppColors.cream,
+        builder: (sheet) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Text('What kind of report?', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            ),
+            for (final k in kinds)
+              ListTile(
+                key: Key('new-report-$k'),
+                leading: Icon(k == 'workplace' ? Icons.business_center_outlined : k == 'false_accusation' ? Icons.gavel : Icons.edit_note, color: AppColors.red),
+                title: Text(reportKinds[k] ?? p4Label(k), style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(switch (k) {
+                  'workplace' => 'Harassment or pressure at work',
+                  'false_accusation' => 'Keep your own record. Nobody is called guilty here.',
+                  _ => 'Private by default. Nothing is sent to police.',
+                }),
+                onTap: () => Navigator.pop(sheet, k),
+              ),
+            const SizedBox(height: 12),
+          ]),
+        ),
+      );
+      if (chosen == null) return;
+      kind = chosen;
+    }
+    if (!context.mounted) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => IncidentFormScreen(kind: kind)));
+    await reload(); // the new report shows at once
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.read(context);
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _push(context, IncidentFormScreen(kind: kind)),
-        icon: const Icon(Icons.add),
-        label: const Text('New report'),
-      ),
       body: P4Loader(
         load: () => s.api.incidentReports(group),
-        builder: (c, items, reload) => ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 90), children: [
-          const NoticeBox(text: 'Reports are private by default. Police are never contacted automatically.'),
-          const SizedBox(height: 12),
-          if (items.isEmpty) const EmptyState(icon: Icons.description_outlined, text: 'No reports yet.'),
-          for (final r in items)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: AppCard(
-                onTap: () => _push(context, IncidentFormScreen(kind: '${r['kind']}', existingId: '${r['id']}')),
-                child: Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(p4Label('${r['category']}'), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                    Text('${r['reference'] ?? 'Draft'}', style: const TextStyle(color: AppColors.muted)),
-                  ])),
-                  StatusPill(p4Label('${r['status']}')),
-                ]),
+        builder: (c, items, reload) => Stack(children: [
+          ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 90), children: [
+            const NoticeBox(text: 'Reports are private by default. Police are never contacted automatically.'),
+            const SizedBox(height: 12),
+            if (items.isEmpty) const EmptyState(icon: Icons.description_outlined, text: 'No reports yet.'),
+            for (final r in items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: AppCard(
+                  onTap: () async {
+                    await Navigator.push(c, MaterialPageRoute(builder: (_) => IncidentFormScreen(kind: '${r['kind']}', existingId: '${r['id']}')));
+                    await reload();
+                  },
+                  child: Row(children: [
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(reportKinds['${r['kind']}'] ?? p4Label('${r['kind']}'),
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                      Text('${p4Label('${r['category']}')} · ${r['reference'] ?? 'Draft'}', style: const TextStyle(color: AppColors.muted)),
+                    ])),
+                    StatusPill(p4Label('${r['status']}')),
+                  ]),
+                ),
               ),
+          ]),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton.extended(
+              key: const Key('new-report'),
+              onPressed: () => _newReport(c, reload),
+              icon: const Icon(Icons.add),
+              label: const Text('New report'),
             ),
+          ),
         ]),
       ),
     );
