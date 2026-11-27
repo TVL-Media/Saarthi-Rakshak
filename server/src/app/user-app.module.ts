@@ -58,6 +58,13 @@ import { BookingsController, BookingsService } from './phase3/bookings';
 import { AdminPhase4Controller, AdminPhase4Service } from './phase4/admin-phase4';
 import { ChildController, ChildService } from './phase4/child';
 import { Phase4Gate } from './phase4/common';
+import { AdminServicesController } from './phase4b/admin-services';
+import { CyberController, CyberService } from './phase4b/cyber';
+import { GlassesController, GlassesService } from './phase4b/glasses';
+import { MonitoringController, MonitoringService } from './phase4b/monitoring';
+import { PoliceHandoffController, PoliceHandoffService } from './phase4b/police';
+import { SafeRouteController, SafetyScoringService } from './phase4b/safety';
+import { SchoolController, SchoolService } from './phase4b/school';
 import { SafetyServicesController, SafetyServicesService } from './phase4/support';
 
 /** Everything the Android app and the guardian pages call: /v1/... and /g/... */
@@ -89,6 +96,13 @@ import { SafetyServicesController, SafetyServicesService } from './phase4/suppor
     SafetyServicesController,
     ChildController,
     AdminPhase4Controller,
+    MonitoringController,
+    SchoolController,
+    CyberController,
+    GlassesController,
+    SafeRouteController,
+    PoliceHandoffController,
+    AdminServicesController,
     AdminSupportController,
   ],
   providers: [
@@ -124,6 +138,12 @@ import { SafetyServicesController, SafetyServicesService } from './phase4/suppor
     SafetyServicesService,
     ChildService,
     AdminPhase4Service,
+    MonitoringService,
+    SchoolService,
+    CyberService,
+    GlassesService,
+    SafetyScoringService,
+    PoliceHandoffService,
     AdminSupportService,
     { provide: JobHandlers, useFactory: () => new JobHandlers() },
     {

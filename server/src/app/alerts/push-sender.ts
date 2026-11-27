@@ -15,7 +15,10 @@ export type PushType =
   | 'booking_status'
   | 'partner_request_status'
   | 'child_alert'
-  | 'child_link';
+  | 'child_link'
+  | 'monitoring_session'
+  | 'school_event'
+  | 'cyber_flag';
 
 export interface PushMessage {
   type: PushType;

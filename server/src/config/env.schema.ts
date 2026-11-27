@@ -81,6 +81,8 @@ const envSchema = z
     // Phase 4 Safe Place Finder: a Google Places API key used by the server only (never put in the
     // app). Without it the finder lists approved partner safe points only.
     GOOGLE_PLACES_API_KEY: z.string().min(10).optional(),
+    /** Server-only key for route alternatives (Directions). Falls back to the Places key. */
+    GOOGLE_DIRECTIONS_API_KEY: z.string().min(10).optional(),
     // Secret added to the Pub/Sub push address (?token=...) so only Google's messages are taken.
     GOOGLE_PLAY_WEBHOOK_TOKEN: z.string().min(20).optional(),
     // 32 random bytes in base64: key for hashing phone numbers that declined a guardian invite.

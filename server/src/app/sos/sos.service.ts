@@ -1,3 +1,4 @@
+import { PoliceHandoffService } from '../phase4b/police';
 import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { CancelledSosRequest, Sos, StartSosRequest, TestSosRequest } from '@sarthi/shared';
@@ -40,6 +41,7 @@ export class SosService {
     private readonly jobs: JobQueue,
     private readonly live: LiveEvents,
     @Inject(ENV) private readonly env: Env,
+    private readonly handoff: PoliceHandoffService,
   ) {}
 
   /**
@@ -132,6 +134,8 @@ export class SosService {
 
     if (created && !created.existing) {
       await this.alertGuardians(userId, input.id, created.links, new Set(input.simSmsSentTo ?? []));
+      // Police / ERSS handoff: never waits and never fails the SOS (Call 112 is always available).
+      void this.handoff.onSos(userId, input.id);
       // "No guardian responded": checked once after the copied number of minutes.
       await this.jobs
         .add(

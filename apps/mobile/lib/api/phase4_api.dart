@@ -101,3 +101,70 @@ extension Phase4Api on ApiClient {
   Future<void> postChildLocation(double lat, double lng, double? accuracyM, DateTime at) => send('POST', '/v1/child/location',
       body: {'lat': lat, 'lng': lng, 'accuracyM': accuracyM, 'recordedAt': at.toUtc().toIso8601String()});
 }
+
+// ---- Phase 4, second group: Chhupa Rakshak, School, Cyber, Glasses, Safer Route, Police handoff ----
+extension Phase4bApi on ApiClient {
+  Future<Map<String, dynamic>> monitoringOverview(String linkId) async => _obj(await send('GET', '/v1/monitoring/$linkId'));
+
+  Future<Map<String, dynamic>> setMonitoringConsent(String linkId, bool enabled, {bool accept = false}) async =>
+      _obj(await send('PUT', '/v1/monitoring/$linkId/consent', body: {'enabled': enabled, 'accept': accept}));
+
+  Future<Map<String, dynamic>> startMonitoring(String linkId, String id, String reason) async =>
+      _obj(await send('POST', '/v1/monitoring/$linkId/sessions', body: {'id': id, 'reason': reason}));
+
+  Future<Map<String, dynamic>> monitoringSession(String id) async => _obj(await send('GET', '/v1/monitoring-sessions/$id'));
+
+  Future<Map<String, dynamic>> stopMonitoring(String id) async => _obj(await send('POST', '/v1/monitoring-sessions/$id/stop'));
+
+  Future<Map<String, dynamic>> childMonitoring() async => _obj(await send('GET', '/v1/child/monitoring'));
+
+  Future<void> postMonitoringSample(String id, double lat, double lng, double? accuracyM) =>
+      send('POST', '/v1/child/monitoring/$id/location', body: {'lat': lat, 'lng': lng, 'accuracyM': accuracyM});
+
+  Future<Map<String, dynamic>> childStopMonitoring(String id) async =>
+      _obj(await send('POST', '/v1/child/monitoring/$id/stop'));
+
+  Future<List<Map<String, dynamic>>> schoolDirectory(String q) async =>
+      _items(_obj(await send('GET', '/v1/schools', query: {if (q.isNotEmpty) 'q': q}))['items']);
+
+  Future<List<Map<String, dynamic>>> schoolLinks() async => _items(_obj(await send('GET', '/v1/school-links'))['items']);
+
+  Future<void> createSchoolLink(String id, String schoolId, String childName, String studentRef) => send('POST', '/v1/school-links',
+      body: {'id': id, 'schoolId': schoolId, 'childName': childName, 'studentRef': studentRef});
+
+  Future<void> revokeSchoolLink(String id) => send('POST', '/v1/school-links/$id/revoke');
+
+  Future<Map<String, dynamic>> schoolEvents(String id) async => _obj(await send('GET', '/v1/school-links/$id/events'));
+
+  Future<Map<String, dynamic>> cyberOverview(String linkId) async => _obj(await send('GET', '/v1/cyber/$linkId'));
+
+  Future<Map<String, dynamic>> setCyberSource(String linkId, bool enabled, {bool accept = false}) async =>
+      _obj(await send('PUT', '/v1/cyber/$linkId/source', body: {'enabled': enabled, 'accept': accept}));
+
+  Future<Map<String, dynamic>> cyberAnalyse(String linkId, String text) async =>
+      _obj(await send('POST', '/v1/cyber/$linkId/analyse', body: {'text': text}));
+
+  Future<Map<String, dynamic>> cyberReview(String flagId, String status, {String? note}) async =>
+      _obj(await send('POST', '/v1/cyber/flags/$flagId/review', body: {'status': status, 'note': ?note}));
+
+  Future<Map<String, dynamic>> glassesModels() async => _obj(await send('GET', '/v1/glasses/models'));
+
+  Future<List<Map<String, dynamic>>> myGlasses() async => _items(_obj(await send('GET', '/v1/glasses'))['items']);
+
+  Future<void> pairGlasses(String id, String modelId, String deviceId, String firmware) =>
+      send('POST', '/v1/glasses/pair', body: {'id': id, 'modelId': modelId, 'deviceId': deviceId, 'firmware': firmware});
+
+  Future<void> unpairGlasses(String id) => send('POST', '/v1/glasses/$id/unpair');
+
+  Future<Map<String, dynamic>> safeRoutes(double fromLat, double fromLng, double toLat, double toLng, String mode) async =>
+      _obj(await send('POST', '/v1/safe-route/routes', body: {
+        'from': {'lat': fromLat, 'lng': fromLng},
+        'to': {'lat': toLat, 'lng': toLng},
+        'mode': mode,
+      }));
+
+  Future<void> safeRouteFeedback(String id, String? scoreId, String kind, String message) => send('POST', '/v1/safe-route/feedback',
+      body: {'id': id, 'routeScoreId': scoreId, 'kind': kind, 'message': message});
+
+  Future<Map<String, dynamic>> sosHandoff(String sosId) async => _obj(await send('GET', '/v1/sos-handoff/$sosId'));
+}

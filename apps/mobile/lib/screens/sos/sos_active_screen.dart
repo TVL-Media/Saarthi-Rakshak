@@ -9,6 +9,7 @@ import '../../api/models.dart';
 import '../../engine/engine.dart';
 import '../../state/app_state.dart';
 import '../../theme.dart';
+import '../phase4/services_screens.dart';
 import '../../widgets/common.dart';
 import '../../widgets/format.dart';
 import 'recordings_screen.dart';
@@ -162,6 +163,7 @@ class _SosActiveScreenState extends State<SosActiveScreen> with WidgetsBindingOb
               icon: const Icon(Icons.local_phone),
               label: const Text('Call 112'),
             ),
+          if (!ended && AppScope.read(context).feature4('police_handoff')) HandoffStatus(sosId: widget.sosId),
           if (guardians.isEmpty && !ended)
             const Padding(
               padding: EdgeInsets.only(top: 10),

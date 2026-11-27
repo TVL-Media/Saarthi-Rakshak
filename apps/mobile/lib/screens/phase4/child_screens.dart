@@ -9,6 +9,7 @@ import '../../widgets/common.dart';
 import '../../widgets/format.dart';
 import '../sos/sos_countdown_screen.dart';
 import 'phase4_common.dart';
+import 'services_screens.dart';
 
 void _push(BuildContext c, Widget w) => Navigator.push(c, MaterialPageRoute(builder: (_) => w));
 
@@ -193,6 +194,10 @@ class _ChildDetailScreenState extends State<ChildDetailScreen> {
                   trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { try { await _state.api.deleteChildZone(_id, '${z['id']}'); _refresh(); } catch (e) { if (context.mounted) showError(context, e); } }),
                 ),
               OutlinedButton.icon(onPressed: _addZone, icon: const Icon(Icons.add_location_alt_outlined), label: const Text('Add a place at my position')),
+              if (_state.feature4('chhupa_rakshak'))
+                ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.visibility_outlined), title: const Text('Chhupa Rakshak'), subtitle: const Text('Ask for a short location check'), trailing: const Icon(Icons.chevron_right), onTap: () => _push(context, ChhupaScreen(linkId: _id, childName: '${link['childName'] ?? 'your child'}'))),
+              if (_state.feature4('cyber_safety'))
+                ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.shield_outlined), title: const Text('Cyberbullying check'), subtitle: const Text('Only messages you choose to share'), trailing: const Icon(Icons.chevron_right), onTap: () => _push(context, CyberScreen(linkId: _id))),
             ],
             const SizedBox(height: 20),
             if (linkActive || link['status'] == 'invited')
@@ -298,6 +303,10 @@ class _ChildModeScreenState extends State<ChildModeScreen> {
                     ]),
                   ),
                 ),
+              if (_state.feature4('chhupa_rakshak')) const ChildMonitoringPanel(),
+              if (_state.feature4('cyber_safety'))
+                for (final p in parents)
+                  ListTile(leading: const Icon(Icons.shield_outlined), title: Text('Cyberbullying check · ${p['parentName']}'), trailing: const Icon(Icons.chevron_right), onTap: () => _push(context, CyberScreen(linkId: '${p['id']}'))),
               if (parents.isNotEmpty) ...[
                 const NoticeBox(icon: Icons.visibility_outlined, text: 'Your location is being shared with your linked parent while this screen is open.'),
                 for (final p in parents) ListTile(leading: const Icon(Icons.family_restroom), title: Text('${p['parentName']}')),

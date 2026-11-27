@@ -14,6 +14,7 @@ import '../phase3/bookings_screen.dart';
 import '../phase3/nearby_screen.dart';
 import '../phase4/child_screens.dart';
 import '../phase4/safe_places_screen.dart';
+import '../phase4/services_screens.dart';
 import '../phase4/support_screens.dart';
 import '../phase4/tools_screen.dart';
 import '../vault/vault_screen.dart';
@@ -185,6 +186,9 @@ class _Menu extends StatelessWidget {
             if (state.feature4('safe_places')) _MenuItem(Icons.local_police_outlined, 'Safe Places', () => open(const SafePlacesScreen())),
             if (state.feature4('women_safety')) _MenuItem(Icons.woman, 'Women Safety', () => open(const WomenSafetyScreen())),
             if (state.feature4('legal_support')) _MenuItem(Icons.balance, "Men's Safety & Legal", () => open(const LegalSupportScreen())),
+            if (state.feature4('safe_route')) _MenuItem(Icons.alt_route, 'Safer route', () => open(const SafeRouteScreen())),
+            if (state.feature4('school')) _MenuItem(Icons.school_outlined, 'School Monitoring', () => open(const SchoolsScreen())),
+            if (state.feature4('smart_glasses')) _MenuItem(Icons.videocam_outlined, 'Smart Glasses', () => open(const GlassesScreen())),
             if (state.feature4('child_safety')) _MenuItem(Icons.child_care, 'Child Safety', () => open(const ChildSafetyScreen())),
             if (state.feature('rakshak')) _MenuItem(Icons.volunteer_activism_outlined, 'Become a Rakshak', () => open(const RakshakScreen())),
             _MenuItem(Icons.health_and_safety_outlined, 'Safety Setup', () => open(const SafetySetupScreen())),

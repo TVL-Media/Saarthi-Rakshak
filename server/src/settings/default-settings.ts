@@ -232,7 +232,7 @@ export const DEFAULT_SETTINGS = {
     min: 0,
     max: 1,
   },
-  // Numbers the plan says need client approval before launch; these are starting values only.
+  // Starting values; admins can change them in Settings.
   'safe_places.cache_minutes': {
     value: 60,
     description: 'How long a nearby-places search from the map provider is kept before asking again',
@@ -262,6 +262,61 @@ export const DEFAULT_SETTINGS = {
     description: 'After this long without a child location the parent sees a "GPS is stale" warning',
     min: 5,
     max: 240,
+  },
+  // ---- Phase 4, second group (staged release switches, default off) ----
+  'feature.chhupa_rakshak': {
+    value: 0,
+    description: 'Chhupa Rakshak (consented one-way child check): 1 = on, 0 = off',
+    min: 0,
+    max: 1,
+  },
+  'feature.school': {
+    value: 0,
+    description: 'School Monitoring (attendance events sent by verified schools): 1 = on, 0 = off',
+    min: 0,
+    max: 1,
+  },
+  'feature.cyber_safety': {
+    value: 0,
+    description: 'Cyberbullying Detection on content a family chooses to share: 1 = on, 0 = off',
+    min: 0,
+    max: 1,
+  },
+  'feature.smart_glasses': {
+    value: 0,
+    description: 'Smart Glasses device registry and capture queue: 1 = on, 0 = off',
+    min: 0,
+    max: 1,
+  },
+  'feature.safe_route': {
+    value: 0,
+    description: 'AI Safety Scoring and Safer Route: 1 = on, 0 = off',
+    min: 0,
+    max: 1,
+  },
+  'feature.police_handoff': {
+    value: 0,
+    description: 'Police / ERSS handoff status on SOS (only when an endpoint is approved and enabled): 1 = on, 0 = off',
+    min: 0,
+    max: 1,
+  },
+  'monitor.expiry_minutes': {
+    value: 15,
+    description: 'A Chhupa Rakshak session stops by itself after this many minutes',
+    min: 1,
+    max: 120,
+  },
+  'monitor.retention_days': {
+    value: 7,
+    description: 'Chhupa Rakshak location samples are deleted after this many days',
+    min: 1,
+    max: 90,
+  },
+  'school.stale_feed_hours': {
+    value: 48,
+    description: 'A school that has sent nothing for this long shows a stale-feed warning',
+    min: 1,
+    max: 720,
   },
 } as const satisfies Record<string, SettingDefinition>;
 

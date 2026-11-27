@@ -9,6 +9,7 @@ import { LiveBody } from './LivePage';
 import { CommunityBody, Phase2Stats, PlansBody, RakshakBody } from './Phase2Pages';
 import { BookingsBody } from './Phase3Pages';
 import { SafetyServicesBody } from './Phase4Pages';
+import { SafetyIntegrationsBody } from './Phase4bPages';
 import { SettingsBody } from './SettingsPage';
 import { TeamBody } from './TeamPage';
 import { UsersBody } from './UsersPage';
@@ -127,6 +128,13 @@ export const MAIN_SCREENS: Screen[] = [
     title: 'Safety Services',
     sub: 'Partners, support and legal requests, and reviewed guidance',
     body: SafetyServicesBody,
+  },
+  {
+    path: '/safety-integrations',
+    menu: 'Safety Integrations',
+    title: 'Safety Integrations',
+    sub: 'Schools, smart glasses, safety data, police handoff and family sessions',
+    body: SafetyIntegrationsBody,
   },
   { path: '/reports', menu: 'Reports', title: 'Reports', sub: 'Pilot numbers', body: Reports },
 ];

@@ -37,6 +37,7 @@ const MENU_ICON: Record<string, ReactNode> = {
   '/community': <CommentOutlined />,
   '/bookings': <CalendarOutlined />,
   '/safety-services': <HeartOutlined />,
+  '/safety-integrations': <SafetyOutlined />,
   '/reports': <BarChartOutlined />,
   '/settings': <SettingOutlined />,
   '/team': <UsergroupAddOutlined />,
